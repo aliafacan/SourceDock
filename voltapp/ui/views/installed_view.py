@@ -177,7 +177,8 @@ class InstalledViewMixin:
         version_col.add_attribute(version_renderer, "text", _AC_VERSION)
         version_col.set_sort_column_id(_AC_VERSION)
         version_col.set_resizable(True)
-        version_col.set_fixed_width(100)
+        version_col.set_fixed_width(115)
+        version_col.set_min_width(100)
         self.applications_tree.append_column(version_col)
 
         size_renderer = Gtk.CellRendererText()
@@ -198,7 +199,8 @@ class InstalledViewMixin:
         inst_date_col.add_attribute(inst_date_renderer, "text", _AC_INSTALLED_DATE)
         inst_date_col.set_sort_column_id(_AC_INSTALLED_DATE)
         inst_date_col.set_resizable(True)
-        inst_date_col.set_fixed_width(120)
+        inst_date_col.set_fixed_width(135)
+        inst_date_col.set_min_width(125)
         self.applications_tree.append_column(inst_date_col)
 
         last_upd_renderer = Gtk.CellRendererText()
@@ -208,7 +210,8 @@ class InstalledViewMixin:
         last_upd_col.add_attribute(last_upd_renderer, "text", _AC_LAST_UPDATED)
         last_upd_col.set_sort_column_id(_AC_LAST_UPDATED)
         last_upd_col.set_resizable(True)
-        last_upd_col.set_fixed_width(120)
+        last_upd_col.set_fixed_width(135)
+        last_upd_col.set_min_width(125)
         self.applications_tree.append_column(last_upd_col)
 
         location_renderer = Gtk.CellRendererText()
