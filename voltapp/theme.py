@@ -2,39 +2,49 @@
 """GTK CSS temaları."""
 
 
-def get_theme_css(theme_name: str) -> str:
+def get_theme_css(theme_name: str, scale: str = "100") -> str:
+    scale_fonts = {
+        "90": "9.5pt",
+        "100": "10.5pt",
+        "110": "11.5pt",
+        "125": "13.0pt",
+    }
+    font_size = scale_fonts.get(scale, "10.5pt")
+
     palettes = {
         "dark": {
-            "window_bg": "#1f262d",
-            "surface": "#26313a",
-            "surface_alt": "#2d3944",
-            "surface_soft": "#222c34",
-            "card_bg": "#2c3d4c",
-            "card_hover": "#364e61",
+            "window_bg": "#1a1e24",
+            "surface": "#222730",
+            "surface_alt": "#2b323d",
+            "surface_soft": "#1e232b",
+            "card_bg": "#252c36",
+            "card_hover": "#303947",
             "text": "#e8f1f7",
             "muted": "#9fb0bc",
-            "border": "#364651",
-            "accent": "#63b3ed",
+            "border": "#36414e",
+            "accent": "#f6c177",  # Volt elektrik sarısı
+            "accent_secondary": "#63b3ed",
             "success": "#59d38c",
-            "accent_text": "#081723",
+            "accent_text": "#16191f",
             "danger": "#ff7f7f",
             "danger_text": "#2f0e0e",
-            "input_bg": "#182026",
-            "input_border": "#4c5d69",
+            "input_bg": "#14171c",
+            "input_border": "#434f5e",
         },
         "light": {
-            "window_bg": "#f3f7fb",
+            "window_bg": "#f4f7fb",
             "surface": "#ffffff",
-            "surface_alt": "#edf4fa",
-            "surface_soft": "#f7fbff",
-            "card_bg": "#edf4fa",
-            "card_hover": "#d9ebf7",
+            "surface_alt": "#e8eff7",
+            "surface_soft": "#f8faff",
+            "card_bg": "#edf3f9",
+            "card_hover": "#dbe7f3",
             "text": "#173041",
             "muted": "#5f7483",
-            "border": "#cfdae4",
-            "accent": "#5bb8f0",
+            "border": "#c8d6e3",
+            "accent": "#e0af68",  # Amber elektrik
+            "accent_secondary": "#3b82f6",
             "success": "#41b86f",
-            "accent_text": "#103041",
+            "accent_text": "#1a1e24",
             "danger": "#ff9d9d",
             "danger_text": "#4b1616",
             "input_bg": "#ffffff",
@@ -43,6 +53,10 @@ def get_theme_css(theme_name: str) -> str:
     }
     colors = palettes.get(theme_name, palettes["dark"])
     return f"""
+window.icon-settings-window {{
+    font-size: {font_size};
+}}
+
 window.icon-settings-window,
 window.icon-settings-window separator,
 window.icon-settings-window menu,

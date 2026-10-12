@@ -113,8 +113,30 @@ class AptProvider:
             package = parts[0].split(":", 1)[0]
             version = parts[1]
             size = _safe_int(parts[2]) if len(parts) > 2 else None
+            if size is None or size == 0:
+                size = self._calc_package_disk_size(package)
             metadata[package] = (version, size)
         return metadata
+
+    def _calc_package_disk_size(self, package: str) -> int | None:
+        for suffix in ("", ":amd64", ":arm64", ":i386"):
+            list_file = f"/var/lib/dpkg/info/{package}{suffix}.list"
+            if os.path.exists(list_file):
+                total_bytes = 0
+                try:
+                    with open(list_file, "r", encoding="utf-8", errors="ignore") as fh:
+                        for line in fh:
+                            p = line.strip()
+                            if p and os.path.isfile(p) and not os.path.islink(p):
+                                try:
+                                    total_bytes += os.path.getsize(p)
+                                except OSError:
+                                    pass
+                    if total_bytes > 0:
+                        return total_bytes // 1024
+                except Exception:
+                    pass
+        return None
 
     def _upgradable_packages(self) -> set[str]:
         if not self.runner.command_exists("apt"):

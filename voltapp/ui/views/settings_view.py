@@ -39,32 +39,45 @@ class SettingsViewMixin:
         form = Gtk.Grid(column_spacing=12, row_spacing=12)
         content.pack_start(form, False, False, 0)
 
-        language_label = Gtk.Label(label=t(self.preferences.language, "language"))
+        lang = self.preferences.language
+        language_label = Gtk.Label(label=t(lang, "language"))
         language_label.set_xalign(0)
-        theme_label = Gtk.Label(label=t(self.preferences.language, "theme"))
+        theme_label = Gtk.Label(label=t(lang, "theme"))
         theme_label.set_xalign(0)
+        scale_label = Gtk.Label(label=t(lang, "ui_scale"))
+        scale_label.set_xalign(0)
 
         language_combo = Gtk.ComboBoxText()
-        language_combo.append("tr", t(self.preferences.language, "language_tr"))
-        language_combo.append("en", t(self.preferences.language, "language_en"))
+        language_combo.append("tr", t(lang, "language_tr"))
+        language_combo.append("en", t(lang, "language_en"))
         language_combo.set_active_id(self.preferences.language)
 
         theme_combo = Gtk.ComboBoxText()
-        theme_combo.append("dark", t(self.preferences.language, "theme_dark"))
-        theme_combo.append("light", t(self.preferences.language, "theme_light"))
+        theme_combo.append("dark", t(lang, "theme_dark"))
+        theme_combo.append("light", t(lang, "theme_light"))
         theme_combo.set_active_id(self.preferences.theme)
+
+        scale_combo = Gtk.ComboBoxText()
+        scale_combo.append("90", t(lang, "scale_90"))
+        scale_combo.append("100", t(lang, "scale_100"))
+        scale_combo.append("110", t(lang, "scale_110"))
+        scale_combo.append("125", t(lang, "scale_125"))
+        scale_combo.set_active_id(getattr(self.preferences, "scale", "100"))
 
         form.attach(language_label, 0, 0, 1, 1)
         form.attach(language_combo, 1, 0, 1, 1)
         form.attach(theme_label, 0, 1, 1, 1)
         form.attach(theme_combo, 1, 1, 1, 1)
+        form.attach(scale_label, 0, 2, 1, 1)
+        form.attach(scale_combo, 1, 2, 1, 1)
 
         dialog.show_all()
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
             new_lang = language_combo.get_active_id() or self.preferences.language
             new_theme = theme_combo.get_active_id() or self.preferences.theme
-            self.preferences = AppPreferences(language=new_lang, theme=new_theme)
+            new_scale = scale_combo.get_active_id() or getattr(self.preferences, "scale", "100")
+            self.preferences = AppPreferences(language=new_lang, theme=new_theme, scale=new_scale)
             self.preferences_store.save(self.preferences)
             self._apply_theme()
             self._refresh_texts()

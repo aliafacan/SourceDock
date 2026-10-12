@@ -158,7 +158,8 @@ class MainWindow(
             self._refresh_operations_list()
 
     def _apply_theme(self) -> None:
-        self.css_provider.load_from_data(get_theme_css(self.preferences.theme).encode("utf-8"))
+        scale = getattr(self.preferences, "scale", "100")
+        self.css_provider.load_from_data(get_theme_css(self.preferences.theme, scale).encode("utf-8"))
         screen = Gdk.Screen.get_default()
         if screen is not None:
             Gtk.StyleContext.add_provider_for_screen(

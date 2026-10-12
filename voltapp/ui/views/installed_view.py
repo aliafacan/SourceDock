@@ -634,6 +634,36 @@ class InstalledViewMixin:
             self.reload_applications_async()
         return False
 
+    def _get_app_size_fallback(self, app: UnifiedApplication) -> int | None:
+        if app.installed_size_kib:
+            return app.installed_size_kib
+        if app.executable:
+            cmd = app.executable.split()[0].strip("\"'") if app.executable else ""
+            if cmd and os.path.isfile(cmd):
+                try:
+                    return os.path.getsize(cmd) // 1024
+                except OSError:
+                    pass
+        if app.install_path and os.path.exists(app.install_path):
+            try:
+                if os.path.isfile(app.install_path):
+                    return os.path.getsize(app.install_path) // 1024
+            except OSError:
+                pass
+        return None
+
+    def _get_app_date_fallback(self, app: UnifiedApplication) -> str:
+        if app.last_updated:
+            return app.last_updated
+        if app.desktop_file and os.path.isfile(app.desktop_file):
+            try:
+                mtime = os.path.getmtime(app.desktop_file)
+                from datetime import datetime
+                return datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+            except OSError:
+                pass
+        return "-"
+
     def _render_applications_list(self) -> None:
         if not hasattr(self, "applications_store") or self.applications_store is None:
             return
@@ -642,14 +672,16 @@ class InstalledViewMixin:
         self.filtered_applications = filtered
 
         for app in filtered:
+            size_kib = self._get_app_size_fallback(app)
+            date_str = self._get_app_date_fallback(app)
             self.applications_store.append([
                 self._get_app_pixbuf(app),
                 app.name,
                 self._application_source_label(app.source),
                 app.version or "-",
-                app.installed_size_kib or 0,
-                self._format_application_size(app.installed_size_kib),
-                app.last_updated or "-",
+                size_kib or 0,
+                self._format_application_size(size_kib),
+                date_str,
                 app.install_path or app.desktop_file or "-",
                 app,
             ])
