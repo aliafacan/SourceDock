@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="clip">
+      <rect width="512" height="512" rx="96"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Top highlight shine -->
+  <rect width="512" height="300" rx="96" fill="url(#shine)" clip-path="url(#clip)"/>
+
+  <!-- 2x2 app grid — each tile 165×165, gap 30, margin 76 -->
+  <!-- Total: 76 + 165 + 30 + 165 + 76 = 512 ✓               -->
+
+  <!-- Top-left tile -->
+  <rect x="76" y="76" width="165" height="165" rx="26" fill="white" fill-opacity="0.88"/>
+  <!-- Decorative dot inside top-left -->
+  <circle cx="158" cy="158" r="36" fill="#2563EB" fill-opacity="0.18"/>
+
+  <!-- Top-right tile -->
+  <rect x="271" y="76" width="165" height="165" rx="26" fill="white" fill-opacity="0.88"/>
+  <circle cx="353" cy="158" r="36" fill="#2563EB" fill-opacity="0.18"/>
+
+  <!-- Bottom-left tile -->
+  <rect x="76" y="271" width="165" height="165" rx="26" fill="white" fill-opacity="0.88"/>
+  <circle cx="158" cy="353" r="36" fill="#2563EB" fill-opacity="0.18"/>
+
+  <!-- Bottom-right tile: green "install" action -->
+  <rect x="271" y="271" width="165" height="165" rx="26" fill="#22C55E"/>
+  <!-- Download arrow — center: (353, 353) -->
+  <path d="M353 303 L353 371" stroke="white" stroke-width="20" stroke-linecap="round" fill="none"/>
+  <path d="M319 347 L353 383 L387 347" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
