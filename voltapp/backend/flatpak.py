@@ -54,15 +54,28 @@ def _flatpak_install_path(app_id: str, installation: str) -> str:
     return f"/var/lib/flatpak/app/{app_id}"
 
 
-def _flatpak_last_updated(install_path: str) -> str:
-    matches = glob.glob(os.path.join(install_path, "*", "*", "active"))
-    if not matches:
-        return ""
+def _flatpak_dates(install_path: str) -> tuple[str, str]:
+    if not os.path.exists(install_path):
+        return "", ""
+    installed_date = ""
+    last_updated = ""
     try:
-        ts = max(os.lstat(p).st_mtime for p in matches)
-        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+        st = os.stat(install_path)
+        installed_date = datetime.fromtimestamp(st.st_ctime).strftime("%Y-%m-%d")
     except OSError:
-        return ""
+        pass
+    matches = glob.glob(os.path.join(install_path, "*", "*", "active"))
+    if matches:
+        try:
+            ts = max(os.lstat(p).st_mtime for p in matches)
+            last_updated = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+        except OSError:
+            pass
+    if not last_updated:
+        last_updated = installed_date
+    if not installed_date:
+        installed_date = last_updated
+    return installed_date, last_updated
 
 
 class FlatpakProvider:
@@ -107,6 +120,7 @@ class FlatpakProvider:
             if entry and not entry.visible:
                 continue
             install_path = _flatpak_install_path(app_id, installation)
+            installed_date, last_updated = _flatpak_dates(install_path)
             applications.append(
                 UnifiedApplication(
                     id=f"{SOURCE_FLATPAK}:{app_id}",
@@ -121,7 +135,8 @@ class FlatpakProvider:
                     package_name=app_id,
                     update_available=app_id in update_ids,
                     installed_size_kib=installed_size_kib,
-                    last_updated=_flatpak_last_updated(install_path),
+                    installed_date=installed_date,
+                    last_updated=last_updated,
                 )
             )
         return applications

@@ -63,9 +63,15 @@ class AppImageProvider:
             size = max(1, os.path.getsize(path) // 1024)
         except OSError:
             pass
+        installed_date = ""
         last_updated = ""
         try:
-            last_updated = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d")
+            st = os.stat(path)
+            # Linux'ta en erken zaman genellikle ilk indirilme / oluşturulmadır
+            first_ts = min(st.st_ctime, st.st_mtime)
+            latest_ts = max(st.st_ctime, st.st_mtime)
+            installed_date = datetime.fromtimestamp(first_ts).strftime("%Y-%m-%d")
+            last_updated = datetime.fromtimestamp(latest_ts).strftime("%Y-%m-%d")
         except OSError:
             pass
 
@@ -84,6 +90,7 @@ class AppImageProvider:
             installed_size_kib=size,
             update_supported=update_supported,
             update_note="" if update_supported else "manual",
+            installed_date=installed_date,
             last_updated=last_updated,
         )
 

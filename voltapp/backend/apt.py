@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+import glob
+import gzip
 import os
 from pathlib import Path
 
@@ -56,7 +58,7 @@ class AptProvider:
 
         package_meta = self._package_metadata(sorted(set(owners.values())))
         upgradable = self._upgradable_packages()
-        install_dates = self._install_dates(sorted(set(owners.values())))
+        installed_dates, last_updated_dates = self._collect_package_dates(sorted(set(owners.values())))
         listed_packages: set[str] = set()
         applications: list[UnifiedApplication] = []
         for entry in desktop_entries:
@@ -79,7 +81,8 @@ class AptProvider:
                     package_name=package,
                     update_available=package in upgradable,
                     installed_size_kib=installed_size_kib,
-                    last_updated=install_dates.get(package, ""),
+                    installed_date=installed_dates.get(package, ""),
+                    last_updated=last_updated_dates.get(package, ""),
                 )
             )
         self._hidden_upgradable = upgradable - listed_packages
@@ -151,9 +154,61 @@ class AptProvider:
                 packages.add(name)
         return packages
 
-    def _install_dates(self, packages: list[str]) -> dict[str, str]:
+    def _get_system_install_date(self) -> str:
+        for p in ("/var/log/installer/media-info", "/var/log/installer"):
+            if os.path.exists(p):
+                try:
+                    return datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y-%m-%d")
+                except OSError:
+                    pass
+        return ""
+
+    def _parse_dpkg_history(self) -> tuple[dict[str, str], dict[str, str]]:
+        first_installed: dict[str, str] = {}
+        last_updated: dict[str, str] = {}
+
+        log_files = glob.glob("/var/log/dpkg.log*")
+        def _sort_key(fn: str) -> int:
+            suffix = fn.split("dpkg.log")[-1].lstrip(".")
+            if not suffix:
+                return 0
+            num = suffix.split(".")[0]
+            try:
+                return int(num)
+            except ValueError:
+                return 999
+
+        # En eski log dosyasından en yeniye doğru tara
+        log_files.sort(key=_sort_key, reverse=True)
+
+        for fn in log_files:
+            try:
+                fh = gzip.open(fn, "rt", encoding="utf-8", errors="ignore") if fn.endswith(".gz") else open(fn, "rt", encoding="utf-8", errors="ignore")
+                with fh:
+                    for line in fh:
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            date_str = parts[0]
+                            action = parts[2]
+                            if action in ("install", "upgrade", "status"):
+                                pkg = parts[3].split(":")[0]
+                                if action == "install" and pkg not in first_installed:
+                                    first_installed[pkg] = date_str
+                                if action in ("install", "upgrade"):
+                                    last_updated[pkg] = date_str
+            except Exception:
+                pass
+
+        return first_installed, last_updated
+
+    def _collect_package_dates(self, packages: list[str]) -> tuple[dict[str, str], dict[str, str]]:
         if not packages:
-            return {}
+            return {}, {}
+
+        dpkg_first, dpkg_last = self._parse_dpkg_history()
+        sys_install_date = self._get_system_install_date()
+
+        # Dpkg .list mtime'ları son güncelleme için kesin referanstır
         paths = []
         for pkg in packages:
             for suffix in ("", ":amd64", ":arm64", ":i386"):
@@ -170,14 +225,29 @@ class AptProvider:
             except ValueError:
                 pass
 
-        dates: dict[str, str] = {}
+        installed_dates: dict[str, str] = {}
+        last_updated_dates: dict[str, str] = {}
+
         for pkg in packages:
+            file_mtime_date = ""
             for suffix in ("", ":amd64", ":arm64", ":i386"):
                 key = f"/var/lib/dpkg/info/{pkg}{suffix}.list"
                 if key in path_times:
-                    dates[pkg] = datetime.fromtimestamp(path_times[key]).strftime("%Y-%m-%d")
+                    file_mtime_date = datetime.fromtimestamp(path_times[key]).strftime("%Y-%m-%d")
                     break
-        return dates
+
+            # Son güncelleme: .list mtime'ı veya dpkg logundaki son upgrade/install
+            last_updated_dates[pkg] = file_mtime_date or dpkg_last.get(pkg, "")
+
+            # İlk kurulum: dpkg logundaki install tarihi; yoksa sistem kurulum tarihi veya .list mtime
+            if pkg in dpkg_first:
+                installed_dates[pkg] = dpkg_first[pkg]
+            elif sys_install_date:
+                installed_dates[pkg] = sys_install_date
+            else:
+                installed_dates[pkg] = file_mtime_date
+
+        return installed_dates, last_updated_dates
 
     def _upgradable_packages_with_versions(self) -> dict[str, str]:
         if not self.runner.command_exists("apt"):

@@ -52,7 +52,7 @@ class SnapProvider:
             if not snap_name or snap_name not in snaps:
                 continue
             version = snaps[snap_name]
-            size_kib, last_updated = self._get_snap_size_and_date(snap_name)
+            size_kib, installed_date, last_updated = self._get_snap_size_and_dates(snap_name)
             applications.append(
                 UnifiedApplication(
                     id=f"{SOURCE_SNAP}:{snap_name}:{Path(entry.path).name}",
@@ -67,20 +67,32 @@ class SnapProvider:
                     package_name=snap_name,
                     update_available=snap_name in update_names,
                     installed_size_kib=size_kib,
+                    installed_date=installed_date,
                     last_updated=last_updated,
                 )
             )
 
         return _dedupe_applications(applications)
 
-    def _get_snap_size_and_date(self, snap_name: str) -> tuple[int | None, str]:
+    def _get_snap_size_and_dates(self, snap_name: str) -> tuple[int | None, str, str]:
         size_kib: int | None = None
-        date_str = ""
+        installed_date = ""
+        last_updated = ""
+
+        # /var/snap/<snap_name> dizini ilk kurulum hakkında güçlü ipucu verir
+        var_snap_dir = f"/var/snap/{snap_name}"
+        if os.path.exists(var_snap_dir):
+            try:
+                st = os.stat(var_snap_dir)
+                installed_date = datetime.fromtimestamp(st.st_ctime).strftime("%Y-%m-%d")
+            except OSError:
+                pass
+
         current_dir = f"/snap/{snap_name}/current"
         if os.path.exists(current_dir):
             try:
                 mtime = os.path.getmtime(current_dir)
-                date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                last_updated = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
             except OSError:
                 pass
 
@@ -95,12 +107,24 @@ class SnapProvider:
                 ]
                 if candidates:
                     latest = max(candidates, key=os.path.getmtime)
+                    oldest = min(candidates, key=os.path.getmtime)
                     size_kib = os.path.getsize(latest) // 1024
-                    if not date_str:
-                        date_str = datetime.fromtimestamp(os.path.getmtime(latest)).strftime("%Y-%m-%d")
+                    oldest_date = datetime.fromtimestamp(os.path.getmtime(oldest)).strftime("%Y-%m-%d")
+                    latest_date = datetime.fromtimestamp(os.path.getmtime(latest)).strftime("%Y-%m-%d")
+
+                    if not installed_date or oldest_date < installed_date:
+                        installed_date = oldest_date
+                    if not last_updated:
+                        last_updated = latest_date
             except Exception:
                 pass
-        return size_kib, date_str
+
+        if not last_updated:
+            last_updated = installed_date
+        if not installed_date:
+            installed_date = last_updated
+
+        return size_kib, installed_date, last_updated
 
     def _snap_metadata(self) -> dict[str, str]:
         result = self.runner.run(["snap", "list"], timeout=30)

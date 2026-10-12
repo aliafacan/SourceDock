@@ -190,7 +190,10 @@ class MainWindow(
         self.applications_tree_col_source.set_title(t(lang, "applications_col_source"))
         self.applications_tree_col_version.set_title(t(lang, "applications_col_version"))
         self.applications_tree_col_size.set_title(t(lang, "applications_col_size"))
-        self.applications_tree_col_date.set_title(t(lang, "applications_col_date"))
+        if hasattr(self, "applications_tree_col_installed_date"):
+            self.applications_tree_col_installed_date.set_title(t(lang, "applications_col_installed_date"))
+        if hasattr(self, "applications_tree_col_last_updated"):
+            self.applications_tree_col_last_updated.set_title(t(lang, "applications_col_last_updated"))
         self.applications_tree_col_location.set_title(t(lang, "applications_col_location"))
         self.applications_launch_btn.set_label(t(lang, "applications_launch"))
         self.applications_action_update_btn.set_label(t(lang, "applications_update"))

@@ -48,6 +48,7 @@ class UnifiedApplication:
     installed_size_kib: int | None = None
     update_supported: bool = True
     update_note: str = ""
+    installed_date: str = ""
     last_updated: str = ""
 
 

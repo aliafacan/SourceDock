@@ -33,9 +33,10 @@ _AC_SOURCE = 2
 _AC_VERSION = 3
 _AC_SIZE_KIB = 4
 _AC_SIZE_STR = 5
-_AC_LAST_UPDATED = 6
-_AC_LOCATION = 7
-_AC_APP = 8
+_AC_INSTALLED_DATE = 6
+_AC_LAST_UPDATED = 7
+_AC_LOCATION = 8
+_AC_APP = 9
 
 
 class InstalledViewMixin:
@@ -126,6 +127,7 @@ class InstalledViewMixin:
             str,
             str,
             str,
+            str,
             GObject.TYPE_PYOBJECT,
         )
         self.applications_tree = Gtk.TreeView(model=self.applications_store)
@@ -188,15 +190,26 @@ class InstalledViewMixin:
         size_col.set_fixed_width(90)
         self.applications_tree.append_column(size_col)
 
-        date_renderer = Gtk.CellRendererText()
-        date_col = Gtk.TreeViewColumn()
-        self.applications_tree_col_date = date_col
-        date_col.pack_start(date_renderer, True)
-        date_col.add_attribute(date_renderer, "text", _AC_LAST_UPDATED)
-        date_col.set_sort_column_id(_AC_LAST_UPDATED)
-        date_col.set_resizable(True)
-        date_col.set_fixed_width(130)
-        self.applications_tree.append_column(date_col)
+        inst_date_renderer = Gtk.CellRendererText()
+        inst_date_col = Gtk.TreeViewColumn()
+        self.applications_tree_col_installed_date = inst_date_col
+        self.applications_tree_col_date = inst_date_col
+        inst_date_col.pack_start(inst_date_renderer, True)
+        inst_date_col.add_attribute(inst_date_renderer, "text", _AC_INSTALLED_DATE)
+        inst_date_col.set_sort_column_id(_AC_INSTALLED_DATE)
+        inst_date_col.set_resizable(True)
+        inst_date_col.set_fixed_width(120)
+        self.applications_tree.append_column(inst_date_col)
+
+        last_upd_renderer = Gtk.CellRendererText()
+        last_upd_col = Gtk.TreeViewColumn()
+        self.applications_tree_col_last_updated = last_upd_col
+        last_upd_col.pack_start(last_upd_renderer, True)
+        last_upd_col.add_attribute(last_upd_renderer, "text", _AC_LAST_UPDATED)
+        last_upd_col.set_sort_column_id(_AC_LAST_UPDATED)
+        last_upd_col.set_resizable(True)
+        last_upd_col.set_fixed_width(120)
+        self.applications_tree.append_column(last_upd_col)
 
         location_renderer = Gtk.CellRendererText()
         location_renderer.set_property("ellipsize", Pango.EllipsizeMode.MIDDLE)
@@ -652,17 +665,19 @@ class InstalledViewMixin:
                 pass
         return None
 
-    def _get_app_date_fallback(self, app: UnifiedApplication) -> str:
-        if app.last_updated:
-            return app.last_updated
-        if app.desktop_file and os.path.isfile(app.desktop_file):
+    def _get_app_date_fallback(self, app: UnifiedApplication) -> tuple[str, str]:
+        inst_date = app.installed_date
+        last_upd = app.last_updated
+        if not inst_date and not last_upd and app.desktop_file and os.path.isfile(app.desktop_file):
             try:
                 mtime = os.path.getmtime(app.desktop_file)
                 from datetime import datetime
-                return datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                d = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                inst_date = d
+                last_upd = d
             except OSError:
                 pass
-        return "-"
+        return inst_date or "-", last_upd or inst_date or "-"
 
     def _render_applications_list(self) -> None:
         if not hasattr(self, "applications_store") or self.applications_store is None:
@@ -673,7 +688,7 @@ class InstalledViewMixin:
 
         for app in filtered:
             size_kib = self._get_app_size_fallback(app)
-            date_str = self._get_app_date_fallback(app)
+            inst_date_str, last_upd_str = self._get_app_date_fallback(app)
             self.applications_store.append([
                 self._get_app_pixbuf(app),
                 app.name,
@@ -681,7 +696,8 @@ class InstalledViewMixin:
                 app.version or "-",
                 size_kib or 0,
                 self._format_application_size(size_kib),
-                date_str,
+                inst_date_str,
+                last_upd_str,
                 app.install_path or app.desktop_file or "-",
                 app,
             ])
