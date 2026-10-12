@@ -9,8 +9,8 @@
 | Aşama | Konu | Durum |
 | :--- | :--- | :--- |
 | **Aşama 1** | Snap `--classic` Hatasının Giderilmesi | ✅ Tamamlandı |
-| **Aşama 2** | Modüler Mimari & Dosya Bölme (Temiz Kod Kuralı) | ⏳ Sırada |
-| **Aşama 3** | Çoklu Dil & Yerelleştirme (i18n) Temizliği | ⏳ Beklemede |
+| **Aşama 2** | Modüler Mimari & Dosya Bölme (Temiz Kod Kuralı) | ✅ Tamamlandı |
+| **Aşama 3** | Çoklu Dil & Yerelleştirme (i18n) Temizliği | ⏳ Sırada |
 | **Aşama 4** | Yeni Paket Formatları (.deb, .AppImage, .tar.gz, vb.) | ⏳ Beklemede |
 | **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ⏳ Beklemede |
 | **Aşama 6** | Açık Kaynak Hazırlığı (Topluluk, CI/CD, Dokümantasyon) | ⏳ Beklemede |

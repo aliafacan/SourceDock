@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Zorin App Manager - giriş noktası."""
+"""VoltApp ⚡ - Giriş noktası (Entry Point)."""
 
 import sys
 import gi
@@ -7,18 +7,18 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from constants import APP_ICON_NAME, APP_TITLE
-from preferences import PreferencesStore
-from ui import AppManagerWindow
+from voltapp.constants import APP_ICON_NAME, APP_TITLE
+from voltapp.preferences import PreferencesStore
+from voltapp.ui.window import MainWindow
 
-# WM_CLASS'ı desktop dosyasındaki StartupWMClass ile eşleştir
+# WM_CLASS ayarları
 GLib.set_prgname(APP_ICON_NAME)
 GLib.set_application_name(APP_TITLE)
 
 
 def main() -> None:
     prefs_store = PreferencesStore()
-    win = AppManagerWindow(prefs_store)
+    win = MainWindow(prefs_store)
     win.show_all()
     Gtk.main()
 

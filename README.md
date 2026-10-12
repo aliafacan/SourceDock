@@ -80,3 +80,4 @@ VoltApp is an open-source project welcoming all Linux enthusiasts and developers
 ## 📄 License / Lisans
 
 Distributed under the **GNU General Public License v3.0 (GPL-3.0)**. See [`LICENSE`](LICENSE) for more information.
+
