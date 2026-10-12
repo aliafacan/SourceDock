@@ -208,3 +208,4 @@ class AptProvider:
                 packages[name].update_available = True
                 packages[name].new_version = new_ver
         return sorted(packages.values(), key=lambda p: p.name)
+

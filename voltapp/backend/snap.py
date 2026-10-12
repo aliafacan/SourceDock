@@ -92,3 +92,4 @@ class SnapProvider:
                 continue
             names.add(line.split()[0])
         return names
+

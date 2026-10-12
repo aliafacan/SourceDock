@@ -69,3 +69,4 @@ class SettingsViewMixin:
             self._apply_theme()
             self._refresh_texts()
         dialog.destroy()
+

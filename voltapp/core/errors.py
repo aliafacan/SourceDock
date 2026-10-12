@@ -22,3 +22,4 @@ class SnapClassicRequiredError(BackendError):
     def __init__(self, message: str, package_name: str = ""):
         super().__init__(message)
         self.package_name = package_name
+

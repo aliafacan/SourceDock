@@ -131,3 +131,4 @@ class FlatpakProvider:
         if result.returncode != 0:
             return set()
         return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+

@@ -174,6 +174,7 @@ class MainWindow(
         self.installed_tab_label.set_text(t(lang, "tab_installed"))
         self.store_tab_label.set_text(t(lang, "tab_store"))
         self.packages_tab_label.set_text(t(lang, "tab_packages"))
+        self.operations_tab_label.set_text(t(lang, "tab_operations"))
 
         # Installed page
         self.applications_title_label.set_markup(
@@ -242,6 +243,18 @@ class MainWindow(
         self.packages_tree_col_description.set_title(t(lang, "packages_col_description"))
         self.packages_update_btn.set_label(t(lang, "packages_update_selected"))
         self.packages_update_all_btn.set_label(t(lang, "packages_update_all"))
+
+        # Operations page
+        self.operations_title_label.set_markup(
+            f'<span size="large" weight="bold">{t(lang, "operations_title")}</span>'
+        )
+        self.operations_subtitle_label.set_text(t(lang, "operations_subtitle"))
+        self.operations_refresh_btn.set_label(t(lang, "operations_refresh"))
+        self.operations_pause_btn.set_label(t(lang, "operations_pause"))
+        self.operations_cancel_btn.set_label(t(lang, "operations_cancel"))
+        self.operations_tree_col_process.set_title(t(lang, "operations_col_process"))
+        self.operations_tree_col_pid.set_title(t(lang, "operations_col_pid"))
+        self.operations_tree_col_target.set_title(t(lang, "operations_col_target"))
 
     def _setup_keyboard_shortcuts(self) -> None:
         self.connect("key-press-event", self._on_key_press)

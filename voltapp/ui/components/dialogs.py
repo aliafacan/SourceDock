@@ -349,3 +349,4 @@ def show_snap_classic_dialog(parent: Gtk.Window, language: str, app_name: str) -
     response = dialog.run()
     dialog.destroy()
     return response == Gtk.ResponseType.OK
+

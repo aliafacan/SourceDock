@@ -13,6 +13,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
+from voltapp.i18n import t
+
 _OC_ICON = 0
 _OC_PID = 1
 _OC_COMMAND = 2
@@ -53,28 +55,28 @@ class OperationsViewMixin:
         sel.set_mode(Gtk.SelectionMode.SINGLE)
         sel.connect("changed", self._on_operations_selection_changed)
 
-        proc_col = Gtk.TreeViewColumn()
-        proc_col.set_title("İşlem")
+        self.operations_tree_col_process = Gtk.TreeViewColumn()
+        self.operations_tree_col_process.set_title("İşlem")
         icon_rend = Gtk.CellRendererPixbuf()
         cmd_rend = Gtk.CellRendererText()
         cmd_rend.set_property("ellipsize", Pango.EllipsizeMode.END)
-        proc_col.pack_start(icon_rend, False)
-        proc_col.pack_start(cmd_rend, True)
-        proc_col.add_attribute(icon_rend, "pixbuf", _OC_ICON)
-        proc_col.add_attribute(cmd_rend, "text", _OC_COMMAND)
-        proc_col.set_expand(True)
-        self.operations_tree.append_column(proc_col)
+        self.operations_tree_col_process.pack_start(icon_rend, False)
+        self.operations_tree_col_process.pack_start(cmd_rend, True)
+        self.operations_tree_col_process.add_attribute(icon_rend, "pixbuf", _OC_ICON)
+        self.operations_tree_col_process.add_attribute(cmd_rend, "text", _OC_COMMAND)
+        self.operations_tree_col_process.set_expand(True)
+        self.operations_tree.append_column(self.operations_tree_col_process)
 
         pid_rend = Gtk.CellRendererText()
-        pid_col = Gtk.TreeViewColumn("PID", pid_rend, text=_OC_PID)
-        pid_col.set_fixed_width(80)
-        self.operations_tree.append_column(pid_col)
+        self.operations_tree_col_pid = Gtk.TreeViewColumn("PID", pid_rend, text=_OC_PID)
+        self.operations_tree_col_pid.set_fixed_width(80)
+        self.operations_tree.append_column(self.operations_tree_col_pid)
 
         pkg_rend = Gtk.CellRendererText()
         pkg_rend.set_property("ellipsize", Pango.EllipsizeMode.END)
-        pkg_col = Gtk.TreeViewColumn("Hedef Paketler", pkg_rend, text=_OC_PACKAGES)
-        pkg_col.set_expand(True)
-        self.operations_tree.append_column(pkg_col)
+        self.operations_tree_col_target = Gtk.TreeViewColumn("Hedef Paketler", pkg_rend, text=_OC_PACKAGES)
+        self.operations_tree_col_target.set_expand(True)
+        self.operations_tree.append_column(self.operations_tree_col_target)
 
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
@@ -128,11 +130,12 @@ class OperationsViewMixin:
 
     def _refresh_operations_list(self) -> None:
         self.operations_store.clear()
+        lang = self.preferences.language
         for key, op in self._active_ops.items():
             self.operations_store.append([
                 op.get("pixbuf"),
                 "VoltApp",
-                op.get("display_summary", "İşlem sürüyor"),
+                op.get("display_summary", t(lang, "operations_in_progress")),
                 op.get("command", ""),
             ])
         try:
@@ -177,3 +180,4 @@ class OperationsViewMixin:
             except Exception as exc:
                 self._show_error_dialog(f"PID {pid_str} sonlandırılamadı: {exc}")
         self._refresh_operations_list()
+

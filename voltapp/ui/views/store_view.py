@@ -286,6 +286,7 @@ class StoreViewMixin:
             message=result.name,
             parent=self,
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
+            language=lang,
         )
         self.store_registry.set_output_callback(
             lambda line: GLib.idle_add(progress_dialog.append_log, line)
@@ -456,3 +457,4 @@ class StoreViewMixin:
 
     def _set_store_status(self, message: str, color: str) -> None:
         self.store_status.set_markup(f'<span foreground="{color}">{GLib.markup_escape_text(message)}</span>')
+

@@ -558,6 +558,7 @@ class InstalledViewMixin:
             message=progress_message,
             parent=self,
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
+            language=lang,
         )
         self.application_registry.runner.set_output_callback(
             lambda line: GLib.idle_add(progress_dialog.append_log, line)
@@ -779,21 +780,22 @@ class InstalledViewMixin:
             if filename:
                 with open(filename, "w", encoding="utf-8") as fh:
                     fh.write(json_data)
-                self._set_applications_status(f"Dışa aktarıldı: {filename}", "#1f7a1f")
+                self._set_applications_status(f"{t(self.preferences.language, 'status_exported')}: {filename}", "#1f7a1f")
         dialog.destroy()
 
     def on_add_appimage(self, _button) -> None:
+        lang = self.preferences.language
         dialog = Gtk.FileChooserDialog(
-            title="AppImage Ekle",
+            title=t(lang, "add_appimage_title"),
             transient_for=self,
             action=Gtk.FileChooserAction.OPEN,
         )
         dialog.add_buttons(
-            t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL,
-            "Ekle", Gtk.ResponseType.OK,
+            t(lang, "password_cancel"), Gtk.ResponseType.CANCEL,
+            t(lang, "add_appimage_btn"), Gtk.ResponseType.OK,
         )
         filter_ai = Gtk.FileFilter()
-        filter_ai.set_name("AppImage Dosyaları (*.AppImage)")
+        filter_ai.set_name(t(lang, "appimage_files"))
         filter_ai.add_pattern("*.AppImage")
         filter_ai.add_pattern("*.appimage")
         dialog.add_filter(filter_ai)
@@ -804,12 +806,13 @@ class InstalledViewMixin:
                 try:
                     self.application_registry.register_appimage(filename)
                     self.reload_applications_async()
-                    self._set_applications_status(f"AppImage eklendi: {Path(filename).name}", "#1f7a1f")
+                    self._set_applications_status(f"{t(lang, 'appimage_added')}: {Path(filename).name}", "#1f7a1f")
                 except Exception as exc:
-                    self._show_error_dialog(f"AppImage eklenemedi: {exc}")
+                    self._show_error_dialog(f"{t(lang, 'appimage_add_failed')}: {exc}")
         dialog.destroy()
 
     def on_bulk_remove_applications(self, _button) -> None:
+        lang = self.preferences.language
         sel = self.applications_tree.get_selection()
         model, paths = sel.get_selected_rows()
         selected_apps = [model.get_value(model.get_iter(p), _AC_APP) for p in paths]
@@ -820,10 +823,10 @@ class InstalledViewMixin:
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
             type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.NONE,
-            text=f"{len(selected_apps)} uygulamayı kaldırmak istiyor musunuz?",
+            text=t(lang, "bulk_remove_title").format(count=len(selected_apps)),
         )
-        dialog.add_button(t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL)
-        del_btn = dialog.add_button("Tümünü Kaldır", Gtk.ResponseType.OK)
+        dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
+        del_btn = dialog.add_button(t(lang, "bulk_remove_btn"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
         if dialog.run() == Gtk.ResponseType.OK:
             dialog.destroy()
@@ -837,14 +840,15 @@ class InstalledViewMixin:
             dialog.destroy()
 
     def on_flatpak_permissions(self, _button, application: UnifiedApplication) -> None:
+        lang = self.preferences.language
         perms = self.application_registry.flatpak_permissions(application.package_name)
         dialog = Gtk.Dialog(
-            title=f"İzinler: {application.name}",
+            title=t(lang, "permissions_title").format(name=application.name),
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
         )
         dialog.set_default_size(500, 350)
-        dialog.add_button("Kapat", Gtk.ResponseType.CLOSE)
+        dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
         box = dialog.get_content_area()
         scroller = Gtk.ScrolledWindow()
@@ -854,7 +858,7 @@ class InstalledViewMixin:
         for sec, items in perms.items():
             lines.append(f"[{sec}]")
             lines.extend(f"  {it}" for it in items)
-        tv.get_buffer().set_text("\n".join(lines) or "Özel izin geçersiz kılınmamış.")
+        tv.get_buffer().set_text("\n".join(lines) or t(lang, "permissions_none"))
         scroller.add(tv)
         box.pack_start(scroller, True, True, 0)
         dialog.show_all()
@@ -862,18 +866,19 @@ class InstalledViewMixin:
         dialog.destroy()
 
     def on_flatpak_rollback(self, _button, application: UnifiedApplication) -> None:
+        lang = self.preferences.language
         history = self.application_registry.flatpak_history(application.package_name)
         if not history:
-            self._show_error_dialog("Geçmiş kaydı bulunamadı.")
+            self._show_error_dialog(t(lang, "rollback_no_history"))
             return
         dialog = Gtk.Dialog(
-            title=f"Sürüm Geri Al: {application.name}",
+            title=t(lang, "rollback_title").format(name=application.name),
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
         )
         dialog.set_default_size(480, 320)
-        dialog.add_button("İptal", Gtk.ResponseType.CANCEL)
-        rb_btn = dialog.add_button("Seçilene Geri Al", Gtk.ResponseType.OK)
+        dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
+        rb_btn = dialog.add_button(t(lang, "rollback_btn"), Gtk.ResponseType.OK)
         rb_btn.get_style_context().add_class("suggested-action")
 
         combo = Gtk.ComboBoxText()
@@ -898,3 +903,4 @@ class InstalledViewMixin:
 
     def on_show_changelog(self, _button, application: UnifiedApplication) -> None:
         self._on_package_changelog(application.package_name)
+

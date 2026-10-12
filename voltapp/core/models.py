@@ -111,3 +111,4 @@ class StoreResult:
     remote: str
     download_size_str: str = ""
     icon_path: str = ""
+

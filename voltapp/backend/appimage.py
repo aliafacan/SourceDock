@@ -106,3 +106,4 @@ class AppImageProvider:
                     if file_name.lower().endswith(".appimage"):
                         paths.append(str(Path(current_root) / file_name))
         return sorted(set(paths))
+

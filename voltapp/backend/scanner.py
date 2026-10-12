@@ -156,3 +156,4 @@ class DesktopEntryScanner:
             if value:
                 return value
         return ""
+

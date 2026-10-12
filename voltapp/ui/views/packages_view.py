@@ -272,21 +272,22 @@ class PackagesViewMixin:
             self._run_packages_task(names, "packages_update_all")
 
     def _on_package_changelog(self, package_name: str) -> None:
+        lang = self.preferences.language
         text = self.application_registry.apt_changelog(package_name)
         dialog = Gtk.Dialog(
-            title=f"Changelog: {package_name}",
+            title=t(lang, "changelog_title").format(name=package_name),
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
         )
         dialog.set_default_size(600, 400)
-        dialog.add_button("Kapat", Gtk.ResponseType.CLOSE)
+        dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
         scroller = Gtk.ScrolledWindow()
         tv = Gtk.TextView()
         tv.set_editable(False)
         tv.set_monospace(True)
         buf = tv.get_buffer()
-        buf.set_text(text or "Changelog bulunamadı.")
+        buf.set_text(text or t(lang, "changelog_none"))
         scroller.add(tv)
         dialog.get_content_area().pack_start(scroller, True, True, 0)
         dialog.show_all()
@@ -297,8 +298,9 @@ class PackagesViewMixin:
         lang = self.preferences.language
         progress_dialog = OperationProgressWindow(
             title=t(lang, title_key),
-            message=f"{len(names)} paket işleniyor",
+            message=f"{len(names)} {t(lang, 'progress_packages_unit')}",
             parent=self,
+            language=lang,
         )
         self.application_registry.runner.set_output_callback(
             lambda line: GLib.idle_add(progress_dialog.append_log, line)
@@ -307,7 +309,7 @@ class PackagesViewMixin:
         def worker():
             try:
                 self.application_registry.update_packages(names)
-                GLib.idle_add(progress_dialog.finish, True, "Paketler güncellendi.")
+                GLib.idle_add(progress_dialog.finish, True, t(lang, "packages_update_done"))
                 GLib.idle_add(self.reload_packages_async)
             except AuthRequiredError:
                 GLib.idle_add(progress_dialog.destroy)
@@ -322,3 +324,4 @@ class PackagesViewMixin:
 
     def _set_packages_status(self, message: str, color: str) -> None:
         self.packages_status.set_markup(f'<span foreground="{color}">{GLib.markup_escape_text(message)}</span>')
+

@@ -406,3 +406,4 @@ class ApplicationRegistry:
             entry = None
         if entry and _normalize_path(entry.appimage_path) == _normalize_path(application.install_path):
             os.remove(application.desktop_file)
+
