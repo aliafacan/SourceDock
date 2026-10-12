@@ -135,9 +135,11 @@ class InstalledViewMixin:
         self.applications_tree.set_activate_on_single_click(False)
         self.applications_tree.set_enable_search(False)
         self.applications_tree.set_rubber_banding(False)
+        self.applications_tree.set_has_tooltip(True)
         self.applications_tree.get_style_context().add_class("applications-tree")
         self.applications_tree.connect("row-activated", self.on_application_tree_activated)
         self.applications_tree.connect("button-press-event", self.on_application_tree_button_press)
+        self.applications_tree.connect("query-tooltip", self.on_applications_tree_query_tooltip)
 
         selection = self.applications_tree.get_selection()
         selection.set_mode(Gtk.SelectionMode.MULTIPLE)
@@ -199,8 +201,8 @@ class InstalledViewMixin:
         inst_date_col.add_attribute(inst_date_renderer, "text", _AC_INSTALLED_DATE)
         inst_date_col.set_sort_column_id(_AC_INSTALLED_DATE)
         inst_date_col.set_resizable(True)
-        inst_date_col.set_fixed_width(135)
-        inst_date_col.set_min_width(125)
+        inst_date_col.set_fixed_width(145)
+        inst_date_col.set_min_width(135)
         self.applications_tree.append_column(inst_date_col)
 
         last_upd_renderer = Gtk.CellRendererText()
@@ -210,8 +212,8 @@ class InstalledViewMixin:
         last_upd_col.add_attribute(last_upd_renderer, "text", _AC_LAST_UPDATED)
         last_upd_col.set_sort_column_id(_AC_LAST_UPDATED)
         last_upd_col.set_resizable(True)
-        last_upd_col.set_fixed_width(135)
-        last_upd_col.set_min_width(125)
+        last_upd_col.set_fixed_width(145)
+        last_upd_col.set_min_width(135)
         self.applications_tree.append_column(last_upd_col)
 
         location_renderer = Gtk.CellRendererText()
@@ -383,6 +385,82 @@ class InstalledViewMixin:
                 application: UnifiedApplication = model.get_value(it, _AC_APP)
                 self._show_application_context_menu(application, event)
                 return True
+        return False
+
+    def on_applications_tree_query_tooltip(
+        self,
+        treeview: Gtk.TreeView,
+        x: int,
+        y: int,
+        _keyboard_mode: bool,
+        tooltip: Gtk.Tooltip,
+    ) -> bool:
+        res = treeview.get_path_at_pos(x, y)
+        if not res:
+            return False
+        path, column, _cell_x, _cell_y = res
+        model = self.applications_store
+        if model is None:
+            return False
+        try:
+            it = model.get_iter(path)
+        except Exception:
+            return False
+        if it is None:
+            return False
+
+        app: UnifiedApplication | None = model.get_value(it, _AC_APP)
+
+        # Fare imlecinin üzerinde olduğu sütuna göre baloncuk (tooltip) göster
+        if column == getattr(self, "applications_tree_col_location", None):
+            loc = model.get_value(it, _AC_LOCATION)
+            if loc and loc != "-":
+                tooltip.set_text(loc)
+                treeview.set_tooltip_cell(tooltip, path, column, None)
+                return True
+        elif column == getattr(self, "applications_tree_col_version", None):
+            ver = model.get_value(it, _AC_VERSION)
+            if ver and ver != "-":
+                tooltip.set_text(ver)
+                treeview.set_tooltip_cell(tooltip, path, column, None)
+                return True
+        elif column == getattr(self, "applications_tree_col_installed_date", None):
+            dt = model.get_value(it, _AC_INSTALLED_DATE)
+            if dt and dt != "-":
+                tooltip.set_text(f"{t(self.preferences.language, 'applications_col_installed_date')}: {dt}")
+                treeview.set_tooltip_cell(tooltip, path, column, None)
+                return True
+        elif column == getattr(self, "applications_tree_col_last_updated", None):
+            dt = model.get_value(it, _AC_LAST_UPDATED)
+            if dt and dt != "-":
+                tooltip.set_text(f"{t(self.preferences.language, 'applications_col_last_updated')}: {dt}")
+                treeview.set_tooltip_cell(tooltip, path, column, None)
+                return True
+        elif column == getattr(self, "applications_tree_col_app", None):
+            name = model.get_value(it, _AC_NAME)
+            pkg = (app.package_name or app.id) if app else ""
+            summary = app.category if app and app.category else ""
+            lines = [name]
+            if pkg and pkg != name:
+                lines.append(f"({pkg})")
+            if summary:
+                lines.append(summary)
+            tooltip.set_text("\n".join(lines))
+            treeview.set_tooltip_cell(tooltip, path, column, None)
+            return True
+        elif column == getattr(self, "applications_tree_col_size", None):
+            sz = model.get_value(it, _AC_SIZE_STR)
+            if sz and sz != "-":
+                tooltip.set_text(f"{t(self.preferences.language, 'applications_col_size')}: {sz}")
+                treeview.set_tooltip_cell(tooltip, path, column, None)
+                return True
+        elif column == getattr(self, "applications_tree_col_source", None):
+            src = model.get_value(it, _AC_SOURCE)
+            if src:
+                tooltip.set_text(f"{t(self.preferences.language, 'applications_col_source')}: {src}")
+                treeview.set_tooltip_cell(tooltip, path, column, None)
+                return True
+
         return False
 
     def on_application_selection_changed(self, selection: Gtk.TreeSelection) -> None:
