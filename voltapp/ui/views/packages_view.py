@@ -50,7 +50,6 @@ class PackagesViewMixin:
         self.packages_filter_all_btn = Gtk.ToggleButton()
         self.packages_filter_all_btn.get_style_context().add_class("filter-chip")
         self.packages_filter_all_btn.connect("toggled", self._on_packages_filter_all_toggled)
-        self.packages_filter_all_btn.set_active(True)
         search_row.pack_start(self.packages_filter_all_btn, False, False, 0)
 
         self.packages_filter_upgradable_btn = Gtk.ToggleButton()
@@ -145,6 +144,8 @@ class PackagesViewMixin:
         self.packages_status.set_line_wrap(True)
         action_bar.pack_start(self.packages_status, True, True, 0)
 
+        self.packages_filter_all_btn.set_active(True)
+
     def reload_packages_async(self) -> None:
         if self.packages_loading:
             return
@@ -177,6 +178,8 @@ class PackagesViewMixin:
         return False
 
     def _render_packages_list(self) -> None:
+        if not hasattr(self, "packages_store") or self.packages_store is None:
+            return
         self.packages_store.clear()
         query = self.packages_search_text.lower()
         upgradable_only = self.packages_filter_upgradable
@@ -203,6 +206,8 @@ class PackagesViewMixin:
         self._render_packages_list()
 
     def _on_packages_filter_all_toggled(self, button: Gtk.ToggleButton) -> None:
+        if not hasattr(self, "packages_filter_upgradable_btn"):
+            return
         if not button.get_active():
             if not self.packages_filter_upgradable_btn.get_active():
                 button.set_active(True)
@@ -212,6 +217,8 @@ class PackagesViewMixin:
         self._render_packages_list()
 
     def _on_packages_filter_upgradable_toggled(self, button: Gtk.ToggleButton) -> None:
+        if not hasattr(self, "packages_filter_all_btn"):
+            return
         if not button.get_active():
             if not self.packages_filter_all_btn.get_active():
                 button.set_active(True)

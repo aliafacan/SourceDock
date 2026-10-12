@@ -71,7 +71,6 @@ class StoreViewMixin:
             button.connect("toggled", self.on_store_filter_toggled, source)
             filter_row.add(button)
             self.store_filter_buttons[source] = button
-        self.store_filter_buttons["all"].set_active(True)
 
         self.store_results_store = Gtk.TreeStore(
             GdkPixbuf.Pixbuf,
@@ -115,8 +114,8 @@ class StoreViewMixin:
         app_col.set_resizable(True)
         app_col.set_expand(True)
         app_col.set_min_width(150)
-        self.store_tree.set_expander_column(app_col)
         self.store_tree.append_column(app_col)
+        self.store_tree.set_expander_column(app_col)
 
         desc_renderer = Gtk.CellRendererText()
         desc_renderer.set_property("ellipsize", Pango.EllipsizeMode.END)
@@ -178,7 +177,11 @@ class StoreViewMixin:
         self.store_status.set_line_wrap(True)
         store_action_bar.pack_start(self.store_status, True, True, 0)
 
+        self.store_filter_buttons["all"].set_active(True)
+
     def on_store_filter_toggled(self, button: Gtk.ToggleButton, source: str) -> None:
+        if not hasattr(self, "store_results_store") or self.store_results_store is None:
+            return
         if not button.get_active():
             if not any(btn.get_active() for btn in self.store_filter_buttons.values()):
                 button.set_active(True)
@@ -391,6 +394,8 @@ class StoreViewMixin:
         return output
 
     def _render_store_results(self, results: list[StoreResult]) -> None:
+        if not hasattr(self, "store_results_store") or self.store_results_store is None:
+            return
         self.store_results_store.clear()
         filtered = [
             r for r in results

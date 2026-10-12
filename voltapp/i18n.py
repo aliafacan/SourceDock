@@ -496,8 +496,14 @@ TRANSLATIONS = {
 }
 
 
-def t(language: str, key: str) -> str:
-    return TRANSLATIONS.get(language, TRANSLATIONS["en"]).get(key, key)
+def t(language: str, key: str, **kwargs) -> str:
+    text = TRANSLATIONS.get(language, TRANSLATIONS["en"]).get(key, key)
+    if kwargs:
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
+    return text
 
 
 def translate_backend_message(language: str, message: str) -> str:

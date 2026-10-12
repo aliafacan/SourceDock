@@ -94,7 +94,6 @@ class InstalledViewMixin:
             button.connect("toggled", self.on_application_filter_toggled, source)
             filter_outer.pack_start(button, False, False, 0)
             self.application_filter_buttons[source] = button
-        self.application_filter_buttons["all"].set_active(True)
 
         sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         sep.set_margin_start(6)
@@ -110,7 +109,6 @@ class InstalledViewMixin:
         self.applications_category_combo.set_valign(Gtk.Align.CENTER)
         self.applications_category_combo.set_size_request(150, -1)
         self.applications_category_combo.append("__all__", "")
-        self.applications_category_combo.set_active(0)
         self.applications_category_combo.connect("changed", self._on_category_filter_changed)
         filter_outer.pack_start(self.applications_category_combo, False, False, 0)
 
@@ -299,6 +297,9 @@ class InstalledViewMixin:
         self.applications_status.set_xalign(0)
         self.applications_status.set_line_wrap(True)
         container.pack_start(self.applications_status, False, False, 0)
+
+        self.application_filter_buttons["all"].set_active(True)
+        self.applications_category_combo.set_active(0)
 
     def on_applications_search_changed(self, entry: Gtk.SearchEntry) -> None:
         self.application_search_text = entry.get_text().strip()
@@ -634,6 +635,8 @@ class InstalledViewMixin:
         return False
 
     def _render_applications_list(self) -> None:
+        if not hasattr(self, "applications_store") or self.applications_store is None:
+            return
         self.applications_store.clear()
         filtered = self._filtered_application_items()
         self.filtered_applications = filtered
