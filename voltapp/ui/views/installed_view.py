@@ -659,6 +659,18 @@ class InstalledViewMixin:
             t(self.preferences.language, "applications_count_summary", count=shown, total=total)
         )
 
+    def _scale_pixbuf_safe(self, pb: GdkPixbuf.Pixbuf | None, size: int = 24) -> GdkPixbuf.Pixbuf | None:
+        if pb is None:
+            return None
+        try:
+            w = pb.get_width()
+            h = pb.get_height()
+            if w != size or h != size:
+                return pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        except Exception:
+            pass
+        return pb
+
     def _get_app_pixbuf(self, application: UnifiedApplication) -> GdkPixbuf.Pixbuf | None:
         cache_key = f"app:{application.id}"
         if cache_key in self._icon_pixbuf_cache:
@@ -668,6 +680,8 @@ class InstalledViewMixin:
         if icon_name and os.path.exists(icon_name):
             try:
                 pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_name, 24, 24, True)
+                if pb:
+                    pb = self._scale_pixbuf_safe(pb, 24)
                 self._icon_pixbuf_cache[cache_key] = pb
                 return pb
             except Exception:
@@ -677,7 +691,9 @@ class InstalledViewMixin:
         for name in (icon_name, application.package_name, "application-x-executable"):
             if name and theme.has_icon(name):
                 try:
-                    pb = theme.load_icon(name, 24, Gtk.IconLookupFlags.GENERIC_FALLBACK)
+                    pb = theme.load_icon(name, 24, Gtk.IconLookupFlags.FORCE_SIZE)
+                    if pb:
+                        pb = self._scale_pixbuf_safe(pb, 24)
                     self._icon_pixbuf_cache[cache_key] = pb
                     return pb
                 except Exception:
@@ -734,12 +750,41 @@ class InstalledViewMixin:
         self.applications_status.set_markup(f'<span foreground="{color}">{GLib.markup_escape_text(message)}</span>')
 
     def _application_source_label(self, source: str) -> str:
+        lang = self.preferences.language
+        if source == "all":
+            return t(lang, "applications_source_all")
+        if source == "updates":
+            return t(lang, "applications_source_updates")
         return {
             SOURCE_APT: "APT",
             SOURCE_FLATPAK: "Flatpak",
             SOURCE_SNAP: "Snap",
             SOURCE_APPIMAGE: "AppImage",
-        }.get(source, source.upper())
+        }.get(source, source)
+
+    def _category_display_name(self, category: str, lang: str) -> str:
+        cat_lower = category.lower().strip()
+        mapping = {
+            "audiovideo": "category_audiovideo",
+            "audio": "category_audio",
+            "video": "category_video",
+            "development": "category_development",
+            "education": "category_education",
+            "game": "category_game",
+            "games": "category_game",
+            "graphics": "category_graphics",
+            "network": "category_network",
+            "office": "category_office",
+            "science": "category_science",
+            "settings": "category_settings",
+            "system": "category_system",
+            "utility": "category_utility",
+            "utilities": "category_utility",
+        }
+        key = mapping.get(cat_lower)
+        if key:
+            return t(lang, key)
+        return category
 
     def _application_error_message(self, message: str) -> str:
         return translate_backend_message(self.preferences.language, message)
@@ -754,12 +799,20 @@ class InstalledViewMixin:
         return f"{kib} KB"
 
     def _update_category_combo(self) -> None:
+        if not hasattr(self, "applications_category_combo"):
+            return
+        current = self.applications_category_combo.get_active_id() or "__all__"
         cats = sorted({app.category for app in self.applications if app.category})
         self.applications_category_combo.remove_all()
-        self.applications_category_combo.append("__all__", t(self.preferences.language, "applications_category_all"))
+        lang = self.preferences.language
+        self.applications_category_combo.append("__all__", t(lang, "applications_category_all"))
         for c in cats:
-            self.applications_category_combo.append(c, c)
-        self.applications_category_combo.set_active(0)
+            label = self._category_display_name(c, lang)
+            self.applications_category_combo.append(c, label)
+        if current in {"__all__"} | set(cats):
+            self.applications_category_combo.set_active_id(current)
+        else:
+            self.applications_category_combo.set_active(0)
 
     def _on_category_filter_changed(self, combo: Gtk.ComboBoxText) -> None:
         active_id = combo.get_active_id() or "__all__"

@@ -437,6 +437,18 @@ class StoreViewMixin:
                     ],
                 )
 
+    def _scale_pixbuf_safe(self, pb: GdkPixbuf.Pixbuf | None, size: int = 24) -> GdkPixbuf.Pixbuf | None:
+        if pb is None:
+            return None
+        try:
+            w = pb.get_width()
+            h = pb.get_height()
+            if w != size or h != size:
+                return pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        except Exception:
+            pass
+        return pb
+
     def _get_store_pixbuf(self, result: StoreResult) -> GdkPixbuf.Pixbuf | None:
         cache_key = f"store:{result.source}:{result.app_id}"
         if cache_key in self._icon_pixbuf_cache:
@@ -444,6 +456,8 @@ class StoreViewMixin:
         if result.icon_path:
             try:
                 pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(result.icon_path, 24, 24, True)
+                if pb:
+                    pb = self._scale_pixbuf_safe(pb, 24)
                 self._icon_pixbuf_cache[cache_key] = pb
                 return pb
             except Exception:
@@ -452,7 +466,9 @@ class StoreViewMixin:
         for icon_name in (result.app_id, result.name.lower(), "application-x-executable"):
             if theme.has_icon(icon_name):
                 try:
-                    pb = theme.load_icon(icon_name, 24, Gtk.IconLookupFlags.GENERIC_FALLBACK)
+                    pb = theme.load_icon(icon_name, 24, Gtk.IconLookupFlags.FORCE_SIZE)
+                    if pb:
+                        pb = self._scale_pixbuf_safe(pb, 24)
                     self._icon_pixbuf_cache[cache_key] = pb
                     return pb
                 except Exception:

@@ -207,6 +207,7 @@ class MainWindow(
         self.applications_flatpak_cleanup_btn.set_label(t(lang, "applications_flatpak_cleanup"))
         for source, button in self.application_filter_buttons.items():
             button.set_label(self._application_source_label(source))
+        self._update_category_combo()
 
         # Store page
         self.store_title_label.set_markup(
