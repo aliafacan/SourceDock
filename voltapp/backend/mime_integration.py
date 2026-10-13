@@ -26,6 +26,25 @@ PACKAGE_MIME_TYPES = (
 )
 
 
+def _get_clean_env() -> dict[str, str]:
+    """Snap ortam değişkenlerinden arındırılmış ve yerel XDG yollarını içeren sistem ortamını döndürür."""
+    env = dict(os.environ)
+    for var in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+        if var in env and "/snap/" in env[var]:
+            del env[var]
+    if "XDG_DATA_DIRS" in env and "/snap/" in env["XDG_DATA_DIRS"]:
+        parts = [p for p in env["XDG_DATA_DIRS"].split(":") if "/snap/" not in p and p.strip()]
+        if parts:
+            env["XDG_DATA_DIRS"] = ":".join(parts)
+        else:
+            del env["XDG_DATA_DIRS"]
+    local_share = os.path.expanduser("~/.local/share")
+    current_dirs = env.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
+    if local_share not in current_dirs.split(":"):
+        env["XDG_DATA_DIRS"] = f"{local_share}:{current_dirs}"
+    return env
+
+
 def get_project_root() -> Path:
     """VoltApp projesinin kök dizinini döndürür."""
     return Path(__file__).resolve().parent.parent.parent
@@ -101,6 +120,7 @@ StartupWMClass=voltapp
                 text=True,
                 check=False,
                 timeout=5,
+                env=_get_clean_env(),
             )
         except Exception:
             pass
@@ -194,6 +214,7 @@ def is_default_package_handler() -> bool:
         "application/vnd.appimage",
         "application/x-appimage",
     )
+    clean_env = _get_clean_env()
 
     # 1. gio mime ile kontrol et
     if shutil.which("gio"):
@@ -205,10 +226,12 @@ def is_default_package_handler() -> bool:
                     text=True,
                     timeout=5,
                     check=False,
+                    env=clean_env,
                 )
                 for line in res.stdout.splitlines():
-                    if "default application" in line.lower() and "voltapp.desktop" in line.lower():
-                        return True
+                    if "default application" in line.lower() or "öntanımlı uygulama" in line.lower():
+                        if "voltapp.desktop" in line.lower():
+                            return True
             except Exception:
                 pass
 
@@ -222,6 +245,7 @@ def is_default_package_handler() -> bool:
                     text=True,
                     timeout=5,
                     check=False,
+                    env=clean_env,
                 )
                 if "voltapp.desktop" in res.stdout.strip().lower():
                     return True
@@ -263,6 +287,7 @@ def set_as_default_package_handler() -> tuple[bool, str]:
     if not has_xdg and not has_gio:
         return True, "Masaüstü kısayolu oluşturuldu (xdg-mime veya gio komutu bulunamadı)."
 
+    clean_env = _get_clean_env()
     errors: list[str] = []
     for mime_type in PACKAGE_MIME_TYPES:
         if has_xdg:
@@ -273,6 +298,7 @@ def set_as_default_package_handler() -> tuple[bool, str]:
                     text=True,
                     timeout=5,
                     check=False,
+                    env=clean_env,
                 )
                 if res.returncode != 0 and res.stderr.strip():
                     errors.append(f"xdg-mime {mime_type}: {res.stderr.strip()}")
@@ -287,6 +313,7 @@ def set_as_default_package_handler() -> tuple[bool, str]:
                     text=True,
                     timeout=5,
                     check=False,
+                    env=clean_env,
                 )
                 if res.returncode != 0 and res.stderr.strip():
                     errors.append(f"gio {mime_type}: {res.stderr.strip()}")
@@ -297,7 +324,7 @@ def set_as_default_package_handler() -> tuple[bool, str]:
     if shutil.which("update-desktop-database"):
         apps_dir = str(Path(os.path.expanduser("~/.local/share/applications")))
         try:
-            subprocess.run(["update-desktop-database", apps_dir], capture_output=True, check=False)
+            subprocess.run(["update-desktop-database", apps_dir], capture_output=True, check=False, env=clean_env)
         except Exception:
             pass
 
