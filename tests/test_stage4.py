@@ -290,6 +290,48 @@ class TestPackageVersionComparison(unittest.TestCase):
         self.assertEqual(status.status, "not_installed")
 
 
+class TestLaunchLocalPackage(unittest.TestCase):
+    def test_launch_flatpak(self):
+        from unittest.mock import MagicMock
+        from voltapp.backend.local_packages import launch_local_package
+        from voltapp.core.models import LocalPackageInfo
+
+        mock_runner = MagicMock()
+        mock_runner.command_exists.return_value = True
+        info = LocalPackageInfo(
+            file_path="/tmp/test.flatpak",
+            format="flatpak",
+            name="SampleApp",
+            extra_info={"app_id": "org.sample.App"},
+        )
+        ok = launch_local_package(mock_runner, info)
+        self.assertTrue(ok)
+        mock_runner.spawn.assert_called_with(["flatpak", "run", "org.sample.App"])
+
+    def test_launch_appimage(self):
+        from unittest.mock import MagicMock
+        from voltapp.backend.local_packages import launch_local_package
+        from voltapp.core.models import LocalPackageInfo
+
+        with tempfile.NamedTemporaryFile(suffix=".AppImage", delete=False) as tf:
+            tf.write(b"#!/bin/sh\n")
+            appimage_path = tf.name
+        os.chmod(appimage_path, 0o755)
+
+        try:
+            mock_runner = MagicMock()
+            info = LocalPackageInfo(
+                file_path=appimage_path,
+                format="appimage",
+                name="MyTool",
+            )
+            ok = launch_local_package(mock_runner, info)
+            self.assertTrue(ok)
+            mock_runner.spawn.assert_called_with([appimage_path])
+        finally:
+            os.remove(appimage_path)
+
+
 if __name__ == "__main__":
     unittest.main()
 

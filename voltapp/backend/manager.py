@@ -362,6 +362,10 @@ class ApplicationRegistry:
         from voltapp.backend.local_packages import get_installed_package_status
         return get_installed_package_status(self.runner, info)
 
+    def launch_local_package(self, info: LocalPackageInfo) -> bool:
+        from voltapp.backend.local_packages import launch_local_package
+        return launch_local_package(self.runner, info)
+
     def install_local_package(
         self,
         info: LocalPackageInfo,

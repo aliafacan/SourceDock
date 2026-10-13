@@ -319,6 +319,13 @@ TRANSLATIONS = {
         "package_installer_already_installed_hint": "Bu uygulama sisteminizde zaten kurulu durumda. 'Yeniden Kur' butonu ile temiz bir kurulum yapabilirsiniz.",
         "package_installer_update_hint": "Bu uygulamanın daha eski bir sürümü kurulu (v{installed_version}). 'Güncelle' butonu ile v{new_version} sürümüne yükseltebilirsiniz.",
         "package_installer_downgrade_hint": "Sisteminizde bu uygulamanın daha yeni bir sürümü zaten kurulu (v{installed_version}).",
+        "package_installer_install_success": "Kurulum başarıyla tamamlandı!",
+        "package_installer_install_failed": "Kurulum tamamlanamadı!",
+        "package_installer_launch_btn": "Uygulamayı Başlat",
+        "package_installer_retry_btn": "Tekrar Dene",
+        "package_installer_close_btn": "Kapat",
+        "package_installer_details": "Ayrıntılar",
+        "package_installer_deleted_notice": "Paket dosyası temizlendi.",
     },
     "en": {
         "app_title": "VoltApp",
@@ -634,6 +641,13 @@ TRANSLATIONS = {
         "package_installer_already_installed_hint": "This application is already installed on your system. You can perform a clean reinstallation using 'Reinstall'.",
         "package_installer_update_hint": "An older version of this app is installed (v{installed_version}). You can update to v{new_version} using 'Update'.",
         "package_installer_downgrade_hint": "A newer version of this application is already installed (v{installed_version}).",
+        "package_installer_install_success": "Installation completed successfully!",
+        "package_installer_install_failed": "Installation failed!",
+        "package_installer_launch_btn": "Launch Application",
+        "package_installer_retry_btn": "Retry",
+        "package_installer_close_btn": "Close",
+        "package_installer_details": "Details",
+        "package_installer_deleted_notice": "Package file cleaned up.",
     },
 }
 

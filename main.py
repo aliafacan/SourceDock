@@ -72,8 +72,6 @@ def main() -> None:
         sys.exit(0 if ok else 1)
 
     prefs_store = PreferencesStore()
-    win = MainWindow(prefs_store)
-    win.show_all()
 
     # Dosya yöneticisinden çift tıklanarak veya terminalden paket dosyası verildiyse aç
     target_files: list[str] = []
@@ -92,9 +90,65 @@ def main() -> None:
             target_files.append(cleaned)
 
     if target_files:
-        win.present()
-        GLib.idle_add(win.prompt_and_install_file, target_files[0])
+        # STANDALONE MINI-INSTALLER:
+        # Büyük ana pencere açılmaz; sadece şık, hafif mini kurulum penceresi açılır!
+        from gi.repository import Gdk
+        from voltapp.backend.manager import ApplicationRegistry
+        from voltapp.ui.components.package_installer_dialog import PackageInstallerDialog
+        from voltapp.theme import get_theme_css
+        from voltapp.i18n import t
 
+        target_file = target_files[0]
+        prefs = prefs_store.load()
+        lang = prefs.language
+        registry = ApplicationRegistry()
+
+        # Tema ayarlarını ekrana uygula
+        is_dark = prefs.theme == "dark"
+        try:
+            def_settings = Gtk.Settings.get_default()
+            if def_settings:
+                def_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
+            screen = Gdk.Screen.get_default()
+            if screen:
+                scr_settings = Gtk.Settings.get_for_screen(screen)
+                if scr_settings:
+                    scr_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
+                provider = Gtk.CssProvider()
+                provider.load_from_data(get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8"))
+                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        except Exception:
+            pass
+
+        try:
+            pkg_info = registry.inspect_local_package(target_file)
+            pkg_status = registry.get_local_package_status(pkg_info)
+        except Exception as exc:
+            err_dialog = Gtk.MessageDialog(
+                title=APP_TITLE,
+                text=f"{t(lang, 'package_inspect_failed')}: {exc}",
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.CLOSE,
+            )
+            err_dialog.run()
+            err_dialog.destroy()
+            sys.exit(1)
+
+        installer = PackageInstallerDialog(
+            parent=None,
+            info=pkg_info,
+            language=lang,
+            is_installed=pkg_status.is_installed,
+            pkg_status=pkg_status,
+            registry=registry,
+            standalone=True,
+        )
+        installer.show_all()
+        Gtk.main()
+        sys.exit(0)
+
+    win = MainWindow(prefs_store)
+    win.show_all()
     Gtk.main()
 
 

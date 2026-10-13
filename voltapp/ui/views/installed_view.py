@@ -1071,43 +1071,11 @@ class InstalledViewMixin:
             language=lang,
             is_installed=is_installed,
             pkg_status=pkg_status,
+            registry=self.application_registry,
+            standalone=False,
+            on_finished=self.reload_applications_async,
         )
-        response = dialog.run()
-        should_create_desktop = dialog.should_create_desktop
-        should_copy_apps = dialog.should_copy_to_applications
-        flatpak_scope = dialog.flatpak_scope
-        should_reinstall = dialog.should_reinstall
-        should_delete_installer = dialog.should_delete_installer
-        dialog.destroy()
-
-        if response != Gtk.ResponseType.OK:
-            return
-
-        action_name = f"install_{pkg_info.format}"
-        target_dir = os.path.expanduser("~/Applications") if should_copy_apps else None
-
-        def do_install():
-            self.application_registry.install_local_package(
-                info=pkg_info,
-                target_dir=target_dir,
-                create_desktop=should_create_desktop,
-                scope=flatpak_scope,
-                reinstall=should_reinstall,
-            )
-            if should_delete_installer and os.path.exists(pkg_info.file_path):
-                try:
-                    os.remove(pkg_info.file_path)
-                except OSError:
-                    pass
-
-        self._run_application_task(
-            action_name=action_name,
-            worker_callable=do_install,
-            success_message_key="package_install_success",
-            progress_title_key="package_installing",
-            refresh_after=True,
-            progress_message=f"{pkg_info.name} ({pkg_info.format.upper()})",
-        )
+        dialog.show_all()
 
     def on_add_appimage(self, _button) -> None:
         self.on_install_local_package(_button)

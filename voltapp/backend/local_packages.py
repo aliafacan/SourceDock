@@ -878,3 +878,75 @@ def install_local_rpm(runner: CommandRunner, file_path: str) -> None:
         runner.run_privileged(["rpm", "-ivh", abs_path], timeout=1800)
     else:
         raise BackendError("Sistemde RPM, DNF veya Zypper paket yoneticisi bulunamadi.")
+
+
+def launch_local_package(runner: CommandRunner, info: LocalPackageInfo) -> bool:
+    """Kurulan yerel paketi sistemde başlatır."""
+    if not info:
+        return False
+
+    fmt = info.format
+    # 1. Flatpak
+    if fmt in ("flatpak", "flatpakref"):
+        app_id = info.extra_info.get("app_id") or info.name
+        if runner.command_exists("flatpak"):
+            runner.spawn(["flatpak", "run", app_id])
+            return True
+
+    # 2. AppImage
+    if fmt == "appimage":
+        candidates = [
+            Path.home() / "Applications" / Path(info.file_path).name,
+            Path(info.file_path),
+        ]
+        for cand in candidates:
+            if cand.exists() and os.access(cand, os.X_OK):
+                runner.spawn([str(cand)])
+                return True
+
+    # 3. Archive
+    if fmt == "archive":
+        from voltapp.backend.portable import find_portable_app
+        app = find_portable_app(info.name)
+        if app and app.executable and os.path.exists(app.executable):
+            runner.spawn([app.executable])
+            return True
+
+    # 4. Debian / RPM (.desktop dosyaları veya komut)
+    pkg_name = (info.extra_info.get("package_name") or info.name).lower()
+    clean_name = re.sub(r"[^a-zA-Z0-9]", "", pkg_name)
+
+    desktop_dirs = [
+        Path.home() / ".local/share/applications",
+        Path("/usr/share/applications"),
+    ]
+    for d in desktop_dirs:
+        if not d.exists():
+            continue
+        for cand_name in (f"{pkg_name}.desktop", f"{info.name}.desktop"):
+            df = d / cand_name
+            if df.exists():
+                if runner.command_exists("gtk-launch"):
+                    runner.spawn(["gtk-launch", cand_name])
+                    return True
+                if runner.command_exists("gio"):
+                    runner.spawn(["gio", "launch", str(df)])
+                    return True
+
+        for df in d.glob("*.desktop"):
+            df_stem = df.stem.lower()
+            if pkg_name in df_stem or (len(clean_name) > 3 and clean_name in re.sub(r"[^a-zA-Z0-9]", "", df_stem)):
+                if runner.command_exists("gtk-launch"):
+                    runner.spawn(["gtk-launch", df.name])
+                    return True
+                if runner.command_exists("gio"):
+                    runner.spawn(["gio", "launch", str(df)])
+                    return True
+
+    for cand_cmd in (pkg_name, info.name.lower()):
+        if runner.command_exists(cand_cmd):
+            runner.spawn([cand_cmd])
+            return True
+
+    return False
+
