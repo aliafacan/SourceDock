@@ -12,7 +12,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
-from voltapp.core.models import LocalPackageInfo
+from voltapp.core.models import InstalledPackageStatus, LocalPackageInfo
 from voltapp.i18n import t
 
 
@@ -25,6 +25,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         info: LocalPackageInfo,
         language: str = "tr",
         is_installed: bool = False,
+        pkg_status: InstalledPackageStatus | None = None,
     ):
         super().__init__(
             title=t(language, "package_installer_title"),
@@ -33,18 +34,26 @@ class PackageInstallerDialog(Gtk.Dialog):
         )
         self.info = info
         self.language = language
-        self.is_installed = is_installed
-        self.is_reinstall = is_installed
+        self.pkg_status = pkg_status or InstalledPackageStatus(
+            is_installed=is_installed,
+            status="same_version" if is_installed else "not_installed",
+        )
+        self.is_installed = self.pkg_status.is_installed
+        self.is_reinstall = self.pkg_status.status == "same_version"
         self.set_default_size(520, 440)
         self.set_resizable(True)
         self.get_style_context().add_class("icon-settings-window")
 
         self.add_button(t(language, "password_cancel"), Gtk.ResponseType.CANCEL)
-        action_label = (
-            t(language, "package_installer_reinstall_btn")
-            if is_installed
-            else t(language, "package_installer_install_btn")
-        )
+        if self.pkg_status.status == "upgradable":
+            action_label = t(language, "package_installer_update_btn")
+        elif self.pkg_status.status == "downgrade":
+            action_label = t(language, "package_installer_downgrade_btn")
+        elif self.pkg_status.status == "same_version":
+            action_label = t(language, "package_installer_reinstall_btn")
+        else:
+            action_label = t(language, "package_installer_install_btn")
+
         install_btn = self.add_button(action_label, Gtk.ResponseType.OK)
         install_btn.get_style_context().add_class("suggested-action")
         self.set_default_response(Gtk.ResponseType.OK)
@@ -94,15 +103,47 @@ class PackageInstallerDialog(Gtk.Dialog):
         badge_lbl.set_valign(Gtk.Align.CENTER)
         name_badge_box.pack_start(badge_lbl, False, False, 0)
 
-        if self.is_installed:
+        status = self.pkg_status.status
+        if status == "same_version":
             inst_badge = Gtk.Label()
             inst_badge.set_markup(
                 f'<span foreground="#065f46" background="#a7f3d0" weight="bold">  ✓ {t(self.language, "package_installer_already_installed_badge")}  </span>'
             )
             inst_badge.set_valign(Gtk.Align.CENTER)
             name_badge_box.pack_start(inst_badge, False, False, 0)
+        elif status == "upgradable":
+            inst_badge = Gtk.Label()
+            inst_badge.set_markup(
+                f'<span foreground="#1e40af" background="#dbeafe" weight="bold">  ⬆ {t(self.language, "package_installer_update_badge")}  </span>'
+            )
+            inst_badge.set_valign(Gtk.Align.CENTER)
+            name_badge_box.pack_start(inst_badge, False, False, 0)
+        elif status == "downgrade":
+            inst_badge = Gtk.Label()
+            inst_badge.set_markup(
+                f'<span foreground="#92400e" background="#fef3c7" weight="bold">  ⬇ {t(self.language, "package_installer_downgrade_badge")}  </span>'
+            )
+            inst_badge.set_valign(Gtk.Align.CENTER)
+            name_badge_box.pack_start(inst_badge, False, False, 0)
 
-        if self.info.version:
+        # Sürüm Bilgisi Satırı
+        if status == "upgradable" and self.pkg_status.installed_version:
+            ver_lbl = Gtk.Label()
+            ver_lbl.set_markup(
+                f'<span foreground="#888888">v{GLib.markup_escape_text(self.pkg_status.installed_version)}</span> '
+                f'<span foreground="#2563eb" weight="bold">➔ v{GLib.markup_escape_text(self.info.version)}</span>'
+            )
+            ver_lbl.set_xalign(0)
+            title_vbox.pack_start(ver_lbl, False, False, 0)
+        elif status == "downgrade" and self.pkg_status.installed_version:
+            ver_lbl = Gtk.Label()
+            ver_lbl.set_markup(
+                f'<span foreground="#888888">v{GLib.markup_escape_text(self.pkg_status.installed_version)}</span> '
+                f'<span foreground="#d97706" weight="bold">➔ v{GLib.markup_escape_text(self.info.version)}</span>'
+            )
+            ver_lbl.set_xalign(0)
+            title_vbox.pack_start(ver_lbl, False, False, 0)
+        elif self.info.version:
             ver_lbl = Gtk.Label()
             ver_lbl.set_markup(f'<span foreground="#888888">v{GLib.markup_escape_text(self.info.version)}</span>')
             ver_lbl.set_xalign(0)
@@ -115,7 +156,35 @@ class PackageInstallerDialog(Gtk.Dialog):
             summary_lbl.get_style_context().add_class("dim-label")
             title_vbox.pack_start(summary_lbl, False, False, 0)
 
-        if self.is_installed:
+        # Bilgilendirme / İpucu Kutusu
+        if status == "upgradable":
+            hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            hint_lbl = Gtk.Label()
+            hint_msg = t(
+                self.language,
+                "package_installer_update_hint",
+                installed_version=self.pkg_status.installed_version,
+                new_version=self.info.version,
+            )
+            hint_lbl.set_markup(f'<span foreground="#2563eb">ℹ {GLib.markup_escape_text(hint_msg)}</span>')
+            hint_lbl.set_line_wrap(True)
+            hint_lbl.set_xalign(0)
+            hint_box.pack_start(hint_lbl, True, True, 0)
+            content.pack_start(hint_box, False, False, 0)
+        elif status == "downgrade":
+            hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            hint_lbl = Gtk.Label()
+            hint_msg = t(
+                self.language,
+                "package_installer_downgrade_hint",
+                installed_version=self.pkg_status.installed_version,
+            )
+            hint_lbl.set_markup(f'<span foreground="#d97706">⚠ {GLib.markup_escape_text(hint_msg)}</span>')
+            hint_lbl.set_line_wrap(True)
+            hint_lbl.set_xalign(0)
+            hint_box.pack_start(hint_lbl, True, True, 0)
+            content.pack_start(hint_box, False, False, 0)
+        elif status == "same_version":
             hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             hint_lbl = Gtk.Label()
             hint_lbl.set_markup(

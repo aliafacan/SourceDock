@@ -18,6 +18,7 @@ from voltapp.core.errors import BackendError
 from voltapp.core.models import (
     APT_LOCK_NOWAIT,
     APT_LOCK_NOWAIT_VALUE,
+    InstalledPackageStatus,
     LocalPackageInfo,
 )
 from voltapp.core.runner import CommandRunner
@@ -411,50 +412,145 @@ def inspect_local_package(runner: CommandRunner, file_path: str) -> LocalPackage
     )
 
 
-def is_package_installed(runner: CommandRunner, info: LocalPackageInfo) -> bool:
-    """Paketin sistemde halihazırda kurulu olup olmadığını kontrol eder."""
+def compare_versions(v1: str, v2: str) -> int:
+    """v1 < v2 ise -1, v1 == v2 ise 0, v1 > v2 ise 1 döndürür."""
+    v1_clean = re.sub(r"^[vV]", "", str(v1).strip())
+    v2_clean = re.sub(r"^[vV]", "", str(v2).strip())
+    if v1_clean == v2_clean:
+        return 0
+
+    if shutil.which("dpkg"):
+        try:
+            res_lt = subprocess.run(
+                ["dpkg", "--compare-versions", v1_clean, "lt", v2_clean],
+                capture_output=True,
+                timeout=2,
+            )
+            if res_lt.returncode == 0:
+                return -1
+            res_gt = subprocess.run(
+                ["dpkg", "--compare-versions", v1_clean, "gt", v2_clean],
+                capture_output=True,
+                timeout=2,
+            )
+            if res_gt.returncode == 0:
+                return 1
+            return 0
+        except Exception:
+            pass
+
+    # Fallback akıllı token ayrıştırma
+    def tokenize(v: str) -> list[int | str]:
+        return [int(part) if part.isdigit() else part for part in re.findall(r"\d+|\D+", v)]
+
+    t1 = tokenize(v1_clean)
+    t2 = tokenize(v2_clean)
+    for p1, p2 in zip(t1, t2):
+        if type(p1) != type(p2):
+            p1, p2 = str(p1), str(p2)
+        if p1 < p2:
+            return -1
+        if p1 > p2:
+            return 1
+    if len(t1) < len(t2):
+        return -1
+    elif len(t1) > len(t2):
+        return 1
+    return 0
+
+
+def get_installed_package_status(runner: CommandRunner, info: LocalPackageInfo) -> InstalledPackageStatus:
+    """Paketin kurulu olup olmadığını ve mevcut sürümünü karşılaştırarak durumunu döndürür."""
     if not info:
-        return False
+        return InstalledPackageStatus(is_installed=False, status="not_installed")
 
     fmt = info.format
+    installed_ver = ""
+    is_inst = False
+
     if fmt == "deb":
         pkg_name = info.extra_info.get("package_name") or info.name
-        res = runner.run(["dpkg-query", "-W", "-f=${Status}", pkg_name], timeout=5, check=False)
-        return "install ok installed" in res.stdout
+        res = runner.run(["dpkg-query", "-W", "-f=${Status}###${Version}", pkg_name], timeout=5, check=False)
+        if "install ok installed" in res.stdout:
+            is_inst = True
+            parts = res.stdout.strip().split("###")
+            if len(parts) > 1:
+                installed_ver = parts[-1].strip()
 
-    if fmt in ("flatpak", "flatpakref"):
-        if not runner.command_exists("flatpak"):
-            return False
-        candidates = []
-        if "app_id" in info.extra_info:
-            candidates.append(info.extra_info["app_id"])
-        if info.name:
-            candidates.append(info.name)
+    elif fmt in ("flatpak", "flatpakref"):
+        if runner.command_exists("flatpak"):
+            candidates = []
+            if "app_id" in info.extra_info:
+                candidates.append(info.extra_info["app_id"])
+            if info.name:
+                candidates.append(info.name)
 
-        # 1. Doğrudan flatpak info ile kontrol et
-        for cand in candidates:
-            res = runner.run(["flatpak", "info", cand], timeout=5, check=False)
-            if res.returncode == 0:
-                return True
-
-        # 2. flatpak list çıktısında app ID veya isim ara
-        res = runner.run(["flatpak", "list", "--columns=application,name"], timeout=5, check=False)
-        if res.returncode == 0:
-            lowered_out = res.stdout.lower()
             for cand in candidates:
-                cand_lower = cand.lower()
-                if cand_lower in lowered_out:
-                    return True
-                cand_clean = cand_lower.replace("-", "").replace("_", "")
-                if len(cand_clean) > 4 and cand_clean in lowered_out.replace("-", "").replace("_", ""):
-                    return True
-        return False
+                res = runner.run(["flatpak", "info", cand], timeout=5, check=False)
+                if res.returncode == 0:
+                    is_inst = True
+                    for line in res.stdout.splitlines():
+                        if line.lower().startswith("version:"):
+                            installed_ver = line.split(":", 1)[1].strip()
+                    break
 
-    if fmt in ("appimage", "archive"):
+            if not is_inst:
+                res = runner.run(["flatpak", "list", "--columns=application,name,version"], timeout=5, check=False)
+                if res.returncode == 0:
+                    for line in res.stdout.splitlines():
+                        parts = line.split("\t")
+                        app_id = parts[0].strip() if len(parts) > 0 else ""
+                        app_name = parts[1].strip() if len(parts) > 1 else ""
+                        ver = parts[2].strip() if len(parts) > 2 else ""
+                        for cand in candidates:
+                            cand_l = cand.lower()
+                            if cand_l in app_id.lower() or cand_l in app_name.lower():
+                                is_inst = True
+                                installed_ver = ver
+                                break
+                        if is_inst:
+                            break
+
+    elif fmt in ("appimage", "archive"):
         from voltapp.backend.portable import find_portable_app
-        return find_portable_app(info.name) is not None
+        app = find_portable_app(info.name)
+        if app is not None:
+            is_inst = True
+            installed_ver = app.version or ""
 
-    return False
+    elif fmt == "rpm":
+        if runner.command_exists("rpm"):
+            pkg_name = info.extra_info.get("package_name") or info.name
+            res = runner.run(["rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", pkg_name], timeout=5, check=False)
+            if res.returncode == 0 and res.stdout.strip() and "is not installed" not in res.stdout:
+                is_inst = True
+                installed_ver = res.stdout.strip()
+
+    if not is_inst:
+        return InstalledPackageStatus(is_installed=False, status="not_installed")
+
+    new_ver = info.version.strip()
+    if installed_ver and new_ver:
+        cmp = compare_versions(installed_ver, new_ver)
+        if cmp < 0:
+            status = "upgradable"
+        elif cmp > 0:
+            status = "downgrade"
+        else:
+            status = "same_version"
+    else:
+        status = "same_version"
+
+    return InstalledPackageStatus(
+        is_installed=True,
+        installed_version=installed_ver,
+        status=status,
+    )
+
+
+def is_package_installed(runner: CommandRunner, info: LocalPackageInfo) -> bool:
+    """Paketin sistemde halihazırda kurulu olup olmadığını kontrol eder."""
+    return get_installed_package_status(runner, info).is_installed
 
 
 # ---------------------------------------------------------------------------

@@ -331,3 +331,4 @@ def set_as_default_package_handler() -> tuple[bool, str]:
     if errors:
         return True, "Büyük ölçüde atandı, ancak bazı türlerde uyarı alındı:\n" + "\n".join(errors[:3])
     return True, "VoltApp başarıyla varsayılan paket yükleyici olarak ayarlandı."
+

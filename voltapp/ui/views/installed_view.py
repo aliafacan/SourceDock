@@ -1058,13 +1058,20 @@ class InstalledViewMixin:
             self._show_error_dialog(f"{t(lang, 'package_inspect_failed')}: {exc}")
             return
 
-        is_installed = False
+        pkg_status = None
         try:
-            is_installed = self.application_registry.is_local_package_installed(pkg_info)
+            pkg_status = self.application_registry.get_local_package_status(pkg_info)
         except Exception:
             pass
+        is_installed = pkg_status.is_installed if pkg_status else False
 
-        dialog = PackageInstallerDialog(parent=self, info=pkg_info, language=lang, is_installed=is_installed)
+        dialog = PackageInstallerDialog(
+            parent=self,
+            info=pkg_info,
+            language=lang,
+            is_installed=is_installed,
+            pkg_status=pkg_status,
+        )
         response = dialog.run()
         should_create_desktop = dialog.should_create_desktop
         should_copy_apps = dialog.should_copy_to_applications

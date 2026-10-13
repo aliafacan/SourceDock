@@ -141,3 +141,11 @@ class LocalPackageInfo:
     exec_path: str = ""
     extra_info: dict[str, str] = field(default_factory=dict)
 
+
+@dataclass
+class InstalledPackageStatus:
+    """Yerel bir paketin sistemdeki kurulum ve sürüm karşılaştırma durumu."""
+    is_installed: bool = False
+    installed_version: str = ""
+    status: str = "not_installed"  # "not_installed", "same_version", "upgradable", "downgrade"
+

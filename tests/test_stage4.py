@@ -237,6 +237,59 @@ class TestAppImageMove(unittest.TestCase):
             self.assertFalse(src.exists(), "AppImage taşınmış olmalı ve kaynak indirme dosyasında kalmamalı!")
 
 
+class TestPackageVersionComparison(unittest.TestCase):
+    def test_compare_versions(self):
+        from voltapp.backend.local_packages import compare_versions
+
+        self.assertEqual(compare_versions("0.6.1-1", "0.6.1-1"), 0)
+        self.assertEqual(compare_versions("0.6.0", "0.6.1-1"), -1)
+        self.assertEqual(compare_versions("0.7.0", "0.6.1-1"), 1)
+        self.assertEqual(compare_versions("v1.2.0", "1.2.0"), 0)
+        self.assertEqual(compare_versions("1.0.0", "1.0.1"), -1)
+
+    def test_get_installed_package_status_deb(self):
+        from unittest.mock import MagicMock
+        from voltapp.backend.local_packages import get_installed_package_status
+        from voltapp.core.models import LocalPackageInfo
+
+        mock_runner = MagicMock()
+        info = LocalPackageInfo(
+            file_path="/tmp/test.deb",
+            format="deb",
+            name="gridcraft",
+            version="0.6.2",
+            extra_info={"package_name": "gridcraft"},
+        )
+
+        # 1. Daha eski sürüm kurulu -> upgradable
+        mock_res = MagicMock()
+        mock_res.stdout = "install ok installed###0.6.1-1"
+        mock_runner.run.return_value = mock_res
+
+        status = get_installed_package_status(mock_runner, info)
+        self.assertTrue(status.is_installed)
+        self.assertEqual(status.installed_version, "0.6.1-1")
+        self.assertEqual(status.status, "upgradable")
+
+        # 2. Aynı sürüm kurulu -> same_version
+        info.version = "0.6.1-1"
+        status = get_installed_package_status(mock_runner, info)
+        self.assertTrue(status.is_installed)
+        self.assertEqual(status.status, "same_version")
+
+        # 3. Daha yeni sürüm kurulu -> downgrade
+        info.version = "0.6.0"
+        status = get_installed_package_status(mock_runner, info)
+        self.assertTrue(status.is_installed)
+        self.assertEqual(status.status, "downgrade")
+
+        # 4. Kurulu değil -> not_installed
+        mock_res.stdout = "unknown ok not-installed"
+        status = get_installed_package_status(mock_runner, info)
+        self.assertFalse(status.is_installed)
+        self.assertEqual(status.status, "not_installed")
+
+
 if __name__ == "__main__":
     unittest.main()
 
