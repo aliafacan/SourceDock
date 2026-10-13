@@ -151,7 +151,8 @@ class StoreViewMixin:
         version_col.add_attribute(version_renderer, "text", _SC_VERSION)
         version_col.set_sort_column_id(_SC_VERSION)
         version_col.set_resizable(True)
-        version_col.set_fixed_width(80)
+        version_col.set_min_width(110)
+        version_col.set_fixed_width(120)
         self.store_tree.append_column(version_col)
 
         size_renderer = Gtk.CellRendererText()

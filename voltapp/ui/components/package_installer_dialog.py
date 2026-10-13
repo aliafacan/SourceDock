@@ -254,16 +254,19 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         if self.info.format in ("appimage", "archive"):
             self.create_desktop_check = Gtk.CheckButton(label=t(self.language, "package_installer_create_shortcut"))
+            self.create_desktop_check.set_tooltip_text(t(self.language, "tooltip_installer_create_shortcut"))
             self.create_desktop_check.set_active(True)
             self.options_box.pack_start(self.create_desktop_check, False, False, 0)
 
         if self.info.format == "appimage":
             self.copy_to_apps_check = Gtk.CheckButton(label=t(self.language, "package_installer_copy_apps"))
+            self.copy_to_apps_check.set_tooltip_text(t(self.language, "tooltip_installer_copy_apps"))
             self.copy_to_apps_check.set_active(True)
             self.options_box.pack_start(self.copy_to_apps_check, False, False, 0)
 
         if self.info.format in ("deb", "rpm", "flatpak", "flatpakref", "archive"):
             self.delete_after_check = Gtk.CheckButton(label=t(self.language, "package_installer_delete_after"))
+            self.delete_after_check.set_tooltip_text(t(self.language, "tooltip_installer_delete_after"))
             self.delete_after_check.set_active(False)
             self.options_box.pack_start(self.delete_after_check, False, False, 0)
 
@@ -337,6 +340,7 @@ class PackageInstallerDialog(Gtk.Dialog):
             action_area.remove(child)
 
         self.cancel_btn = Gtk.Button(label=t(self.language, "password_cancel"))
+        self.cancel_btn.set_tooltip_text(t(self.language, "tooltip_installer_cancel"))
         self.cancel_btn.connect("clicked", self._on_cancel_clicked)
         action_area.pack_start(self.cancel_btn, False, False, 0)
 
@@ -351,23 +355,27 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         self.action_btn = Gtk.Button(label=action_label)
         self.action_btn.get_style_context().add_class("suggested-action")
+        self.action_btn.set_tooltip_text(t(self.language, "tooltip_installer_install"))
         self.action_btn.connect("clicked", self._on_start_install_clicked)
         action_area.pack_start(self.action_btn, False, False, 0)
 
         # Başarı & Hata Butonları
         self.launch_btn = Gtk.Button(label=t(self.language, "package_installer_launch_btn"))
         self.launch_btn.get_style_context().add_class("suggested-action")
+        self.launch_btn.set_tooltip_text(t(self.language, "tooltip_installer_launch"))
         self.launch_btn.connect("clicked", self._on_launch_clicked)
         self.launch_btn.set_no_show_all(True)
         action_area.pack_start(self.launch_btn, False, False, 0)
 
         self.retry_btn = Gtk.Button(label=t(self.language, "package_installer_retry_btn"))
         self.retry_btn.get_style_context().add_class("suggested-action")
+        self.retry_btn.set_tooltip_text(t(self.language, "tooltip_installer_retry"))
         self.retry_btn.connect("clicked", self._on_retry_clicked)
         self.retry_btn.set_no_show_all(True)
         action_area.pack_start(self.retry_btn, False, False, 0)
 
         self.close_btn = Gtk.Button(label=t(self.language, "package_installer_close_btn"))
+        self.close_btn.set_tooltip_text(t(self.language, "tooltip_installer_close"))
         self.close_btn.connect("clicked", self._on_close_clicked)
         self.close_btn.set_no_show_all(True)
         action_area.pack_start(self.close_btn, False, False, 0)

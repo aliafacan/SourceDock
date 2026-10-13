@@ -50,16 +50,19 @@ class SettingsViewMixin:
         scale_label.set_xalign(0)
 
         language_combo = Gtk.ComboBoxText()
+        language_combo.set_tooltip_text(t(lang, "tooltip_settings_language"))
         language_combo.append("tr", t(lang, "language_tr"))
         language_combo.append("en", t(lang, "language_en"))
         language_combo.set_active_id(self.preferences.language)
 
         theme_combo = Gtk.ComboBoxText()
+        theme_combo.set_tooltip_text(t(lang, "tooltip_settings_theme"))
         theme_combo.append("dark", t(lang, "theme_dark"))
         theme_combo.append("light", t(lang, "theme_light"))
         theme_combo.set_active_id(self.preferences.theme)
 
         scale_combo = Gtk.ComboBoxText()
+        scale_combo.set_tooltip_text(t(lang, "tooltip_settings_scale"))
         scale_combo.append("90", t(lang, "scale_90"))
         scale_combo.append("100", t(lang, "scale_100"))
         scale_combo.append("110", t(lang, "scale_110"))
@@ -103,6 +106,7 @@ class SettingsViewMixin:
         is_def = is_default_package_handler()
         btn_label = t(lang, "settings_already_default_btn") if is_def else t(lang, "settings_set_default_btn")
         set_default_btn = Gtk.Button(label=btn_label)
+        set_default_btn.set_tooltip_text(t(lang, "tooltip_settings_set_default"))
         if not is_def:
             set_default_btn.get_style_context().add_class("suggested-action")
 

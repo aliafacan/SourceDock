@@ -193,8 +193,8 @@ class InstalledViewMixin:
         version_col.add_attribute(version_renderer, "text", _AC_VERSION)
         version_col.set_sort_column_id(_AC_VERSION)
         version_col.set_resizable(True)
-        version_col.set_fixed_width(115)
-        version_col.set_min_width(100)
+        version_col.set_fixed_width(140)
+        version_col.set_min_width(120)
         self.applications_tree.append_column(version_col)
 
         size_renderer = Gtk.CellRendererText()

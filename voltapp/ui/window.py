@@ -28,6 +28,7 @@ from voltapp.ui.views.store_view import StoreViewMixin
 from voltapp.ui.views.packages_view import PackagesViewMixin
 from voltapp.ui.views.operations_view import OperationsViewMixin
 from voltapp.ui.views.settings_view import SettingsViewMixin
+from voltapp.ui.views.help_view import HelpViewMixin
 
 
 class MainWindow(
@@ -37,6 +38,7 @@ class MainWindow(
     PackagesViewMixin,
     OperationsViewMixin,
     SettingsViewMixin,
+    HelpViewMixin,
 ):
     """VoltApp ana penceresi."""
 
@@ -120,12 +122,21 @@ class MainWindow(
         self.pages.set_scrollable(True)
         root.pack_start(self.pages, True, True, 0)
 
+        header_actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        header_actions_box.set_valign(Gtk.Align.CENTER)
+
+        self.help_btn = Gtk.Button()
+        self.help_btn.get_style_context().add_class("header-action")
+        self.help_btn.connect("clicked", self.on_open_help)
+        header_actions_box.pack_start(self.help_btn, False, False, 0)
+
         self.settings_btn = Gtk.Button()
         self.settings_btn.get_style_context().add_class("header-action")
         self.settings_btn.connect("clicked", self.on_open_settings)
-        self.settings_btn.set_valign(Gtk.Align.CENTER)
-        self.settings_btn.show()
-        self.pages.set_action_widget(self.settings_btn, Gtk.PackType.END)
+        header_actions_box.pack_start(self.settings_btn, False, False, 0)
+
+        header_actions_box.show_all()
+        self.pages.set_action_widget(header_actions_box, Gtk.PackType.END)
 
         self.installed_tab_label = Gtk.Label()
         installed_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -188,7 +199,10 @@ class MainWindow(
     def _refresh_texts(self) -> None:
         lang = self.preferences.language
         self.set_title(APP_TITLE)
+        self.help_btn.set_label(t(lang, "help"))
+        self.help_btn.set_tooltip_text(t(lang, "tooltip_help"))
         self.settings_btn.set_label(t(lang, "settings"))
+        self.settings_btn.set_tooltip_text(t(lang, "tooltip_settings"))
         self.installed_tab_label.set_text(t(lang, "tab_installed"))
         self.store_tab_label.set_text(t(lang, "tab_store"))
         self.packages_tab_label.set_text(t(lang, "tab_packages"))
@@ -200,9 +214,13 @@ class MainWindow(
         )
         self.applications_subtitle_label.set_text(t(lang, "applications_subtitle"))
         self.applications_search_entry.set_placeholder_text(t(lang, "applications_search_placeholder"))
+        self.applications_search_entry.set_tooltip_text(t(lang, "tooltip_installed_search"))
         self.applications_refresh_btn.set_label(t(lang, "applications_refresh"))
+        self.applications_refresh_btn.set_tooltip_text(t(lang, "tooltip_installed_refresh"))
         self.applications_check_updates_btn.set_label(t(lang, "applications_check_updates"))
+        self.applications_check_updates_btn.set_tooltip_text(t(lang, "tooltip_installed_check_updates"))
         self.applications_update_all_btn.set_label(t(lang, "applications_update_all"))
+        self.applications_update_all_btn.set_tooltip_text(t(lang, "tooltip_installed_update_all"))
         self.applications_tree_col_app.set_title(t(lang, "applications_col_app"))
         self.applications_tree_col_source.set_title(t(lang, "applications_col_source"))
         self.applications_tree_col_version.set_title(t(lang, "applications_col_version"))
@@ -213,23 +231,49 @@ class MainWindow(
             self.applications_tree_col_last_updated.set_title(t(lang, "applications_col_last_updated"))
         self.applications_tree_col_location.set_title(t(lang, "applications_col_location"))
         self.applications_launch_btn.set_label(t(lang, "applications_launch"))
+        self.applications_launch_btn.set_tooltip_text(t(lang, "tooltip_installed_launch"))
         self.applications_action_update_btn.set_label(t(lang, "applications_update"))
+        self.applications_action_update_btn.set_tooltip_text(t(lang, "tooltip_installed_update"))
         self.applications_action_location_btn.set_label(t(lang, "applications_open_location"))
+        self.applications_action_location_btn.set_tooltip_text(t(lang, "tooltip_installed_open_location"))
         self.applications_action_remove_btn.set_label(t(lang, "applications_remove"))
+        self.applications_action_remove_btn.set_tooltip_text(t(lang, "tooltip_installed_remove"))
         self.applications_bulk_remove_btn.set_label(t(lang, "applications_remove") + " (×N)")
+        self.applications_bulk_remove_btn.set_tooltip_text(t(lang, "tooltip_installed_bulk_remove"))
         self.applications_permissions_btn.set_label(t(lang, "flatpak_permissions_btn"))
+        self.applications_permissions_btn.set_tooltip_text(t(lang, "tooltip_installed_permissions"))
         self.applications_rollback_btn.set_label(t(lang, "flatpak_rollback_menu"))
+        self.applications_rollback_btn.set_tooltip_text(t(lang, "tooltip_installed_rollback"))
         self.applications_changelog_btn.set_label(t(lang, "changelog_menu"))
+        self.applications_changelog_btn.set_tooltip_text(t(lang, "tooltip_installed_changelog"))
         self.applications_export_btn.set_label(t(lang, "applications_export"))
+        self.applications_export_btn.set_tooltip_text(t(lang, "tooltip_installed_export"))
         if hasattr(self, "applications_install_file_btn"):
             self.applications_install_file_btn.set_label(t(lang, "install_package_btn"))
+            self.applications_install_file_btn.set_tooltip_text(t(lang, "tooltip_installed_install_file"))
         self.applications_add_appimage_btn.set_label(t(lang, "appimage_register_btn"))
+        self.applications_add_appimage_btn.set_tooltip_text(t(lang, "tooltip_installed_add_appimage"))
         self.applications_export_selected_btn.set_label(t(lang, "export_selected"))
+        self.applications_export_selected_btn.set_tooltip_text(t(lang, "tooltip_installed_export_selected"))
         self.applications_category_label.set_text(t(lang, "applications_category_filter") + ": ")
+        if hasattr(self, "applications_category_combo"):
+            self.applications_category_combo.set_tooltip_text(t(lang, "tooltip_installed_category"))
         self.applications_diagnostics_expander.set_label(t(lang, "applications_diagnostics"))
         self.applications_flatpak_cleanup_btn.set_label(t(lang, "applications_flatpak_cleanup"))
+        self.applications_flatpak_cleanup_btn.set_tooltip_text(t(lang, "tooltip_installed_flatpak_cleanup"))
+
+        filter_tooltip_map = {
+            "all": "tooltip_installed_filter_all",
+            "updates": "tooltip_installed_filter_updates",
+            "flatpak": "tooltip_installed_filter_flatpak",
+            "snap": "tooltip_installed_filter_snap",
+            "appimage": "tooltip_installed_filter_appimage",
+            "portable": "tooltip_installed_filter_portable",
+        }
         for source, button in self.application_filter_buttons.items():
             button.set_label(self._application_source_label(source))
+            tt_key = filter_tooltip_map.get(source, "tooltip_installed_filter_native")
+            button.set_tooltip_text(t(lang, tt_key))
         self._update_category_combo()
 
         # Store page
@@ -238,15 +282,26 @@ class MainWindow(
         )
         self.store_subtitle_label.set_text(t(lang, "store_subtitle"))
         self.store_search_entry.set_placeholder_text(t(lang, "store_search_placeholder"))
+        self.store_search_entry.set_tooltip_text(t(lang, "tooltip_store_search_entry"))
         self.store_search_btn.set_label(t(lang, "store_search_btn"))
+        self.store_search_btn.set_tooltip_text(t(lang, "tooltip_store_search_btn"))
+        self.store_install_btn.set_tooltip_text(t(lang, "tooltip_store_install"))
         self.store_tree_col_name.set_title(t(lang, "store_col_name"))
         self.store_tree_col_description.set_title(t(lang, "store_col_description"))
         self.store_tree_col_source.set_title(t(lang, "store_col_source"))
         self.store_tree_col_version.set_title(t(lang, "store_col_version"))
         self.store_tree_col_size.set_title(t(lang, "store_col_size"))
+
+        store_tooltip_map = {
+            "all": "tooltip_store_filter_all",
+            "flatpak": "tooltip_store_filter_flatpak",
+            "snap": "tooltip_store_filter_snap",
+        }
         for source, button in self.store_filter_buttons.items():
             label_key = f"store_source_{source}"
             button.set_label(t(lang, label_key))
+            stt_key = store_tooltip_map.get(source, "tooltip_store_filter_native")
+            button.set_tooltip_text(t(lang, stt_key))
         self._set_store_status(t(lang, "store_empty"), "#666666")
         self.on_store_result_selected(self.store_tree.get_selection())
         self._render_applications_list()
@@ -259,16 +314,22 @@ class MainWindow(
         )
         self.packages_subtitle_label.set_text(t(lang, "packages_subtitle"))
         self.packages_search_entry.set_placeholder_text(t(lang, "packages_search_placeholder"))
+        self.packages_search_entry.set_tooltip_text(t(lang, "tooltip_packages_search"))
         self.packages_refresh_btn.set_label(t(lang, "packages_refresh"))
+        self.packages_refresh_btn.set_tooltip_text(t(lang, "tooltip_packages_refresh"))
         self.packages_filter_all_btn.set_label(t(lang, "packages_filter_all"))
+        self.packages_filter_all_btn.set_tooltip_text(t(lang, "tooltip_packages_filter_all"))
         self.packages_filter_upgradable_btn.set_label(t(lang, "packages_filter_upgradable"))
+        self.packages_filter_upgradable_btn.set_tooltip_text(t(lang, "tooltip_packages_filter_upgradable"))
         self.packages_tree_col_name.set_title(t(lang, "packages_col_name"))
         self.packages_tree_col_version.set_title(t(lang, "packages_col_version"))
         self.packages_tree_col_new_version.set_title(t(lang, "packages_col_new_version"))
         self.packages_tree_col_size.set_title(t(lang, "packages_col_size"))
         self.packages_tree_col_description.set_title(t(lang, "packages_col_description"))
         self.packages_update_btn.set_label(t(lang, "packages_update_selected"))
+        self.packages_update_btn.set_tooltip_text(t(lang, "tooltip_packages_update_selected"))
         self.packages_update_all_btn.set_label(t(lang, "packages_update_all"))
+        self.packages_update_all_btn.set_tooltip_text(t(lang, "tooltip_packages_update_all"))
 
         # Operations page
         self.operations_title_label.set_markup(
@@ -276,8 +337,11 @@ class MainWindow(
         )
         self.operations_subtitle_label.set_text(t(lang, "operations_subtitle"))
         self.operations_refresh_btn.set_label(t(lang, "operations_refresh"))
+        self.operations_refresh_btn.set_tooltip_text(t(lang, "tooltip_operations_refresh"))
         self.operations_pause_btn.set_label(t(lang, "operations_pause"))
+        self.operations_pause_btn.set_tooltip_text(t(lang, "tooltip_operations_pause"))
         self.operations_cancel_btn.set_label(t(lang, "operations_cancel"))
+        self.operations_cancel_btn.set_tooltip_text(t(lang, "tooltip_operations_cancel"))
         self.operations_tree_col_process.set_title(t(lang, "operations_col_process"))
         self.operations_tree_col_pid.set_title(t(lang, "operations_col_pid"))
         self.operations_tree_col_target.set_title(t(lang, "operations_col_target"))
@@ -288,6 +352,9 @@ class MainWindow(
     def _on_key_press(self, _window: Gtk.Window, event: Gdk.EventKey) -> bool:
         ctrl = bool(event.state & Gdk.ModifierType.CONTROL_MASK)
         key = Gdk.keyval_name(event.keyval) or ""
+        if key == "F1":
+            self.on_open_help(None)
+            return True
         if ctrl and key.lower() == "f":
             page = self.pages.get_current_page()
             if page == 0:
