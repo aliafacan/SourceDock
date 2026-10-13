@@ -3,107 +3,132 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-PACKAGE="zorin-app-manager"
-VERSION="0.2.0"
+PACKAGE="voltapp"
+VERSION="1.0.0"
 BUILD_DIR="$(mktemp -d)"
 DEB_ROOT="$BUILD_DIR/${PACKAGE}_${VERSION}_all"
+OUTPUT_DIR="${1:-$SCRIPT_DIR}"
 
-echo "==> Paket dizini hazırlanıyor..."
+echo "⚡ VoltApp .deb Paketi Hazırlanıyor (v$VERSION)..."
 
-# Directory structure
+# 1. Dizin hiyerarşisi
 mkdir -p "$DEB_ROOT/DEBIAN"
 mkdir -p "$DEB_ROOT/usr/lib/$PACKAGE"
 mkdir -p "$DEB_ROOT/usr/bin"
 mkdir -p "$DEB_ROOT/usr/share/applications"
 mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/48x48/apps"
+mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/64x64/apps"
 mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/128x128/apps"
-mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps"
 
-# Python source files
-echo "==> Kaynak dosyalar kopyalanıyor..."
-for f in main.py ui.py applications.py store.py backend.py constants.py i18n.py preferences.py theme.py; do
-    [ -f "$PROJECT_DIR/$f" ] && cp "$PROJECT_DIR/$f" "$DEB_ROOT/usr/lib/$PACKAGE/"
-done
+# 2. Kaynak dosyaları kopyala
+echo "==> Uygulama kaynak dosyaları kopyalanıyor..."
+cp "$PROJECT_DIR/main.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/run.sh" ] && cp "$PROJECT_DIR/run.sh" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/constants.py" ] && cp "$PROJECT_DIR/constants.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/i18n.py" ] && cp "$PROJECT_DIR/i18n.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/preferences.py" ] && cp "$PROJECT_DIR/preferences.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/theme.py" ] && cp "$PROJECT_DIR/theme.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/applications.py" ] && cp "$PROJECT_DIR/applications.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/store.py" ] && cp "$PROJECT_DIR/store.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/backend.py" ] && cp "$PROJECT_DIR/backend.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
+[ -f "$PROJECT_DIR/ui.py" ] && cp "$PROJECT_DIR/ui.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
 
-# Launcher script
+# voltapp/ paket modülleri
+cp -r "$PROJECT_DIR/voltapp" "$DEB_ROOT/usr/lib/$PACKAGE/"
+find "$DEB_ROOT/usr/lib/$PACKAGE" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$DEB_ROOT/usr/lib/$PACKAGE" -type f -name "*.pyc" -delete 2>/dev/null || true
+
+# assets dizini
+if [ -d "$PROJECT_DIR/assets" ]; then
+    cp -r "$PROJECT_DIR/assets" "$DEB_ROOT/usr/lib/$PACKAGE/"
+fi
+
+# 3. /usr/bin/voltapp başlatıcı betiği
 cat > "$DEB_ROOT/usr/bin/$PACKAGE" <<'LAUNCHER'
 #!/bin/bash
-exec /usr/bin/python3 /usr/lib/zorin-app-manager/main.py "$@"
+exec /usr/bin/python3 /usr/lib/voltapp/main.py "$@"
 LAUNCHER
 chmod 755 "$DEB_ROOT/usr/bin/$PACKAGE"
 
-# Desktop file & SVG icon
-cp "$SCRIPT_DIR/$PACKAGE.desktop" "$DEB_ROOT/usr/share/applications/"
-cp "$SCRIPT_DIR/$PACKAGE.svg"     "$DEB_ROOT/usr/share/icons/hicolor/scalable/apps/"
+# 4. Masaüstü kısayolu & İkonlar
+if [ -f "$SCRIPT_DIR/voltapp.desktop" ]; then
+    cp "$SCRIPT_DIR/voltapp.desktop" "$DEB_ROOT/usr/share/applications/"
+elif [ -f "$PROJECT_DIR/packaging/voltapp.desktop" ]; then
+    cp "$PROJECT_DIR/packaging/voltapp.desktop" "$DEB_ROOT/usr/share/applications/"
+fi
 
-# PNG icon generation via Python + librsvg
-echo "==> İkonlar oluşturuluyor..."
-/usr/bin/python3 - "$SCRIPT_DIR/$PACKAGE.svg" "$DEB_ROOT" "$PACKAGE" <<'PYEOF'
-import sys, gi
-gi.require_version('Rsvg', '2.0')
-from gi.repository import Rsvg
-import cairo
+# Vektörel SVG ikon
+if [ -f "$PROJECT_DIR/assets/voltapp.svg" ]; then
+    cp "$PROJECT_DIR/assets/voltapp.svg" "$DEB_ROOT/usr/share/icons/hicolor/scalable/apps/voltapp.svg"
+fi
 
-svg_path, deb_root, pkg = sys.argv[1], sys.argv[2], sys.argv[3]
-handle = Rsvg.Handle.new_from_file(svg_path)
+# PNG ikonlar
+[ -f "$PROJECT_DIR/assets/voltapp_48.png" ] && cp "$PROJECT_DIR/assets/voltapp_48.png" "$DEB_ROOT/usr/share/icons/hicolor/48x48/apps/voltapp.png"
+[ -f "$PROJECT_DIR/assets/voltapp_64.png" ] && cp "$PROJECT_DIR/assets/voltapp_64.png" "$DEB_ROOT/usr/share/icons/hicolor/64x64/apps/voltapp.png"
+[ -f "$PROJECT_DIR/assets/voltapp_128.png" ] && cp "$PROJECT_DIR/assets/voltapp_128.png" "$DEB_ROOT/usr/share/icons/hicolor/128x128/apps/voltapp.png"
+[ -f "$PROJECT_DIR/assets/voltapp.png" ] && [ ! -f "$DEB_ROOT/usr/share/icons/hicolor/128x128/apps/voltapp.png" ] && cp "$PROJECT_DIR/assets/voltapp.png" "$DEB_ROOT/usr/share/icons/hicolor/128x128/apps/voltapp.png"
 
-for size in [48, 128, 256]:
-    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
-    ctx = cairo.Context(surface)
-    vp = Rsvg.Rectangle()
-    vp.x, vp.y, vp.width, vp.height = 0, 0, size, size
-    handle.render_document(ctx, vp)
-    out = f"{deb_root}/usr/share/icons/hicolor/{size}x{size}/apps/{pkg}.png"
-    surface.write_to_png(out)
-    print(f"   {size}x{size} OK")
-PYEOF
-
-# DEBIAN/control
+# 5. DEBIAN/control
 cat > "$DEB_ROOT/DEBIAN/control" <<EOF
 Package: $PACKAGE
 Version: $VERSION
-Section: admin
+Section: utils
 Priority: optional
 Architecture: all
 Depends: python3 (>= 3.8), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-gdkpixbuf-2.0
 Recommends: flatpak, snapd
 Maintainer: Ali Afacan <aafacan1425@gmail.com>
-Description: Zorin OS Uygulama Yöneticisi
- APT, Flatpak, Snap ve AppImage için birleşik uygulama yöneticisi.
+Homepage: https://github.com/aliafacan/VoltApp
+Description: VoltApp - Lightning-fast Unified Package and Application Manager
+ VoltApp is a modern, modular, and distro-agnostic Linux software management
+ tool. It unifies APT/DNF/Pacman/Zypper native packages, Flatpak, Snap,
+ AppImage, and portable software with standalone mini-installer preview,
+ smart version detection, and dual-language (TR/EN) support.
 EOF
 
-# DEBIAN/postinst
+# 6. DEBIAN/postinst
 cat > "$DEB_ROOT/DEBIAN/postinst" <<'EOF'
 #!/bin/bash
 set -e
 if [ "$1" = "configure" ]; then
     update-desktop-database -q /usr/share/applications 2>/dev/null || true
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+    update-mime-database /usr/share/mime 2>/dev/null || true
 fi
 EOF
 chmod 755 "$DEB_ROOT/DEBIAN/postinst"
 
-# DEBIAN/postrm
+# 7. DEBIAN/postrm
 cat > "$DEB_ROOT/DEBIAN/postrm" <<'EOF'
 #!/bin/bash
 set -e
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     update-desktop-database -q /usr/share/applications 2>/dev/null || true
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+    update-mime-database /usr/share/mime 2>/dev/null || true
 fi
 EOF
 chmod 755 "$DEB_ROOT/DEBIAN/postrm"
 
-# Build
-echo "==> .deb oluşturuluyor..."
-DEB_OUT="$SCRIPT_DIR/${PACKAGE}_${VERSION}_all.deb"
+# 8. İzinleri standartlaştır
+echo "==> İzinler ayarlanıyor..."
+find "$DEB_ROOT" -type d -exec chmod 755 {} +
+find "$DEB_ROOT" -type f -exec chmod 644 {} +
+find "$DEB_ROOT/usr/bin" -type f -exec chmod 755 {} +
+chmod 755 "$DEB_ROOT/DEBIAN/postinst" "$DEB_ROOT/DEBIAN/postrm"
+chmod 755 "$DEB_ROOT/DEBIAN"
+chmod 644 "$DEB_ROOT/DEBIAN/control"
+
+# 9. Paket oluşturma
+mkdir -p "$OUTPUT_DIR"
+DEB_OUT="$OUTPUT_DIR/${PACKAGE}_${VERSION}_all.deb"
+echo "==> dpkg-deb çalıştırılıyor..."
 dpkg-deb --build --root-owner-group "$DEB_ROOT" "$DEB_OUT"
 
+# 10. Temizlik & Bilgi
 rm -rf "$BUILD_DIR"
 
-echo ""
-echo "✓ Paket hazır: $DEB_OUT"
-echo ""
-echo "Kurmak için:"
-echo "  sudo dpkg -i $DEB_OUT"
+echo "✅ Başarılı! .deb paketi oluşturuldu:"
+echo "   $DEB_OUT"
+ls -lh "$DEB_OUT"

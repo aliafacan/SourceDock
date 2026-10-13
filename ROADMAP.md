@@ -13,7 +13,7 @@
 | **Aşama 3** | Çoklu Dil & Yerelleştirme (i18n) Temizliği | ✅ Tamamlandı |
 | **Aşama 4** | Yeni Paket Formatları (.deb, .AppImage, .tar.gz, vb.) | ✅ Tamamlandı |
 | **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ✅ Tamamlandı |
-| **Aşama 6** | Açık Kaynak Hazırlığı (Topluluk, CI/CD, Dokümantasyon) | ⏳ Sırada |
+| **Aşama 6** | Açık Kaynak Hazırlığı & Paketleme (.deb, CI/CD, Docs) | ✅ Tamamlandı |
 
 ---
 
@@ -91,11 +91,15 @@
 ---
 
 ## 🚀 Aşama 6: Açık Kaynak Hazırlığı & GitHub Topluluğu
-- [ ] **6.1. Topluluk ve Katkı Belgeleri**
+- [x] **6.1. Topluluk ve Katkı Belgeleri**
   - `CONTRIBUTING.md` (Geliştirici katkı kuralları ve modüler dosya kuralı).
   - `CODE_OF_CONDUCT.md` (Topluluk kuralları).
   - `.github/ISSUE_TEMPLATE/` (Hata ve öneri şablonları).
   - `.github/pull_request_template.md`.
-- [ ] **6.2. Otomasyon & CI/CD**
-  - Tek komutla kurulum için `install.sh`.
-  - GitHub Actions CI (syntax, lint ve import kontrolleri).
+- [x] **6.2. Otomasyon & CI/CD**
+  - Tek komutla global sistem kurulumu için `install.sh` ve `uninstall.sh`.
+  - GitHub Actions CI (`.github/workflows/ci.yml`: syntax, Python 3.10/3.11/3.12 matrisi, Xvfb altında unittest çalıştırma ve paketleme doğrulaması).
+- [x] **6.3. VoltApp `.deb` Paketi & Dağıtımı**
+  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`voltapp_1.0.0_all.deb`) inşası.
+  - Bağımsız masaüstü başlatıcı (`voltapp.desktop`), tam ikon setleri ve MIME ilişkilendirmeleri.
+

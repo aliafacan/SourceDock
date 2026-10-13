@@ -302,3 +302,4 @@ class HelpViewMixin:
         dialog = HelpDialog(parent=self, language=self.preferences.language)
         dialog.run()
         dialog.destroy()
+
