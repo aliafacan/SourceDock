@@ -73,6 +73,125 @@ def main() -> None:
 
     prefs_store = PreferencesStore()
 
+    # Uygulama Ayrıntıları (App Details)
+    if "--details" in sys.argv:
+        from gi.repository import Gdk
+        from voltapp.backend.manager import ApplicationRegistry
+        from voltapp.ui.components.app_details_dialog import InstalledAppDetailsDialog
+        from voltapp.core.models import UnifiedApplication
+        from voltapp.theme import get_theme_css
+
+        prefs = prefs_store.load()
+        lang = prefs.language
+        registry = ApplicationRegistry()
+
+        try:
+            is_dark = prefs.theme == "dark"
+            def_settings = Gtk.Settings.get_default()
+            if def_settings:
+                def_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
+            screen = Gdk.Screen.get_default()
+            if screen:
+                scr_settings = Gtk.Settings.get_for_screen(screen)
+                if scr_settings:
+                    scr_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
+                provider = Gtk.CssProvider()
+                provider.load_from_data(get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8"))
+                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        except Exception:
+            pass
+
+        idx = sys.argv.index("--details")
+        target_name = sys.argv[idx + 1] if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-") else "voltapp"
+
+        snapshot = registry.load()
+        target_app = next(
+            (a for a in snapshot.applications if a.package_name == target_name or a.name.lower() == target_name.lower() or target_name in a.id),
+            None,
+        )
+
+        if not target_app:
+            target_app = UnifiedApplication(
+                id="apt:voltapp",
+                name="VoltApp ⚡",
+                source="apt",
+                version="1.1.0",
+                icon="voltapp",
+                executable="/usr/bin/voltapp",
+                desktop_file="/usr/share/applications/voltapp.desktop",
+                install_path="/usr/share/voltapp",
+                category="System",
+                package_name="voltapp",
+                update_available=False,
+            )
+
+        dialog = InstalledAppDetailsDialog(
+            application=target_app,
+            registry=registry,
+            language=lang,
+            parent=None,
+            standalone=True,
+        )
+        dialog.show_all()
+        Gtk.main()
+        sys.exit(0)
+
+    # Uygulamayı Kaldır (Uninstall CLI/Action)
+    if "--uninstall" in sys.argv:
+        from gi.repository import Gdk
+        from voltapp.backend.manager import ApplicationRegistry
+        from voltapp.theme import get_theme_css
+        from voltapp.i18n import t
+
+        prefs = prefs_store.load()
+        lang = prefs.language
+        registry = ApplicationRegistry()
+
+        try:
+            screen = Gdk.Screen.get_default()
+            if screen:
+                provider = Gtk.CssProvider()
+                provider.load_from_data(get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8"))
+                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        except Exception:
+            pass
+
+        idx = sys.argv.index("--uninstall")
+        target_name = sys.argv[idx + 1] if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-") else "voltapp"
+
+        confirm = Gtk.MessageDialog(
+            title=APP_TITLE,
+            type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.NONE,
+            text=t(lang, "details_remove_confirm_title"),
+        )
+        confirm.format_secondary_text(
+            t(lang, "details_remove_confirm_text", name=target_name.capitalize())
+        )
+        confirm.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
+        del_btn = confirm.add_button(t(lang, "details_btn_remove"), Gtk.ResponseType.OK)
+        del_btn.get_style_context().add_class("destructive-action")
+        confirm.show_all()
+        resp = confirm.run()
+        confirm.destroy()
+
+        if resp == Gtk.ResponseType.OK:
+            if target_name.lower() == "voltapp":
+                uninstall_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.sh")
+                if os.path.exists(uninstall_script):
+                    registry.runner.run_privileged(["bash", uninstall_script])
+                else:
+                    registry.runner.run_privileged(["apt-get", "remove", "-y", "voltapp"])
+            else:
+                snapshot = registry.load()
+                app = next(
+                    (a for a in snapshot.applications if a.package_name == target_name or a.name.lower() == target_name.lower()),
+                    None,
+                )
+                if app:
+                    registry.remove(app)
+        sys.exit(0)
+
     # Dosya yöneticisinden çift tıklanarak veya terminalden paket dosyası verildiyse aç
     target_files: list[str] = []
     for arg in sys.argv[1:]:

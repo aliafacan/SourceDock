@@ -47,5 +47,5 @@ jobs:
       - name: Debian (.deb) Paketini Derle ve Doğrula
         run: |
           bash packaging/build_deb.sh
-          dpkg -I packaging/voltapp_1.0.0_all.deb
+          dpkg -I packaging/voltapp_*.deb
 

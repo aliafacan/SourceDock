@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Aşama 4 (Yeni Paket Formatları) birim ve entegrasyon testleri."""
 
+import glob
 import os
 from pathlib import Path
 import stat
@@ -43,14 +44,15 @@ class TestStage4FormatDetection(unittest.TestCase):
 
 class TestDebInspection(unittest.TestCase):
     def test_inspect_real_deb(self):
-        deb_path = "packaging/voltapp_1.0.0_all.deb"
-        if not os.path.exists(deb_path):
+        deb_candidates = sorted(glob.glob("packaging/voltapp_*_all.deb"))
+        if not deb_candidates:
             self.skipTest("Deb dosyası bulunamadı.")
+        deb_path = deb_candidates[-1]
         runner = CommandRunner()
         info = inspect_local_package(runner, deb_path)
         self.assertEqual(info.format, "deb")
         self.assertEqual(info.name, "voltapp")
-        self.assertEqual(info.version, "1.0.0")
+        self.assertIn(info.version, ("1.0.0", "1.1.0"))
         self.assertEqual(info.architecture, "all")
         self.assertGreater(info.size_bytes, 0)
         self.assertTrue(len(info.description) > 0)

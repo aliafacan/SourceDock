@@ -3,4 +3,4 @@
 
 APP_TITLE = "VoltApp"
 APP_ICON_NAME = "voltapp"
-APP_VERSION = "0.3.0"
+APP_VERSION = "1.1.0"

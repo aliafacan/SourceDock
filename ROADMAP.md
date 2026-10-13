@@ -100,6 +100,6 @@
   - Tek komutla global sistem kurulumu için `install.sh` ve `uninstall.sh`.
   - GitHub Actions CI (`.github/workflows/ci.yml`: syntax, Python 3.10/3.11/3.12 matrisi, Xvfb altında unittest çalıştırma ve paketleme doğrulaması).
 - [x] **6.3. VoltApp `.deb` Paketi & Dağıtımı**
-  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`voltapp_1.0.0_all.deb`) inşası.
-  - Bağımsız masaüstü başlatıcı (`voltapp.desktop`), tam ikon setleri ve MIME ilişkilendirmeleri.
+  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`voltapp_1.1.0_all.deb`) inşası.
+  - Bağımsız masaüstü başlatıcı (`voltapp.desktop`), masaüstü sağ tık eylemleri (Desktop Actions: Ayrıntılar, Kaldır, Güncellemeler), uygulama detay sayfası (`InstalledAppDetailsDialog`), tam ikon setleri ve MIME ilişkilendirmeleri.
 

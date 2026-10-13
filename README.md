@@ -35,6 +35,7 @@
 - **📦 Çoklu Format ve Bağımsız Mini Kurucu:** `.deb`, `.AppImage`, `.flatpak` veya `.rpm` dosyalarına çift tıklandığında akıllı sürüm algılamalı (Kurulu/Tekrar Kur, Güncelle, Eski Sürüme Dön, Yeni Kur) bağımsız mini kurulum penceresi açılır.
 - **🛡️ Akıllı Snap Confinement Yönetimi:** Geliştirici IDE'leri (Antigravity, VS Code, JetBrains vb.) için gerekli `--classic` yetkilendirmelerini otomatik algılar ve kullanıcı onay diyaloğu sunar.
 - **⚙️ Sistem, Bellenim & Çalışma Ortamı Güncellemeleri:** Donanım bellenimleri (`fwupd` / UEFI dbx) ve Flatpak/Snap sistem platformları/çalışma ortamları (Mesa, GNOME, KDE, Wine) için tam güncelleme desteği.
+- **🔍 Uygulama Detayları ve Masaüstü Sağ Tık Eylemleri (Desktop Actions):** Zorin OS / GNOME masaüstü menüsünden doğrudan VoltApp ayrıntılarını açma veya kaldırma eylemleri; uygulama listesinde çift tık veya sağ tık ile sürüm, boyut, kaynak ve izinleri inceleyebileceğiniz kapsamlı detay penceresi.
 - **⚡ Modern ve Hızlı GTK Arayüzü:** Koyu/Açık tema, `%90-%125` arayüz ölçekleme, yerleşik Kullanıcı Kılavuzu (`F1`) ve her işlem için etkileşimli araç ipuçları (tooltips).
 - **🌍 Çift Dilli (i18n):** Türkçe ve İngilizce dilleri arasında çalışma anında anında geçiş.
 - **🐧 Dağıtım Bağımsız:** Ubuntu, Zorin OS, Debian, Fedora, Arch Linux, Manjaro, openSUSE ve genel Linux dağıtımlarını otomatik tanır.
@@ -49,7 +50,7 @@
 ./packaging/build_deb.sh
 
 # Tek komutla kurun:
-sudo apt install ./packaging/voltapp_1.0.0_all.deb
+sudo apt install ./packaging/voltapp_1.1.0_all.deb
 ```
 
 ### Seçenek 2: Otomatik Kurulum Betiği (Global Installer)
@@ -111,6 +112,7 @@ python3 -m unittest discover -s tests -v
 - **📦 Multi-Format & Standalone Mini-Installer:** Double-click any `.deb`, `.AppImage`, `.flatpak`, or `.rpm` file to open a lightweight mini-installer with intelligent version detection (Installed/Reinstall, Update, Downgrade, Fresh Install).
 - **🛡️ Smart Snap Confinement Handling:** Automatically detects `--classic` confinement requirements for developer IDEs (such as Antigravity, VS Code, JetBrains) with seamless confirmation dialogs.
 - **⚙️ System, Firmware & Runtime Updates:** Full update support for hardware firmware (`fwupd` / UEFI dbx) and Flatpak/Snap platform runtimes (Mesa, GNOME, KDE, Wine).
+- **🔍 Application Details & Desktop Actions:** Native Zorin OS / GNOME desktop actions for opening App Details, direct uninstall, and update checks right from the application menu; comprehensive in-app details dialog with version comparison, launch, and safe uninstall.
 - **⚡ Blazing GTK User Interface:** Clean dark/light theme styling, `90%-125%` UI scaling, integrated User Guide (`F1`), and localized interactive tooltips.
 - **🌍 Fully Bilingual (i18n):** Native support for English and Turkish with instant runtime switching.
 - **🐧 Distro-Agnostic Engine:** Auto-detects Debian, Ubuntu, Zorin OS, Fedora, Arch Linux, Manjaro, openSUSE, and generic Linux platforms.
@@ -125,7 +127,7 @@ python3 -m unittest discover -s tests -v
 ./packaging/build_deb.sh
 
 # Install with single command:
-sudo apt install ./packaging/voltapp_1.0.0_all.deb
+sudo apt install ./packaging/voltapp_1.1.0_all.deb
 ```
 
 ### Option 2: Automatic Global Installer Script

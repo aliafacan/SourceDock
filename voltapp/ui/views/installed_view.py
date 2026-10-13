@@ -34,6 +34,7 @@ from voltapp.core.models import (
 from voltapp.i18n import t, translate_backend_message
 from voltapp.ui.components.progress import OperationProgressWindow
 from voltapp.ui.components.package_installer_dialog import PackageInstallerDialog
+from voltapp.ui.components.app_details_dialog import InstalledAppDetailsDialog
 
 _AC_ICON = 0
 _AC_NAME = 1
@@ -260,6 +261,10 @@ class InstalledViewMixin:
         self.applications_launch_btn.connect("clicked", lambda _b: self._on_selected_app_action(self.on_launch_application))
         action_bar.pack_start(self.applications_launch_btn, False, False, 0)
 
+        self.applications_details_btn = Gtk.Button()
+        self.applications_details_btn.connect("clicked", lambda _b: self._on_selected_app_action(self.on_show_application_details))
+        action_bar.pack_start(self.applications_details_btn, False, False, 0)
+
         self.applications_action_update_btn = Gtk.Button()
         self.applications_action_update_btn.connect("clicked", lambda _b: self._on_selected_app_action(self.on_update_application))
         action_bar.pack_start(self.applications_action_update_btn, False, False, 0)
@@ -297,6 +302,7 @@ class InstalledViewMixin:
 
         for btn in (
             self.applications_launch_btn,
+            self.applications_details_btn,
             self.applications_action_update_btn,
             self.applications_action_location_btn,
             self.applications_action_remove_btn,
@@ -392,7 +398,7 @@ class InstalledViewMixin:
         if it is None:
             return
         application: UnifiedApplication = model.get_value(it, _AC_APP)
-        self.on_launch_application(None, application)
+        self.on_show_application_details(None, application)
 
     def on_application_tree_button_press(self, _tree: Gtk.TreeView, event) -> bool:
         if event.button == 3:
@@ -488,6 +494,7 @@ class InstalledViewMixin:
         if count == 0:
             for btn in (
                 self.applications_launch_btn,
+                self.applications_details_btn,
                 self.applications_action_update_btn,
                 self.applications_action_location_btn,
                 self.applications_action_remove_btn,
@@ -504,6 +511,7 @@ class InstalledViewMixin:
             it = model.get_iter(paths[0])
             application: UnifiedApplication = model.get_value(it, _AC_APP)
             self.applications_launch_btn.set_sensitive(bool(application.executable))
+            self.applications_details_btn.set_sensitive(True)
             self.applications_action_update_btn.set_sensitive(application.update_available)
             self.applications_action_location_btn.set_sensitive(bool(application.install_path or application.desktop_file))
             self.applications_action_remove_btn.set_sensitive(application.source != SOURCE_FIRMWARE)
@@ -513,6 +521,7 @@ class InstalledViewMixin:
             self.applications_changelog_btn.set_sensitive(is_native_source(application.source))
         else:
             self.applications_launch_btn.set_sensitive(False)
+            self.applications_details_btn.set_sensitive(False)
             self.applications_action_location_btn.set_sensitive(False)
             self.applications_permissions_btn.set_sensitive(False)
             self.applications_rollback_btn.set_sensitive(False)
@@ -533,6 +542,11 @@ class InstalledViewMixin:
     def _show_application_context_menu(self, application: UnifiedApplication, event) -> None:
         menu = Gtk.Menu()
         menu.get_style_context().add_class("icon-settings-window")
+
+        item_details = Gtk.MenuItem(label=t(self.preferences.language, "applications_details"))
+        item_details.connect("activate", lambda _: self.on_show_application_details(None, application))
+        menu.append(item_details)
+
         item_launch = Gtk.MenuItem(label=t(self.preferences.language, "applications_launch"))
         item_launch.connect("activate", lambda _: self.on_launch_application(None, application))
         menu.append(item_launch)
@@ -546,12 +560,42 @@ class InstalledViewMixin:
         item_loc.connect("activate", lambda _: self.on_open_application_location(None, application))
         menu.append(item_loc)
 
-        item_del = Gtk.MenuItem(label=t(self.preferences.language, "applications_remove"))
-        item_del.connect("activate", lambda _: self.on_remove_application(None, application))
-        menu.append(item_del)
+        if application.source != SOURCE_FIRMWARE:
+            item_del = Gtk.MenuItem(label=t(self.preferences.language, "applications_remove"))
+            item_del.connect("activate", lambda _: self.on_remove_application(None, application))
+            menu.append(item_del)
 
         menu.show_all()
         menu.popup_at_pointer(event)
+
+    def on_show_application_details(self, _button, application: UnifiedApplication) -> None:
+        def _handle_detail_action(action: str, app: UnifiedApplication):
+            if action == "launch":
+                self.on_launch_application(None, app)
+            elif action == "update":
+                self.on_update_application(None, app)
+            elif action == "remove":
+                self.on_remove_application(None, app)
+            elif action == "location":
+                self.on_open_application_location(None, app)
+            elif action == "permissions":
+                self.on_flatpak_permissions(None, app)
+            elif action == "rollback":
+                self.on_flatpak_rollback(None, app)
+            elif action == "changelog":
+                self.on_show_changelog(None, app)
+
+        toplevel = self.get_toplevel() if hasattr(self, "get_toplevel") else None
+        parent_win = toplevel if isinstance(toplevel, Gtk.Window) else None
+        dialog = InstalledAppDetailsDialog(
+            application=application,
+            registry=self.application_registry,
+            language=self.preferences.language,
+            parent=parent_win,
+            on_action_callback=_handle_detail_action,
+        )
+        dialog.run()
+        dialog.destroy()
 
     def on_launch_application(self, _button, application: UnifiedApplication) -> None:
         try:

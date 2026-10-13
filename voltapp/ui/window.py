@@ -94,6 +94,10 @@ class MainWindow(
         self._refresh_texts()
         self._setup_keyboard_shortcuts()
         self._setup_drag_and_drop()
+        if "--updates" in sys.argv:
+            btn = self.application_filter_buttons.get("updates")
+            if btn:
+                btn.set_active(True)
         self.reload_applications_async()
 
     def _apply_window_icon(self) -> None:
@@ -232,6 +236,9 @@ class MainWindow(
         self.applications_tree_col_location.set_title(t(lang, "applications_col_location"))
         self.applications_launch_btn.set_label(t(lang, "applications_launch"))
         self.applications_launch_btn.set_tooltip_text(t(lang, "tooltip_installed_launch"))
+        if hasattr(self, "applications_details_btn"):
+            self.applications_details_btn.set_label(t(lang, "applications_details"))
+            self.applications_details_btn.set_tooltip_text(t(lang, "tooltip_installed_details"))
         self.applications_action_update_btn.set_label(t(lang, "applications_update"))
         self.applications_action_update_btn.set_tooltip_text(t(lang, "tooltip_installed_update"))
         self.applications_action_location_btn.set_label(t(lang, "applications_open_location"))

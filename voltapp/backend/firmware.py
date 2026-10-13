@@ -91,3 +91,4 @@ class FirmwareProvider:
 
     def refresh_cache_command(self) -> list[str]:
         return ["fwupdmgr", "refresh", "--no-authenticate"]
+

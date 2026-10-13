@@ -117,7 +117,7 @@ Uygulamayı Debian paketi olarak derlemek için:
 ```bash
 ./packaging/build_deb.sh
 ```
-Oluşturulan paket `packaging/voltapp_1.0.0_all.deb` dosyasında yer alacaktır.
+Oluşturulan paket `packaging/voltapp_1.1.0_all.deb` dosyasında yer alacaktır.
 
 ---
 
@@ -258,7 +258,7 @@ To build the standalone installation package:
 ```bash
 ./packaging/build_deb.sh
 ```
-The output file will be generated at `packaging/voltapp_1.0.0_all.deb`.
+The output file will be generated at `packaging/voltapp_1.1.0_all.deb`.
 
 ---
 

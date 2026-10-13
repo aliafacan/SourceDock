@@ -12,4 +12,22 @@ Categories=System;PackageManager;Settings;
 MimeType=application/vnd.debian.binary-package;application/x-deb;application/x-debian-package;application/x-rpm;application/x-redhat-package-manager;application/x-appimage;application/vnd.appimage;application/vnd.flatpak;application/vnd.flatpak.ref;application/vnd.flatpak.repo;
 Keywords=voltapp;package;deb;rpm;appimage;flatpak;install;manager;
 StartupWMClass=voltapp
+Actions=Details;Uninstall;Updates;
 
+[Desktop Action Details]
+Name=Uygulama Ayrıntıları
+Name[en]=Application Details
+Exec=/usr/bin/voltapp --details voltapp
+Icon=document-properties
+
+[Desktop Action Uninstall]
+Name=VoltApp'i Kaldır
+Name[en]=Uninstall VoltApp
+Exec=/usr/bin/voltapp --uninstall voltapp
+Icon=edit-delete
+
+[Desktop Action Updates]
+Name=Güncellemeleri Denetle
+Name[en]=Check for Updates
+Exec=/usr/bin/voltapp --updates
+Icon=software-update-available

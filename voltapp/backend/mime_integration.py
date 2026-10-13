@@ -101,6 +101,25 @@ Categories=System;PackageManager;Settings;
 MimeType={mime_str}
 Keywords=voltapp;package;deb;rpm;appimage;flatpak;install;manager;
 StartupWMClass=voltapp
+Actions=Details;Uninstall;Updates;
+
+[Desktop Action Details]
+Name=Uygulama Ayrıntıları
+Name[en]=Application Details
+Exec={launcher} --details voltapp
+Icon=document-properties
+
+[Desktop Action Uninstall]
+Name=VoltApp'i Kaldır
+Name[en]=Uninstall VoltApp
+Exec={launcher} --uninstall voltapp
+Icon=edit-delete
+
+[Desktop Action Updates]
+Name=Güncellemeleri Denetle
+Name[en]=Check for Updates
+Exec={launcher} --updates
+Icon=software-update-available
 """
     desktop_file.write_text(content, encoding="utf-8")
     try:
