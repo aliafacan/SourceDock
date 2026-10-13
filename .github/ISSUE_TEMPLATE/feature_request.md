@@ -17,3 +17,4 @@ Varsa düşündüğünüz alternatif yaklaşımlar.
 
 **Ek Bağlam**
 Fikrinizi açıklayan şemalar, referans uygulamalar veya ekran görüntüleri.
+

@@ -12,34 +12,40 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Linux](https://img.shields.io/badge/Platform-Linux%20Universal-FCC624?style=flat&logo=linux&logoColor=black)](https://kernel.org)
 
+<br/>
+
+[ 🇹🇷 **Türkçe** ](#-türkçe) &nbsp;&bull;&nbsp; [ 🇬🇧 **English** ](#-english)
+
 </div>
 
 ---
 
-## ⚡ The Story Behind VoltApp / VoltApp'in Hikayesi
+<a id="-türkçe"></a>
+# 🇹🇷 Türkçe
 
-> *"VoltApp was born from an Electrical & Electronics Engineer's passion for Pikachu, high-voltage electricity, and a dream to manage Linux applications at lightning speed without distribution barriers."*
->
+## ⚡ VoltApp'in Hikayesi
+
 > *"VoltApp ⚡; bir Elektrik-Elektronik Mühendisinin Pikachu ve voltaj sevgisi ile Linux ekosistemindeki tüm uygulamaları dağıtım engellerine takılmadan, elektrik hızında yönetme tutkusundan doğdu."*
 
 ---
 
-## 🌟 Features / Özellikler
+## 🌟 Temel Özellikler
 
-- **🔌 Universal Multi-Store Support:** Search, install, and manage applications from **Flathub (Flatpak)**, **Snap Store**, and native package managers (**APT / DNF / Pacman / Zypper**).
-- **📦 Multi-Format & Standalone Mini-Installer:** Double-click any `.deb`, `.AppImage`, `.flatpak`, or `.rpm` file to open a lightweight mini-installer with smart version detection (Installed/Reinstall, Update, Downgrade, New install).
-- **🛡️ Smart Snap Confinement Handling:** Automatically detects `--classic` confinement requirements for developer IDEs (such as Antigravity, VS Code, JetBrains) with user-friendly confirmation dialogs.
-- **⚡ Supercharged UI & Guidance:** Clean, responsive GTK interface with dark/light theme, built-in User Guide (`F1`), and localized tooltips for every action.
-- **🌍 Bilingual (i18n):** Native support for both English and Turkish with instant runtime switching.
-- **🐧 Distro-Agnostic:** Auto-detects Debian, Ubuntu, Zorin OS, Fedora, Arch Linux, Manjaro, openSUSE, and generic Linux platforms.
+- **🔌 Evrensel Çoklu Mağaza Desteği:** **Flathub (Flatpak)**, **Snap Store** ve yerel paket depolarındaki (**APT / DNF / Pacman / Zypper**) uygulamaları tek ekrandan arayın, kurun ve güncelleyin.
+- **📦 Çoklu Format ve Bağımsız Mini Kurucu:** `.deb`, `.AppImage`, `.flatpak` veya `.rpm` dosyalarına çift tıklandığında akıllı sürüm algılamalı (Kurulu/Tekrar Kur, Güncelle, Eski Sürüme Dön, Yeni Kur) bağımsız mini kurulum penceresi açılır.
+- **🛡️ Akıllı Snap Confinement Yönetimi:** Geliştirici IDE'leri (Antigravity, VS Code, JetBrains vb.) için gerekli `--classic` yetkilendirmelerini otomatik algılar ve kullanıcı onay diyaloğu sunar.
+- **⚙️ Sistem, Bellenim & Çalışma Ortamı Güncellemeleri:** Donanım bellenimleri (`fwupd` / UEFI dbx) ve Flatpak/Snap sistem platformları/çalışma ortamları (Mesa, GNOME, KDE, Wine) için tam güncelleme desteği.
+- **⚡ Modern ve Hızlı GTK Arayüzü:** Koyu/Açık tema, `%90-%125` arayüz ölçekleme, yerleşik Kullanıcı Kılavuzu (`F1`) ve her işlem için etkileşimli araç ipuçları (tooltips).
+- **🌍 Çift Dilli (i18n):** Türkçe ve İngilizce dilleri arasında çalışma anında anında geçiş.
+- **🐧 Dağıtım Bağımsız:** Ubuntu, Zorin OS, Debian, Fedora, Arch Linux, Manjaro, openSUSE ve genel Linux dağıtımlarını otomatik tanır.
 
 ---
 
-## 🚀 Installation & Usage / Kurulum ve Kullanım
+## 🚀 Kurulum ve Kullanım
 
 ### Seçenek 1: Debian (.deb) Paketi ile Kurulum (Önerilen)
 ```bash
-# Paketi derleyin veya indirin:
+# Paketi derleyin:
 ./packaging/build_deb.sh
 
 # Tek komutla kurun:
@@ -72,7 +78,7 @@ voltapp /yol/uygulama.AppImage
 
 ---
 
-## 🧪 Testing / Testleri Çalıştırma
+## 🧪 Birim Testleri Çalıştırma
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -80,20 +86,91 @@ python3 -m unittest discover -s tests -v
 
 ---
 
-## 🗺️ Roadmap / Yol Haritası
+## 🤝 Katkıda Bulunma & Topluluk
 
-Tüm aşamaların ve tamamlanan hedeflerin detayları için [ROADMAP.md](ROADMAP.md) belgesini inceleyebilirsiniz.
+- Katkı rehberi için: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Topluluk kuralları için: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Yol haritası için: [ROADMAP.md](ROADMAP.md)
+- İletişim: [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com)
+
+---
+---
+
+<a id="-english"></a>
+# 🇬🇧 English
+
+## ⚡ The Story Behind VoltApp
+
+> *"VoltApp was born from an Electrical & Electronics Engineer's passion for Pikachu, high-voltage electricity, and a dream to manage Linux applications at lightning speed without distribution barriers."*
 
 ---
 
-## 🤝 Contributing / Katkıda Bulunma
+## 🌟 Key Features
 
-Katkıda bulunma standartları, kod mimarisi ve kurallar için [CONTRIBUTING.md](CONTRIBUTING.md) ve [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) belgelerini inceleyebilirsiniz.
+- **🔌 Universal Multi-Store Catalog:** Search, install, and update applications from **Flathub (Flatpak)**, **Snap Store**, and native package managers (**APT / DNF / Pacman / Zypper**) in one place.
+- **📦 Multi-Format & Standalone Mini-Installer:** Double-click any `.deb`, `.AppImage`, `.flatpak`, or `.rpm` file to open a lightweight mini-installer with intelligent version detection (Installed/Reinstall, Update, Downgrade, Fresh Install).
+- **🛡️ Smart Snap Confinement Handling:** Automatically detects `--classic` confinement requirements for developer IDEs (such as Antigravity, VS Code, JetBrains) with seamless confirmation dialogs.
+- **⚙️ System, Firmware & Runtime Updates:** Full update support for hardware firmware (`fwupd` / UEFI dbx) and Flatpak/Snap platform runtimes (Mesa, GNOME, KDE, Wine).
+- **⚡ Blazing GTK User Interface:** Clean dark/light theme styling, `90%-125%` UI scaling, integrated User Guide (`F1`), and localized interactive tooltips.
+- **🌍 Fully Bilingual (i18n):** Native support for English and Turkish with instant runtime switching.
+- **🐧 Distro-Agnostic Engine:** Auto-detects Debian, Ubuntu, Zorin OS, Fedora, Arch Linux, Manjaro, openSUSE, and generic Linux platforms.
 
 ---
 
-## 📄 License / Lisans
+## 🚀 Installation & Usage
 
-Distributed under the **GNU General Public License v3.0 (GPL-3.0)**. See [`LICENSE`](LICENSE) for more information.
+### Option 1: Debian (.deb) Package (Recommended)
+```bash
+# Build the package:
+./packaging/build_deb.sh
 
+# Install with single command:
+sudo apt install ./packaging/voltapp_1.0.0_all.deb
+```
 
+### Option 2: Automatic Global Installer Script
+```bash
+sudo ./install.sh
+```
+
+### Option 3: Run Without Installing
+```bash
+# System dependencies:
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
+
+# Run:
+./run.sh
+# or
+python3 main.py
+```
+
+### Standalone Mini-Installer Usage
+To open any package in the dedicated lightweight installer window:
+```bash
+voltapp /path/to/package.deb
+# or
+voltapp /path/to/application.AppImage
+```
+
+---
+
+## 🧪 Running Unit Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+---
+
+## 🤝 Contributing & Community
+
+- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Project roadmap: [ROADMAP.md](ROADMAP.md)
+- Maintainer contact: [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com)
+
+---
+
+## 📄 License
+
+Distributed under the **GNU General Public License v3.0 (GPL-3.0)**. See [`LICENSE`](LICENSE) for more details.

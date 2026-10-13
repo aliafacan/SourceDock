@@ -12,3 +12,4 @@ Categories=System;PackageManager;Settings;
 MimeType=application/vnd.debian.binary-package;application/x-deb;application/x-debian-package;application/x-rpm;application/x-redhat-package-manager;application/x-appimage;application/vnd.appimage;application/vnd.flatpak;application/vnd.flatpak.ref;application/vnd.flatpak.repo;
 Keywords=voltapp;package;deb;rpm;appimage;flatpak;install;manager;
 StartupWMClass=voltapp
+

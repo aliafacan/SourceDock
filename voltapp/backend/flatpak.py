@@ -48,10 +48,11 @@ def _flatpak_desktop_path(app_id: str, installation: str) -> str:
     return f"/var/lib/flatpak/exports/share/applications/{app_id}.desktop"
 
 
-def _flatpak_install_path(app_id: str, installation: str) -> str:
+def _flatpak_install_path(app_id: str, installation: str, is_runtime: bool = False) -> str:
+    kind = "runtime" if is_runtime else "app"
     if installation == "user":
-        return os.path.expanduser(f"~/.local/share/flatpak/app/{app_id}")
-    return f"/var/lib/flatpak/app/{app_id}"
+        return os.path.expanduser(f"~/.local/share/flatpak/{kind}/{app_id}")
+    return f"/var/lib/flatpak/{kind}/{app_id}"
 
 
 def _flatpak_dates(install_path: str) -> tuple[str, str]:
@@ -139,13 +140,54 @@ class FlatpakProvider:
                     last_updated=last_updated,
                 )
             )
+
+        if update_ids:
+            runtime_res = self.runner.run(
+                ["flatpak", "list", "--runtime", "--columns=application,name,version,origin,installation,size,description"],
+                timeout=30,
+                check=False,
+            )
+            if runtime_res.returncode == 0:
+                for line in runtime_res.stdout.splitlines():
+                    parts = line.split("\t")
+                    if len(parts) < 2:
+                        continue
+                    r_id = parts[0].strip()
+                    if r_id in update_ids and not any(a.package_name == r_id for a in applications):
+                        r_name = parts[1].strip() or r_id
+                        r_ver = parts[2].strip() if len(parts) > 2 else ""
+                        r_install = parts[4].strip() if len(parts) > 4 else "system"
+                        r_size = _parse_human_size_kib(parts[5].strip()) if len(parts) > 5 else None
+                        r_desc = parts[6].strip() if len(parts) > 6 else ""
+                        display_name = f"{r_name} ({r_desc})" if r_desc and r_desc != r_name else r_name
+                        install_path = _flatpak_install_path(r_id, r_install, is_runtime=True)
+                        installed_date, last_updated = _flatpak_dates(install_path)
+                        applications.append(
+                            UnifiedApplication(
+                                id=f"{SOURCE_FLATPAK}:{r_id}",
+                                name=display_name,
+                                source=SOURCE_FLATPAK,
+                                version=r_ver,
+                                icon="application-x-addon",
+                                executable="",
+                                desktop_file="",
+                                install_path=install_path,
+                                category="System",
+                                package_name=r_id,
+                                update_available=True,
+                                installed_size_kib=r_size,
+                                installed_date=installed_date,
+                                last_updated=last_updated,
+                            )
+                        )
+
         return applications
 
     def _update_ids(self) -> set[str]:
         try:
             result = self.runner.run(
-                ["flatpak", "remote-ls", "--updates", "--app", "--columns=application"],
-                timeout=8,
+                ["flatpak", "remote-ls", "--updates", "--columns=application"],
+                timeout=10,
                 check=False,
             )
             if result.returncode != 0:
@@ -153,5 +195,6 @@ class FlatpakProvider:
             return {line.strip() for line in result.stdout.splitlines() if line.strip()}
         except Exception:
             return set()
+
 
 

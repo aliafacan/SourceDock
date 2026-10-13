@@ -28,3 +28,4 @@ update-mime-database /usr/share/mime 2>/dev/null || true
 echo "=========================================================="
 echo "✓ VoltApp sisteminizden başarıyla kaldırıldı."
 echo "=========================================================="
+

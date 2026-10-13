@@ -97,3 +97,4 @@ echo "   Terminalden çalıştırmak için : voltapp"
 echo "   Belirli paket kurmak için    : voltapp /yol/paket.deb"
 echo "   Uygulama menüsünden          : 'VoltApp' olarak aratabilirsiniz."
 echo "=========================================================="
+

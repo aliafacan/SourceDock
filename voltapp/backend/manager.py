@@ -23,6 +23,7 @@ from voltapp.core.models import (
     SOURCE_PORTABLE,
     SOURCE_SNAP,
     SOURCE_ZYPPER,
+    SOURCE_FIRMWARE,
     ApplicationIssue,
     ApplicationSnapshot,
     LocalPackageInfo,
@@ -46,6 +47,7 @@ from voltapp.backend.pacman import PacmanProvider
 from voltapp.backend.zypper import ZypperProvider
 from voltapp.backend.flatpak import FlatpakProvider
 from voltapp.backend.snap import SnapProvider
+from voltapp.backend.firmware import FirmwareProvider
 from voltapp.backend.appimage import AppImageProvider
 from voltapp.backend.portable import PortableProvider
 
@@ -77,6 +79,7 @@ class ApplicationRegistry:
             SnapProvider(self.runner, self.scanner),
             AppImageProvider(self.runner, self.scanner),
             PortableProvider(self.runner),
+            FirmwareProvider(self.runner),
         ]
 
     def _select_native_provider(self) -> BaseNativeProvider:
@@ -106,6 +109,8 @@ class ApplicationRegistry:
             self.runner.run(["flatpak", "update", "--appstream", "-y"], timeout=60, check=False)
         if self.runner.command_exists("snap"):
             self.runner.run_privileged(["snap", "refresh", "--list"], timeout=30)
+        if self.runner.command_exists("fwupdmgr"):
+            self.runner.run(["fwupdmgr", "refresh", "--no-authenticate"], timeout=30, check=False)
 
     def refresh_update_cache_silent(self) -> None:
         try:
@@ -119,6 +124,11 @@ class ApplicationRegistry:
         try:
             if self.runner.command_exists("flatpak"):
                 self.runner.run(["flatpak", "update", "--appstream", "-y"], timeout=60, check=False)
+        except Exception:
+            pass
+        try:
+            if self.runner.command_exists("fwupdmgr"):
+                self.runner.run(["fwupdmgr", "refresh", "--no-authenticate"], timeout=30, check=False)
         except Exception:
             pass
 
@@ -209,6 +219,9 @@ class ApplicationRegistry:
                 raise BackendError("Manual update required")
             self.runner.run(["AppImageUpdate", application.install_path], timeout=1800, check=True)
             return
+        if application.source == SOURCE_FIRMWARE:
+            self.runner.run(["fwupdmgr", "update", "-y", application.package_name], timeout=1800, check=True)
+            return
         raise BackendError("Bilinmeyen uygulama kaynagi.")
 
     def update_all(self, applications: list[UnifiedApplication]) -> None:
@@ -223,6 +236,8 @@ class ApplicationRegistry:
             self.runner.run(["flatpak", "update", "-y"], timeout=3600, check=True)
         if SOURCE_SNAP in sources and self.runner.command_exists("snap"):
             self.runner.run_privileged(["snap", "refresh"], timeout=3600)
+        if SOURCE_FIRMWARE in sources and self.runner.command_exists("fwupdmgr"):
+            self.runner.run(["fwupdmgr", "update", "-y"], timeout=3600, check=False)
         for application in applications:
             if application.source == SOURCE_APPIMAGE and application.update_supported:
                 self.runner.run(["AppImageUpdate", application.install_path], timeout=1800, check=False)
@@ -477,6 +492,7 @@ class ApplicationRegistry:
             SOURCE_SNAP: 2,
             SOURCE_APPIMAGE: 3,
             SOURCE_PORTABLE: 4,
+            SOURCE_FIRMWARE: 5,
         }.get(application.source, 9)
         in_apps = 0 if application.install_path and "/applications" in application.install_path.lower() else 1
         return (

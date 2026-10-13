@@ -269,6 +269,7 @@ class MainWindow(
             "snap": "tooltip_installed_filter_snap",
             "appimage": "tooltip_installed_filter_appimage",
             "portable": "tooltip_installed_filter_portable",
+            "firmware": "tooltip_installed_filter_firmware",
         }
         for source, button in self.application_filter_buttons.items():
             button.set_label(self._application_source_label(source))

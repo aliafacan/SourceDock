@@ -48,3 +48,4 @@ jobs:
         run: |
           bash packaging/build_deb.sh
           dpkg -I packaging/voltapp_1.0.0_all.deb
+

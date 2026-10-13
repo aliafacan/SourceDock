@@ -78,7 +78,7 @@ Priority: optional
 Architecture: all
 Depends: python3 (>= 3.8), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-gdkpixbuf-2.0
 Recommends: flatpak, snapd
-Maintainer: Ali Afacan <aafacan1425@gmail.com>
+Maintainer: Ali Afacan <aliafacan.dev@gmail.com>
 Homepage: https://github.com/aliafacan/VoltApp
 Description: VoltApp - Lightning-fast Unified Package and Application Manager
  VoltApp is a modern, modular, and distro-agnostic Linux software management

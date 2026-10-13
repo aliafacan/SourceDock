@@ -72,6 +72,29 @@ class SnapProvider:
                 )
             )
 
+        for update_name in update_names:
+            if update_name in snaps and not any(app.package_name == update_name for app in applications):
+                version = snaps[update_name]
+                size_kib, installed_date, last_updated = self._get_snap_size_and_dates(update_name)
+                applications.append(
+                    UnifiedApplication(
+                        id=f"{SOURCE_SNAP}:{update_name}",
+                        name=update_name,
+                        source=SOURCE_SNAP,
+                        version=version,
+                        icon="system-run",
+                        executable=f"snap run {update_name}" if os.path.exists(f"/snap/bin/{update_name}") else "",
+                        desktop_file="",
+                        install_path=f"/snap/{update_name}/current",
+                        category="System",
+                        package_name=update_name,
+                        update_available=True,
+                        installed_size_kib=size_kib,
+                        installed_date=installed_date,
+                        last_updated=last_updated,
+                    )
+                )
+
         return _dedupe_applications(applications)
 
     def _get_snap_size_and_dates(self, snap_name: str) -> tuple[int | None, str, str]:

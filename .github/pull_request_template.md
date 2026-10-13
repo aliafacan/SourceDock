@@ -14,3 +14,4 @@ Bu PR'ın amacı, çözdüğü problem ve tasarım kararları:
 - [ ] **Çoklu Dil (i18n):** Eklenen/değiştirilen tüm kullanıcı metinleri hem Türkçe (`tr`) hem İngilizce (`en`) olarak `voltapp/i18n.py` dosyasına eklendi.
 - [ ] **Testler:** `python3 -m unittest discover -s tests -v` komutu çalıştırıldı ve tüm birim testleri başarıyla geçti.
 - [ ] **Paketleme:** Gerekliyse `./packaging/build_deb.sh` ile `.deb` inşası denendi.
+

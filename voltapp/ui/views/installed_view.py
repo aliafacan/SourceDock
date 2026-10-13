@@ -25,6 +25,7 @@ from voltapp.core.models import (
     SOURCE_PORTABLE,
     SOURCE_SNAP,
     SOURCE_ZYPPER,
+    SOURCE_FIRMWARE,
     ApplicationIssue,
     ApplicationSnapshot,
     UnifiedApplication,
@@ -103,7 +104,11 @@ class InstalledViewMixin:
 
         native_provider = getattr(self.application_registry, "native_provider", None)
         native_key = native_provider.source if native_provider else SOURCE_APT
-        for source in ("all", "updates", native_key, SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APPIMAGE, SOURCE_PORTABLE):
+        source_filters = ["all", "updates", native_key, SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APPIMAGE, SOURCE_PORTABLE]
+        runner = getattr(self.application_registry, "runner", None)
+        if runner and runner.command_exists("fwupdmgr"):
+            source_filters.append(SOURCE_FIRMWARE)
+        for source in source_filters:
             button = Gtk.ToggleButton()
             button.get_style_context().add_class("filter-chip")
             button.connect("toggled", self.on_application_filter_toggled, source)
@@ -501,7 +506,7 @@ class InstalledViewMixin:
             self.applications_launch_btn.set_sensitive(bool(application.executable))
             self.applications_action_update_btn.set_sensitive(application.update_available)
             self.applications_action_location_btn.set_sensitive(bool(application.install_path or application.desktop_file))
-            self.applications_action_remove_btn.set_sensitive(True)
+            self.applications_action_remove_btn.set_sensitive(application.source != SOURCE_FIRMWARE)
             is_flatpak = application.source == SOURCE_FLATPAK
             self.applications_permissions_btn.set_sensitive(is_flatpak)
             self.applications_rollback_btn.set_sensitive(is_flatpak)
@@ -514,7 +519,7 @@ class InstalledViewMixin:
             self.applications_changelog_btn.set_sensitive(False)
             selected_apps = [model.get_value(model.get_iter(p), _AC_APP) for p in paths]
             self.applications_action_update_btn.set_sensitive(any(a.update_available for a in selected_apps))
-            self.applications_action_remove_btn.set_sensitive(True)
+            self.applications_action_remove_btn.set_sensitive(any(a.source != SOURCE_FIRMWARE for a in selected_apps))
 
     def _on_selected_app_action(self, callback: Callable) -> None:
         sel = self.applications_tree.get_selection()
@@ -913,6 +918,7 @@ class InstalledViewMixin:
             SOURCE_SNAP: "Snap",
             SOURCE_APPIMAGE: "AppImage",
             SOURCE_PORTABLE: t(lang, "source_portable"),
+            SOURCE_FIRMWARE: t(lang, "source_firmware"),
         }.get(source, source.upper())
 
     def _category_display_name(self, category: str, lang: str) -> str:

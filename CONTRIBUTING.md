@@ -1,4 +1,13 @@
-# ⚡ VoltApp — Geliştirici & Katkı Kılavuzu (Contributing Guide)
+<div align="center">
+
+[ 🇹🇷 **Türkçe** ](#-türkçe) &nbsp;&bull;&nbsp; [ 🇬🇧 **English** ](#-english)
+
+</div>
+
+---
+
+<a id="-türkçe"></a>
+# 🇹🇷 VoltApp — Geliştirici & Katkı Kılavuzu (Contributing Guide)
 
 > *VoltApp ⚡, bir Elektrik-Elektronik Mühendisinin Pikachu ve voltaj sevgisi ile Linux sistemlerini elektrik hızında, engelsizce yönetme arzusundan doğdu.*
 
@@ -29,6 +38,7 @@ voltapp/
 │   ├── zypper.py          # openSUSE yerel yöneticisi
 │   ├── flatpak.py         # Flatpak sandbox yönetimi
 │   ├── snap.py            # Snap ve --classic yönetimi
+│   ├── firmware.py        # Donanım yazılımı / fwupd entegrasyonu
 │   ├── appimage.py        # AppImage çalıştırma ve masaüstü entegrasyonu
 │   ├── portable.py        # Taşınabilir arşiv (tar.gz/zip) yöneticisi
 │   ├── local_packages.py  # Çevrimdışı paket inceleme ve kurucu
@@ -72,7 +82,7 @@ Kullanıcı arayüzünde görünen **hiçbir metin koda doğrudan (hardcoded) ya
 
 ## 🛠️ 3. Geliştirme Ortamı ve Çalıştırma
 
-### Sistem Gereksinimleri (Ubuntu/Debian tabanlı sistemler):
+### Sistem Gereksinimleri (Ubuntu/Debian/Zorin tabanlı sistemler):
 ```bash
 sudo apt update
 sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
@@ -127,3 +137,150 @@ Oluşturulan paket `packaging/voltapp_1.0.0_all.deb` dosyasında yer alacaktır.
    - `docs: Dokümantasyon güncellemesi`
    - `refactor: Kod temizliği ve modülerleştirme`
 4. Dalınızı push'layın ve GitHub üzerinden Pull Request açın.
+
+---
+
+## 📬 7. İletişim
+
+Her türlü soru, öneri ve güvenlik bildirimi için proje yöneticisine [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com) adresinden ulaşabilirsiniz.
+
+---
+---
+
+<a id="-english"></a>
+# 🇬🇧 VoltApp — Developer & Contributing Guide
+
+> *VoltApp ⚡ was born from an Electrical & Electronics Engineer's passion for Pikachu, high-voltage electricity, and a dream to manage Linux applications at lightning speed without distribution barriers.*
+
+Thank you for your interest in contributing to VoltApp! This guide outlines the project's architectural standards, coding conventions, and development workflow.
+
+---
+
+## 📐 1. Clean Architecture & Modular Code Structure
+
+> **Golden Rule:**  
+> No monolithic files or spaghetti code are allowed.  
+> When introducing new functionality, do not append hundreds of lines to existing files. Create well-isolated submodules in their respective layer (`core/`, `backend/`, `ui/views/`, `ui/components/`).
+
+### Project Structure Overview:
+```text
+voltapp/
+├── core/                  # Core domain models and utilities
+│   ├── models.py          # Unified data models & type definitions
+│   ├── errors.py          # Custom error hierarchy
+│   └── runner.py          # Process execution & privileged command runner
+│
+├── backend/               # Package manager backends
+│   ├── base_native.py     # Distro-agnostic native package manager base
+│   ├── distro.py          # OS & Linux distribution auto-detection
+│   ├── apt.py             # Debian / Ubuntu / Zorin backend
+│   ├── dnf.py             # Fedora / RHEL backend
+│   ├── pacman.py          # Arch Linux / Manjaro backend
+│   ├── zypper.py          # openSUSE backend
+│   ├── flatpak.py         # Flatpak sandboxed application manager
+│   ├── snap.py            # Snap Store and --classic confinement manager
+│   ├── firmware.py        # Hardware firmware / fwupd provider
+│   ├── appimage.py        # AppImage runtime & desktop integration
+│   ├── portable.py        # Portable archives (tar.gz/zip) backend
+│   ├── local_packages.py  # Standalone package inspection and installer
+│   ├── mime_integration.py# Desktop MIME types & default handler setup
+│   ├── scanner.py         # Desktop entry parser & icon resolution
+│   └── manager.py         # Unified ApplicationRegistry coordinator
+│
+├── store/                 # Online store catalog & multi-source search
+│   └── registry.py        # Flathub, Snap Store & native repository search
+│
+├── ui/                    # GTK 3 User Interface
+│   ├── views/             # Tab views (ViewMixins)
+│   │   ├── installed_view.py # Installed applications tab
+│   │   ├── store_view.py     # App store catalog tab
+│   │   ├── packages_view.py  # System packages & upgrade tab
+│   │   ├── operations_view.py# Process monitor & lock status tab
+│   │   ├── settings_view.py  # Preferences dialog
+│   │   └── help_view.py      # Help guide dialog (F1)
+│   ├── components/        # Reusable UI widgets
+│   │   ├── dialogs.py        # Confirmation, auth & permission dialogs
+│   │   ├── progress.py       # Operation progress dialog
+│   │   └── package_installer_dialog.py # Standalone mini-installer dialog
+│   └── window.py          # MainWindow combining all view mixins
+│
+├── constants.py           # Application constants
+├── i18n.py                # Complete English and Turkish translation catalog
+├── preferences.py         # JSON-backed configuration storage
+└── theme.py               # Modern GTK CSS styling engine
+```
+
+---
+
+## 🌍 2. Bilingual Localization (i18n) Requirement
+
+**Zero Hardcoded Strings:**
+- Every new label, button text, error message, or tooltip must be defined in both `en` and `tr` within [`voltapp/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/voltapp/i18n.py).
+- Use `t(lang, "key_name")` in UI components.
+- Ensure all text elements are registered in `_refresh_texts()` so language changes apply instantly without requiring an application restart.
+
+---
+
+## 🛠️ 3. Development Setup & Running
+
+### Prerequisites (Ubuntu/Debian/Zorin):
+```bash
+sudo apt update
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
+```
+
+### Running the App:
+```bash
+# Run with launcher script in development:
+./run.sh
+
+# Or directly with Python:
+python3 main.py
+
+# Test standalone mini-installer mode:
+python3 main.py /path/to/sample.deb
+```
+
+---
+
+## 🧪 4. Running Unit Tests
+
+Ensure all unit tests pass before submitting changes:
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+---
+
+## 📦 5. Building Debian (.deb) Package
+
+To build the standalone installation package:
+```bash
+./packaging/build_deb.sh
+```
+The output file will be generated at `packaging/voltapp_1.0.0_all.deb`.
+
+---
+
+## 🚀 6. Contributing & Pull Requests Workflow
+
+1. Fork the repository and create your feature branch:
+   ```bash
+   git checkout -b feature/awesome-feature
+   ```
+2. Make your changes and run the test suite:
+   ```bash
+   python3 -m unittest discover -s tests -v
+   ```
+3. Write clear commit messages following Conventional Commits:
+   - `feat: New feature summary`
+   - `fix: Bug fix summary`
+   - `docs: Documentation update`
+   - `refactor: Code restructuring`
+4. Push your branch and open a Pull Request on GitHub.
+
+---
+
+## 📬 7. Contact
+
+For inquiries, support, or security reports, reach out to the maintainer at [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com).
