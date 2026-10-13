@@ -52,6 +52,11 @@ def get_project_root() -> Path:
 
 def get_launcher_path() -> str:
     """Masaüstü kısayolu için çalıştırılabilir dosya yolunu döndürür."""
+    if os.path.exists("/usr/bin/voltapp") and os.access("/usr/bin/voltapp", os.X_OK):
+        return "/usr/bin/voltapp"
+    sys_bin = shutil.which("voltapp")
+    if sys_bin and os.path.isabs(sys_bin):
+        return sys_bin
     root = get_project_root()
     run_sh = root / "run.sh"
     if run_sh.exists() and os.access(run_sh, os.X_OK):
@@ -62,6 +67,8 @@ def get_launcher_path() -> str:
 
 def get_icon_path() -> str:
     """VoltApp logo ikon dosyasının yolunu döndürür."""
+    if os.path.exists("/usr/share/icons/hicolor/scalable/apps/voltapp.svg"):
+        return "voltapp"
     root = get_project_root()
     svg_icon = root / "assets" / "voltapp.svg"
     if svg_icon.exists():
