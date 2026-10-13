@@ -91,6 +91,7 @@ class MainWindow(
         self._apply_theme()
         self._refresh_texts()
         self._setup_keyboard_shortcuts()
+        self._setup_drag_and_drop()
         self.reload_applications_async()
 
     def _apply_window_icon(self) -> None:
@@ -159,9 +160,25 @@ class MainWindow(
 
     def _apply_theme(self) -> None:
         scale = getattr(self.preferences, "scale", "100")
-        self.css_provider.load_from_data(get_theme_css(self.preferences.theme, scale).encode("utf-8"))
+        is_dark = self.preferences.theme == "dark"
+
+        try:
+            default_settings = Gtk.Settings.get_default()
+            if default_settings is not None:
+                default_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
+        except Exception:
+            pass
+
         screen = Gdk.Screen.get_default()
         if screen is not None:
+            try:
+                screen_settings = Gtk.Settings.get_for_screen(screen)
+                if screen_settings is not None:
+                    screen_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
+            except Exception:
+                pass
+
+            self.css_provider.load_from_data(get_theme_css(self.preferences.theme, scale).encode("utf-8"))
             Gtk.StyleContext.add_provider_for_screen(
                 screen,
                 self.css_provider,
@@ -204,6 +221,8 @@ class MainWindow(
         self.applications_rollback_btn.set_label(t(lang, "flatpak_rollback_menu"))
         self.applications_changelog_btn.set_label(t(lang, "changelog_menu"))
         self.applications_export_btn.set_label(t(lang, "applications_export"))
+        if hasattr(self, "applications_install_file_btn"):
+            self.applications_install_file_btn.set_label(t(lang, "install_package_btn"))
         self.applications_add_appimage_btn.set_label(t(lang, "appimage_register_btn"))
         self.applications_export_selected_btn.set_label(t(lang, "export_selected"))
         self.applications_category_label.set_text(t(lang, "applications_category_filter") + ": ")
@@ -285,6 +304,36 @@ class MainWindow(
             return True
         return False
 
+    def _setup_drag_and_drop(self) -> None:
+        self.drag_dest_set(
+            Gtk.DestDefaults.ALL,
+            [Gtk.TargetEntry.new("text/uri-list", 0, 0)],
+            Gdk.DragAction.COPY,
+        )
+        self.connect("drag-data-received", self._on_window_drag_data_received)
+
+    def _on_window_drag_data_received(self, _widget, drag_context, _x, _y, data, _info, time) -> None:
+        target_file = None
+        uris = data.get_uris()
+        if not uris:
+            text = data.get_text()
+            if text:
+                uris = [line.strip() for line in text.splitlines() if line.strip()]
+        if uris:
+            for uri in uris:
+                try:
+                    filename, _ = GLib.filename_from_uri(uri)
+                except Exception:
+                    filename = uri.replace("file://", "").strip()
+                if os.path.exists(filename):
+                    target_file = filename
+                    break
+
+        Gtk.drag_finish(drag_context, target_file is not None, False, time)
+
+        if target_file:
+            GLib.idle_add(self.prompt_and_install_file, target_file)
+
     def _ask_sudo_password(
         self,
         retry: bool = False,
@@ -296,6 +345,7 @@ class MainWindow(
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL,
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.add_button(t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL)
         dialog.add_button(t(self.preferences.language, "password_continue"), Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.OK)
@@ -333,6 +383,7 @@ class MainWindow(
             buttons=Gtk.ButtonsType.CLOSE,
             text="Hata",
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.format_secondary_text(message)
         dialog.run()
         dialog.destroy()

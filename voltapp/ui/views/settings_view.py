@@ -20,6 +20,7 @@ class SettingsViewMixin:
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL,
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.add_button(t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL)
         dialog.add_button(t(self.preferences.language, "settings_save"), Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.OK)

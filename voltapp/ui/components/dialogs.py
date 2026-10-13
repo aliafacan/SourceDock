@@ -302,6 +302,7 @@ def ask_sudo_password(
         transient_for=parent,
         flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
     )
+    dialog.get_style_context().add_class("icon-settings-window")
     dialog.add_button(t(language, "password_cancel"), Gtk.ResponseType.CANCEL)
     ok_btn = dialog.add_button(t(language, "password_continue"), Gtk.ResponseType.OK)
     ok_btn.get_style_context().add_class("suggested-action")
@@ -339,6 +340,7 @@ def show_snap_classic_dialog(parent: Gtk.Window, language: str, app_name: str) -
         buttons=Gtk.ButtonsType.NONE,
         text=t(language, "store_snap_classic_title"),
     )
+    dialog.get_style_context().add_class("icon-settings-window")
     dialog.format_secondary_text(
         t(language, "store_snap_classic_message", name=app_name)
     )

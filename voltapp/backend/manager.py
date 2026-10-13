@@ -17,9 +17,11 @@ from voltapp.core.models import (
     SOURCE_APPIMAGE,
     SOURCE_APT,
     SOURCE_FLATPAK,
+    SOURCE_PORTABLE,
     SOURCE_SNAP,
     ApplicationIssue,
     ApplicationSnapshot,
+    LocalPackageInfo,
     PackageInfo,
     UnifiedApplication,
 )
@@ -35,6 +37,7 @@ from voltapp.backend.apt import AptProvider
 from voltapp.backend.flatpak import FlatpakProvider
 from voltapp.backend.snap import SnapProvider
 from voltapp.backend.appimage import AppImageProvider
+from voltapp.backend.portable import PortableProvider
 
 
 def _apt_command(*args: str) -> list[str]:
@@ -53,6 +56,7 @@ class ApplicationRegistry:
             FlatpakProvider(self.runner, self.scanner),
             SnapProvider(self.runner, self.scanner),
             AppImageProvider(self.runner, self.scanner),
+            PortableProvider(self.runner),
         ]
 
     def set_sudo_password(self, password: str) -> None:
@@ -124,6 +128,10 @@ class ApplicationRegistry:
         if application.source == SOURCE_APPIMAGE:
             self.runner.spawn([application.install_path])
             return
+        if application.source == SOURCE_PORTABLE:
+            if application.executable and os.path.exists(application.executable):
+                self.runner.spawn([application.executable])
+                return
 
         command = _clean_exec_parts(application.executable)
         if not command:
@@ -203,6 +211,13 @@ class ApplicationRegistry:
             return
         if application.source == SOURCE_APPIMAGE:
             self._remove_appimage(application)
+            if purge:
+                self._remove_user_data_dirs(application.name)
+            return
+        if application.source == SOURCE_PORTABLE:
+            portable_provider = next((p for p in self.providers if isinstance(p, PortableProvider)), None)
+            if portable_provider:
+                portable_provider.remove(application, purge=purge)
             if purge:
                 self._remove_user_data_dirs(application.name)
             return
@@ -287,28 +302,44 @@ class ApplicationRegistry:
         return ""
 
     def register_appimage(self, path: str) -> None:
-        apps_dir = os.path.expanduser("~/Applications")
-        os.makedirs(apps_dir, exist_ok=True)
-        dest = os.path.join(apps_dir, os.path.basename(path))
-        if os.path.abspath(path) != os.path.abspath(dest):
-            shutil.copy2(path, dest)
-        os.chmod(dest, 0o755)
-        name = _name_from_appimage(dest)
-        desktop_dir = os.path.expanduser("~/.local/share/applications")
-        os.makedirs(desktop_dir, exist_ok=True)
-        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name.lower())
-        desktop_path = os.path.join(desktop_dir, f"appimage-{safe_name}.desktop")
-        desktop_content = (
-            "[Desktop Entry]\n"
-            "Type=Application\n"
-            f"Name={name}\n"
-            f"Exec={dest}\n"
-            f"Icon=application-x-executable\n"
-            "Categories=Utility;\n"
-            f"X-AppImage-Path={dest}\n"
+        from voltapp.backend.local_packages import install_local_appimage
+        install_local_appimage(self.runner, path)
+
+    def inspect_local_package(self, path: str) -> LocalPackageInfo:
+        from voltapp.backend.local_packages import inspect_local_package
+        return inspect_local_package(self.runner, path)
+
+    def is_local_package_installed(self, info: LocalPackageInfo) -> bool:
+        from voltapp.backend.local_packages import is_package_installed
+        return is_package_installed(self.runner, info)
+
+    def install_local_package(
+        self,
+        info: LocalPackageInfo,
+        target_dir: str | None = None,
+        create_desktop: bool = True,
+        scope: str = "--user",
+        reinstall: bool = False,
+    ) -> None:
+        from voltapp.backend.local_packages import (
+            install_local_deb,
+            install_local_appimage,
+            install_local_archive,
+            install_local_flatpak,
+            install_local_rpm,
         )
-        with open(desktop_path, "w", encoding="utf-8") as fh:
-            fh.write(desktop_content)
+        if info.format == "deb":
+            install_local_deb(self.runner, info.file_path)
+        elif info.format == "appimage":
+            install_local_appimage(self.runner, info.file_path, target_dir=target_dir, create_desktop=create_desktop)
+        elif info.format == "archive":
+            install_local_archive(self.runner, info.file_path, extract_dir=target_dir, create_desktop=create_desktop)
+        elif info.format in ("flatpakref", "flatpak"):
+            install_local_flatpak(self.runner, info.file_path, scope=scope, reinstall=reinstall)
+        elif info.format == "rpm":
+            install_local_rpm(self.runner, info.file_path)
+        else:
+            raise BackendError(f"Desteklenmeyen paket formati: {info.format}")
 
     def _remove_user_data_dirs(self, name: str) -> None:
         name_lower = re.sub(r"[\s_]", "-", name.strip().lower())
@@ -359,7 +390,7 @@ class ApplicationRegistry:
 
         merged: list[UnifiedApplication] = []
         for group in grouped_by_name.values():
-            if len({application.source for application in group}) > 1:
+            if len(group) > 1:
                 merged.append(sorted(group, key=self._preference_sort_key)[0])
             else:
                 merged.extend(group)
@@ -377,18 +408,25 @@ class ApplicationRegistry:
             return True
         if candidate.update_available and not current.update_available:
             return True
+        cand_in_apps = bool(candidate.install_path and "/applications" in candidate.install_path.lower())
+        curr_in_apps = bool(current.install_path and "/applications" in current.install_path.lower())
+        if cand_in_apps and not curr_in_apps:
+            return True
         return len(candidate.name) > len(current.name)
 
-    def _preference_sort_key(self, application: UnifiedApplication) -> tuple[int, int, int, str]:
+    def _preference_sort_key(self, application: UnifiedApplication) -> tuple[int, int, int, int, str]:
         source_priority = {
             SOURCE_APT: 0,
             SOURCE_FLATPAK: 1,
             SOURCE_SNAP: 2,
             SOURCE_APPIMAGE: 3,
+            SOURCE_PORTABLE: 4,
         }.get(application.source, 9)
+        in_apps = 0 if application.install_path and "/applications" in application.install_path.lower() else 1
         return (
             0 if application.update_available else 1,
             0 if application.desktop_file else 1,
+            in_apps,
             source_priority,
             application.name.lower(),
         )

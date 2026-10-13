@@ -10,6 +10,7 @@ SOURCE_APT = "apt"
 SOURCE_FLATPAK = "flatpak"
 SOURCE_SNAP = "snap"
 SOURCE_APPIMAGE = "appimage"
+SOURCE_PORTABLE = "portable"
 
 PACKAGE_MANAGER_SOURCES = {SOURCE_APT, SOURCE_FLATPAK, SOURCE_SNAP}
 
@@ -112,4 +113,23 @@ class StoreResult:
     remote: str
     download_size_str: str = ""
     icon_path: str = ""
+
+
+@dataclass
+class LocalPackageInfo:
+    """Yerel paket veya kurulum dosyası (.deb, .AppImage, arşiv, .rpm, .flatpakref)."""
+    file_path: str
+    format: str  # "deb", "appimage", "archive", "flatpakref", "flatpak", "rpm"
+    name: str
+    version: str = ""
+    summary: str = ""
+    description: str = ""
+    size_bytes: int = 0
+    icon: str = ""
+    architecture: str = ""
+    dependencies: list[str] = field(default_factory=list)
+    maintainer: str = ""
+    installed_size: str = ""
+    exec_path: str = ""
+    extra_info: dict[str, str] = field(default_factory=dict)
 

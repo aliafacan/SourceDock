@@ -11,8 +11,8 @@
 | **Aşama 1** | Snap `--classic` Hatasının Giderilmesi | ✅ Tamamlandı |
 | **Aşama 2** | Modüler Mimari & Dosya Bölme & Markalama | ✅ Tamamlandı |
 | **Aşama 3** | Çoklu Dil & Yerelleştirme (i18n) Temizliği | ✅ Tamamlandı |
-| **Aşama 4** | Yeni Paket Formatları (.deb, .AppImage, .tar.gz, vb.) | ⏳ Sırada |
-| **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ⏳ Beklemede |
+| **Aşama 4** | Yeni Paket Formatları (.deb, .AppImage, .tar.gz, vb.) | ✅ Tamamlandı |
+| **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ⏳ Sırada |
 | **Aşama 6** | Açık Kaynak Hazırlığı (Topluluk, CI/CD, Dokümantasyon) | ⏳ Beklemede |
 
 ---
@@ -55,22 +55,22 @@
 ---
 
 ## 📦 Aşama 4: Yeni Paket Formatları ve Yerel Kurulum Desteği
-- [ ] **4.1. `.deb` Paket Kurulumu & Yönetimi**
+- [x] **4.1. `.deb` Paket Kurulumu & Yönetimi**
   - Kullanıcının yerel `.deb` dosyasını seçebilmesi (`apt install ./dosya.deb` veya `dpkg -i`).
-  - Paket metaverilerini (ad, sürüm, açıklama) önizleme ekranı.
-- [ ] **4.2. `.AppImage` Entegrasyonu**
+  - Paket metaverilerini (ad, sürüm, açıklama, bağımlılıklar, mimari, boyut) önizleme ekranı (`PackageInstallerDialog`).
+- [x] **4.2. `.AppImage` Entegrasyonu**
   - İndirilen `.AppImage` dosyalarına çalıştırma izni (`chmod +x`) verme.
-  - Uygulamayı standart konuma (`~/Applications` veya `~/.local/bin`) taşıma seçeneği.
-  - Masaüstü kısayolu (`.desktop` dosyası ve menü ikonu) otomatik oluşturma.
-- [ ] **4.3. `.tar.gz` / `.tar.xz` / `.zip` Taşınabilir (Portable) Yazılımlar**
-  - Arşivleri güvenli bir dizine açma (`~/.local/share/<uygulama>`).
+  - Uygulamayı standart konuma (`~/Applications`) taşıma/kopyalama seçeneği.
+  - Masaüstü kısayolu (`.desktop` dosyası ve menü ikonu) otomatik oluşturma ve entegrasyonu.
+- [x] **4.3. `.tar.gz` / `.tar.xz` / `.zip` Taşınabilir (Portable) Yazılımlar**
+  - Arşivleri güvenli bir dizine açma (`~/.local/share/voltapp/apps/<uygulama>`).
   - Çalıştırılabilir ana dosyayı tespit edip uygulama menüsüne `.desktop` kısayolu ekleme.
-  - Kaldırma sırasında bu dizini ve kısayolları güvenle temizleme.
-- [ ] **4.4. Diğer Dağıtımlar ve Paketler**
-  - Fedora/RHEL için `.rpm` desteği (`dnf install ./paket.rpm`).
-  - `.flatpak` ve `.flatpakref` dosyalarını GUI'dan tek tıkla kurabilme.
-- [ ] **4.5. "Paket Kur" / Sürükle-Bırak Arayüzü**
-  - Pencereye doğrudan `.deb`, `.AppImage`, `.tar.gz` sürükleyip bırakarak kurma özelliği.
+  - `PortableProvider` ile yüklü uygulamalar listesinde görünme, çalıştırma ve temiz kaldırma desteği.
+- [x] **4.4. Diğer Dağıtımlar ve Paketler**
+  - Fedora/RHEL için `.rpm` desteği (`dnf install ./paket.rpm` ve metaveri inceleme).
+  - `.flatpak` ve `.flatpakref` dosyalarını GUI'dan tek tıkla kurabilme ve metaveri görüntüleme.
+- [x] **4.5. "Paket Kur" / Sürükle-Bırak Arayüzü**
+  - Toolbar üzerinde "Paket Kur" butonu ve pencereye doğrudan `.deb`, `.AppImage`, `.tar.gz`, vb. sürükleyip bırakarak kurma (Drag-and-Drop) özelliği.
 
 ---
 

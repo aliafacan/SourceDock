@@ -142,8 +142,16 @@ class FlatpakProvider:
         return applications
 
     def _update_ids(self) -> set[str]:
-        result = self.runner.run(["flatpak", "remote-ls", "--updates", "--app", "--columns=application"], timeout=30)
-        if result.returncode != 0:
+        try:
+            result = self.runner.run(
+                ["flatpak", "remote-ls", "--updates", "--app", "--columns=application"],
+                timeout=8,
+                check=False,
+            )
+            if result.returncode != 0:
+                return set()
+            return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+        except Exception:
             return set()
-        return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
 

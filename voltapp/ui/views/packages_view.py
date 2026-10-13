@@ -286,6 +286,7 @@ class PackagesViewMixin:
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.set_default_size(600, 400)
         dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 

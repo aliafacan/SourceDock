@@ -19,6 +19,7 @@ from voltapp.core.models import (
     SOURCE_APPIMAGE,
     SOURCE_APT,
     SOURCE_FLATPAK,
+    SOURCE_PORTABLE,
     SOURCE_SNAP,
     ApplicationIssue,
     ApplicationSnapshot,
@@ -26,6 +27,7 @@ from voltapp.core.models import (
 )
 from voltapp.i18n import t, translate_backend_message
 from voltapp.ui.components.progress import OperationProgressWindow
+from voltapp.ui.components.package_installer_dialog import PackageInstallerDialog
 
 _AC_ICON = 0
 _AC_NAME = 1
@@ -81,6 +83,11 @@ class InstalledViewMixin:
         self.applications_export_btn.connect("clicked", self.on_export_application_list)
         search_row.pack_start(self.applications_export_btn, False, False, 0)
 
+        self.applications_install_file_btn = Gtk.Button()
+        self.applications_install_file_btn.connect("clicked", self.on_install_local_package)
+        self.applications_install_file_btn.get_style_context().add_class("suggested-action")
+        search_row.pack_start(self.applications_install_file_btn, False, False, 0)
+
         self.applications_add_appimage_btn = Gtk.Button()
         self.applications_add_appimage_btn.connect("clicked", self.on_add_appimage)
         search_row.pack_start(self.applications_add_appimage_btn, False, False, 0)
@@ -89,7 +96,7 @@ class InstalledViewMixin:
         filter_outer.set_valign(Gtk.Align.CENTER)
         toolbar.pack_start(filter_outer, False, False, 0)
 
-        for source in ("all", "updates", SOURCE_APT, SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APPIMAGE):
+        for source in ("all", "updates", SOURCE_APT, SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APPIMAGE, SOURCE_PORTABLE):
             button = Gtk.ToggleButton()
             button.get_style_context().add_class("filter-chip")
             button.connect("toggled", self.on_application_filter_toggled, source)
@@ -513,6 +520,7 @@ class InstalledViewMixin:
 
     def _show_application_context_menu(self, application: UnifiedApplication, event) -> None:
         menu = Gtk.Menu()
+        menu.get_style_context().add_class("icon-settings-window")
         item_launch = Gtk.MenuItem(label=t(self.preferences.language, "applications_launch"))
         item_launch.connect("activate", lambda _: self.on_launch_application(None, application))
         menu.append(item_launch)
@@ -563,6 +571,7 @@ class InstalledViewMixin:
             buttons=Gtk.ButtonsType.NONE,
             text=t(self.preferences.language, "applications_remove_confirm_title"),
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.format_secondary_text(
             t(self.preferences.language, "applications_remove_confirm_body", name=application.name)
         )
@@ -889,6 +898,7 @@ class InstalledViewMixin:
             SOURCE_FLATPAK: "Flatpak",
             SOURCE_SNAP: "Snap",
             SOURCE_APPIMAGE: "AppImage",
+            SOURCE_PORTABLE: t(lang, "source_portable"),
         }.get(source, source)
 
     def _category_display_name(self, category: str, lang: str) -> str:
@@ -968,33 +978,118 @@ class InstalledViewMixin:
                 self._set_applications_status(f"{t(self.preferences.language, 'status_exported')}: {filename}", "#1f7a1f")
         dialog.destroy()
 
-    def on_add_appimage(self, _button) -> None:
+    def on_install_local_package(self, _button=None) -> None:
         lang = self.preferences.language
         dialog = Gtk.FileChooserDialog(
-            title=t(lang, "add_appimage_title"),
+            title=t(lang, "install_package_title"),
             transient_for=self,
             action=Gtk.FileChooserAction.OPEN,
         )
         dialog.add_buttons(
             t(lang, "password_cancel"), Gtk.ResponseType.CANCEL,
-            t(lang, "add_appimage_btn"), Gtk.ResponseType.OK,
+            t(lang, "password_continue"), Gtk.ResponseType.OK,
         )
+
+        filter_all = Gtk.FileFilter()
+        filter_all.set_name(t(lang, "package_filter_supported"))
+        for ext in (
+            "*.deb", "*.AppImage", "*.appimage",
+            "*.tar.gz", "*.tgz", "*.tar.xz", "*.txz", "*.tar.bz2", "*.tbz2", "*.zip",
+            "*.flatpak", "*.flatpakref", "*.rpm",
+        ):
+            filter_all.add_pattern(ext)
+        dialog.add_filter(filter_all)
+
+        filter_deb = Gtk.FileFilter()
+        filter_deb.set_name(t(lang, "package_filter_deb"))
+        filter_deb.add_pattern("*.deb")
+        dialog.add_filter(filter_deb)
+
         filter_ai = Gtk.FileFilter()
-        filter_ai.set_name(t(lang, "appimage_files"))
+        filter_ai.set_name(t(lang, "package_filter_appimage"))
         filter_ai.add_pattern("*.AppImage")
         filter_ai.add_pattern("*.appimage")
         dialog.add_filter(filter_ai)
 
+        filter_arc = Gtk.FileFilter()
+        filter_arc.set_name(t(lang, "package_filter_archive"))
+        for ext in ("*.tar.gz", "*.tgz", "*.tar.xz", "*.txz", "*.tar.bz2", "*.tbz2", "*.zip"):
+            filter_arc.add_pattern(ext)
+        dialog.add_filter(filter_arc)
+
+        filter_fp = Gtk.FileFilter()
+        filter_fp.set_name(t(lang, "package_filter_flatpak"))
+        filter_fp.add_pattern("*.flatpak")
+        filter_fp.add_pattern("*.flatpakref")
+        dialog.add_filter(filter_fp)
+
+        filter_rpm = Gtk.FileFilter()
+        filter_rpm.set_name(t(lang, "package_filter_rpm"))
+        filter_rpm.add_pattern("*.rpm")
+        dialog.add_filter(filter_rpm)
+
         if dialog.run() == Gtk.ResponseType.OK:
             filename = dialog.get_filename()
+            dialog.destroy()
             if filename:
-                try:
-                    self.application_registry.register_appimage(filename)
-                    self.reload_applications_async()
-                    self._set_applications_status(f"{t(lang, 'appimage_added')}: {Path(filename).name}", "#1f7a1f")
-                except Exception as exc:
-                    self._show_error_dialog(f"{t(lang, 'appimage_add_failed')}: {exc}")
+                self.prompt_and_install_file(filename)
+        else:
+            dialog.destroy()
+
+    def prompt_and_install_file(self, filename: str) -> None:
+        lang = self.preferences.language
+        try:
+            pkg_info = self.application_registry.inspect_local_package(filename)
+        except Exception as exc:
+            self._show_error_dialog(f"{t(lang, 'package_inspect_failed')}: {exc}")
+            return
+
+        is_installed = False
+        try:
+            is_installed = self.application_registry.is_local_package_installed(pkg_info)
+        except Exception:
+            pass
+
+        dialog = PackageInstallerDialog(parent=self, info=pkg_info, language=lang, is_installed=is_installed)
+        response = dialog.run()
+        should_create_desktop = dialog.should_create_desktop
+        should_copy_apps = dialog.should_copy_to_applications
+        flatpak_scope = dialog.flatpak_scope
+        should_reinstall = dialog.should_reinstall
+        should_delete_installer = dialog.should_delete_installer
         dialog.destroy()
+
+        if response != Gtk.ResponseType.OK:
+            return
+
+        action_name = f"install_{pkg_info.format}"
+        target_dir = os.path.expanduser("~/Applications") if should_copy_apps else None
+
+        def do_install():
+            self.application_registry.install_local_package(
+                info=pkg_info,
+                target_dir=target_dir,
+                create_desktop=should_create_desktop,
+                scope=flatpak_scope,
+                reinstall=should_reinstall,
+            )
+            if should_delete_installer and os.path.exists(pkg_info.file_path):
+                try:
+                    os.remove(pkg_info.file_path)
+                except OSError:
+                    pass
+
+        self._run_application_task(
+            action_name=action_name,
+            worker_callable=do_install,
+            success_message_key="package_install_success",
+            progress_title_key="package_installing",
+            refresh_after=True,
+            progress_message=f"{pkg_info.name} ({pkg_info.format.upper()})",
+        )
+
+    def on_add_appimage(self, _button) -> None:
+        self.on_install_local_package(_button)
 
     def on_bulk_remove_applications(self, _button) -> None:
         lang = self.preferences.language
@@ -1010,6 +1105,7 @@ class InstalledViewMixin:
             buttons=Gtk.ButtonsType.NONE,
             text=t(lang, "bulk_remove_title").format(count=len(selected_apps)),
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         del_btn = dialog.add_button(t(lang, "bulk_remove_btn"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
@@ -1032,6 +1128,7 @@ class InstalledViewMixin:
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.set_default_size(500, 350)
         dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
@@ -1061,6 +1158,7 @@ class InstalledViewMixin:
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
         )
+        dialog.get_style_context().add_class("icon-settings-window")
         dialog.set_default_size(480, 320)
         dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         rb_btn = dialog.add_button(t(lang, "rollback_btn"), Gtk.ResponseType.OK)

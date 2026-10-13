@@ -121,11 +121,24 @@ class CommandRunner:
     ) -> subprocess.CompletedProcess[str]:
         """Komut çıktısını gerçek zamanlı olarak okur ve callback'e iletir."""
         try:
+            child_env = dict(os.environ)
+            # Alt süreçlere snap ortam değişkenlerinin sızmasını önle
+            for _v in (
+                "GTK_PATH", "GTK3_MODULES", "GTK_EXE_PREFIX", "GTK_IM_MODULE_FILE",
+                "GDK_PIXBUF_MODULEDIR", "GDK_PIXBUF_MODULE_FILE", "GIO_MODULE_DIR",
+                "GSETTINGS_SCHEMA_DIR", "LOCPATH",
+            ):
+                child_env.pop(_v, None)
+            for _xv in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+                if _xv in child_env and "/snap/" in child_env[_xv]:
+                    child_env.pop(_xv, None)
+
             process = subprocess.Popen(
                 wrapped_command,
                 stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                env=child_env,
             )
             self._current_process = process
             if stdin_text is not None:
@@ -139,11 +152,15 @@ class CommandRunner:
             collected: list[str] = []
             buf = b""
             while True:
-                chunk = process.stdout.read(256)  # type: ignore[union-attr]
+                try:
+                    chunk = os.read(process.stdout.fileno(), 1024)
+                except OSError:
+                    break
                 if not chunk:
                     break
                 buf += chunk
                 while True:
+                    found = False
                     for sep in (b"\r\n", b"\n", b"\r"):
                         idx = buf.find(sep)
                         if idx >= 0:
@@ -153,8 +170,9 @@ class CommandRunner:
                                 collected.append(line)
                                 if self._output_callback is not None:
                                     self._output_callback(line)
+                            found = True
                             break
-                    else:
+                    if not found:
                         break
             if buf:
                 line = buf.decode("utf-8", errors="replace").strip()

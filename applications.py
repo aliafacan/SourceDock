@@ -7,10 +7,12 @@ from voltapp.core.models import (
     SOURCE_APPIMAGE,
     SOURCE_APT,
     SOURCE_FLATPAK,
+    SOURCE_PORTABLE,
     SOURCE_SNAP,
     ApplicationIssue,
     ApplicationSnapshot,
     DesktopEntry,
+    LocalPackageInfo,
     PackageInfo,
     UnifiedApplication,
 )
@@ -20,6 +22,7 @@ from voltapp.backend.apt import AptProvider
 from voltapp.backend.flatpak import FlatpakProvider
 from voltapp.backend.snap import SnapProvider
 from voltapp.backend.appimage import AppImageProvider
+from voltapp.backend.portable import PortableProvider
 from voltapp.backend.manager import ApplicationRegistry
 
 __all__ = [
@@ -28,11 +31,13 @@ __all__ = [
     "SOURCE_APPIMAGE",
     "SOURCE_APT",
     "SOURCE_FLATPAK",
+    "SOURCE_PORTABLE",
     "SOURCE_SNAP",
     "ApplicationIssue",
     "ApplicationRegistry",
     "ApplicationSnapshot",
     "DesktopEntry",
+    "LocalPackageInfo",
     "PackageInfo",
     "UnifiedApplication",
     "CommandRunner",
@@ -41,4 +46,5 @@ __all__ = [
     "FlatpakProvider",
     "SnapProvider",
     "AppImageProvider",
+    "PortableProvider",
 ]
