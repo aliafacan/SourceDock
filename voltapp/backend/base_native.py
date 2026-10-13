@@ -76,3 +76,4 @@ class BaseNativeProvider(ABC):
     def get_lock_holders(self) -> list[tuple[str, str]]:
         """Veritabanı kilidini tutan işlem listesini (pid, komut) döndürür."""
         return []
+

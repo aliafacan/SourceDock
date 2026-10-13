@@ -255,3 +255,4 @@ class DnfProvider(BaseNativeProvider):
         except Exception:
             pass
         return holders
+

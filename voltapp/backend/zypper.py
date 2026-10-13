@@ -250,3 +250,4 @@ class ZypperProvider(BaseNativeProvider):
         except Exception:
             pass
         return holders
+

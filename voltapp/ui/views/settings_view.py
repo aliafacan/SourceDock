@@ -9,6 +9,7 @@ from gi.repository import Gtk  # pyright: ignore[reportMissingModuleSource]
 
 from voltapp.i18n import t
 from voltapp.preferences import AppPreferences
+from voltapp.backend.mime_integration import is_default_package_handler, set_as_default_package_handler
 
 
 class SettingsViewMixin:
@@ -71,6 +72,52 @@ class SettingsViewMixin:
         form.attach(theme_combo, 1, 1, 1, 1)
         form.attach(scale_label, 0, 2, 1, 1)
         form.attach(scale_combo, 1, 2, 1, 1)
+
+        # Sistem Entegrasyonu & Varsayılan Paket Yükleyici
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sep.set_margin_top(6)
+        sep.set_margin_bottom(6)
+        content.pack_start(sep, False, False, 0)
+
+        sys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        content.pack_start(sys_box, False, False, 0)
+
+        sys_title = Gtk.Label()
+        sys_title.set_markup(f"<b>{t(lang, 'settings_system_integration')}</b>")
+        sys_title.set_xalign(0)
+        sys_box.pack_start(sys_title, False, False, 0)
+
+        sys_desc = Gtk.Label(label=t(lang, "settings_default_installer_desc"))
+        sys_desc.set_xalign(0)
+        sys_desc.set_line_wrap(True)
+        sys_desc.get_style_context().add_class("dim-label")
+        sys_box.pack_start(sys_desc, False, False, 0)
+
+        action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        sys_box.pack_start(action_box, False, False, 0)
+
+        status_lbl = Gtk.Label()
+        status_lbl.set_xalign(0)
+        status_lbl.set_line_wrap(True)
+
+        is_def = is_default_package_handler()
+        btn_label = t(lang, "settings_already_default_btn") if is_def else t(lang, "settings_set_default_btn")
+        set_default_btn = Gtk.Button(label=btn_label)
+        if not is_def:
+            set_default_btn.get_style_context().add_class("suggested-action")
+
+        def on_set_default_clicked(_btn):
+            ok, msg = set_as_default_package_handler()
+            if ok:
+                set_default_btn.set_label(t(lang, "settings_already_default_btn"))
+                set_default_btn.get_style_context().remove_class("suggested-action")
+                status_lbl.set_markup(f'<span foreground="#059669">✓ {t(lang, "settings_default_success")}</span>')
+            else:
+                status_lbl.set_markup(f'<span foreground="#dc2626">✗ {msg}</span>')
+
+        set_default_btn.connect("clicked", on_set_default_clicked)
+        action_box.pack_start(set_default_btn, False, False, 0)
+        action_box.pack_start(status_lbl, True, True, 0)
 
         dialog.show_all()
         response = dialog.run()

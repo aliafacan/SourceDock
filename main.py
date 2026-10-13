@@ -65,11 +65,39 @@ GLib.set_application_name(APP_TITLE)
 
 
 def main() -> None:
+    if "--register-mime" in sys.argv:
+        from voltapp.backend.mime_integration import set_as_default_package_handler
+        ok, msg = set_as_default_package_handler()
+        print(msg)
+        sys.exit(0 if ok else 1)
+
     prefs_store = PreferencesStore()
     win = MainWindow(prefs_store)
     win.show_all()
+
+    # Dosya yöneticisinden çift tıklanarak veya terminalden paket dosyası verildiyse aç
+    target_files: list[str] = []
+    for arg in sys.argv[1:]:
+        if arg.startswith("-"):
+            continue
+        cleaned = arg
+        if cleaned.startswith("file://"):
+            try:
+                filename, _ = GLib.filename_from_uri(cleaned)
+                cleaned = filename
+            except Exception:
+                cleaned = cleaned.replace("file://", "")
+        cleaned = os.path.abspath(cleaned)
+        if os.path.exists(cleaned) and os.path.isfile(cleaned):
+            target_files.append(cleaned)
+
+    if target_files:
+        win.present()
+        GLib.idle_add(win.prompt_and_install_file, target_files[0])
+
     Gtk.main()
 
 
 if __name__ == "__main__":
     main()
+

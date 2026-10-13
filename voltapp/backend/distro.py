@@ -142,3 +142,4 @@ def _find_available_manager(has_cmd: callable) -> str:
     if has_cmd("zypper"):
         return SOURCE_ZYPPER
     return SOURCE_APT
+

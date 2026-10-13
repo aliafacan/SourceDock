@@ -272,3 +272,4 @@ class PacmanProvider(BaseNativeProvider):
         except Exception:
             pass
         return holders
+
