@@ -13,19 +13,26 @@ from voltapp.core.errors import BackendError
 from voltapp.core.models import (
     APT_LOCK_NOWAIT,
     APT_LOCK_NOWAIT_VALUE,
+    NATIVE_SOURCES,
     PACKAGE_MANAGER_SOURCES,
     SOURCE_APPIMAGE,
     SOURCE_APT,
+    SOURCE_DNF,
     SOURCE_FLATPAK,
+    SOURCE_PACMAN,
     SOURCE_PORTABLE,
     SOURCE_SNAP,
+    SOURCE_ZYPPER,
     ApplicationIssue,
     ApplicationSnapshot,
     LocalPackageInfo,
     PackageInfo,
     UnifiedApplication,
+    is_native_source,
 )
 from voltapp.core.runner import CommandRunner
+from voltapp.backend.base_native import BaseNativeProvider
+from voltapp.backend.distro import DistroInfo, detect_distro
 from voltapp.backend.scanner import (
     DesktopEntryScanner,
     _clean_exec_parts,
@@ -34,6 +41,9 @@ from voltapp.backend.scanner import (
     _normalize_path,
 )
 from voltapp.backend.apt import AptProvider
+from voltapp.backend.dnf import DnfProvider
+from voltapp.backend.pacman import PacmanProvider
+from voltapp.backend.zypper import ZypperProvider
 from voltapp.backend.flatpak import FlatpakProvider
 from voltapp.backend.snap import SnapProvider
 from voltapp.backend.appimage import AppImageProvider
@@ -47,24 +57,51 @@ def _apt_command(*args: str) -> list[str]:
 class ApplicationRegistry:
     """Sistemdeki tüm kurulu paket kaynaklarını yöneten ana kayıt defteri."""
 
-    def __init__(self):
-        self.runner = CommandRunner()
+    def __init__(self, distro_info: DistroInfo | None = None, runner: CommandRunner | None = None):
+        self.runner = runner or CommandRunner()
         self.scanner = DesktopEntryScanner(self.runner)
+        self.distro = distro_info or detect_distro(self.runner)
         self.applications: list[UnifiedApplication] = []
+
+        self._native_providers: dict[str, BaseNativeProvider] = {
+            SOURCE_APT: AptProvider(self.runner, self.scanner),
+            SOURCE_DNF: DnfProvider(self.runner, self.scanner),
+            SOURCE_PACMAN: PacmanProvider(self.runner, self.scanner),
+            SOURCE_ZYPPER: ZypperProvider(self.runner, self.scanner),
+        }
+        self.native_provider = self._select_native_provider()
+
         self.providers = [
-            AptProvider(self.runner, self.scanner),
+            self.native_provider,
             FlatpakProvider(self.runner, self.scanner),
             SnapProvider(self.runner, self.scanner),
             AppImageProvider(self.runner, self.scanner),
             PortableProvider(self.runner),
         ]
 
+    def _select_native_provider(self) -> BaseNativeProvider:
+        pref = self.distro.native_manager
+        if pref in self._native_providers and self._native_providers[pref].is_available():
+            return self._native_providers[pref]
+        for mgr_key in (SOURCE_APT, SOURCE_DNF, SOURCE_PACMAN, SOURCE_ZYPPER):
+            prov = self._native_providers[mgr_key]
+            if prov.is_available():
+                return prov
+        return self._native_providers[SOURCE_APT]
+
+    def get_native_provider(self, source: str | None = None) -> BaseNativeProvider:
+        if source and source in self._native_providers:
+            return self._native_providers[source]
+        return self.native_provider
+
     def set_sudo_password(self, password: str) -> None:
         self.runner.set_sudo_password(password)
 
     def refresh_update_cache(self) -> None:
-        if self.runner.command_exists("apt-get"):
-            self.runner.run_privileged(_apt_command("update", "-q"), timeout=120)
+        if self.native_provider.is_available():
+            cmd = self.native_provider.refresh_cache_command()
+            if cmd:
+                self.runner.run_privileged(cmd, timeout=120)
         if self.runner.command_exists("flatpak"):
             self.runner.run(["flatpak", "update", "--appstream", "-y"], timeout=60, check=False)
         if self.runner.command_exists("snap"):
@@ -73,8 +110,10 @@ class ApplicationRegistry:
     def refresh_update_cache_silent(self) -> None:
         try:
             sudo_free = self.runner.run(["sudo", "-n", "true"], timeout=5).returncode == 0
-            if sudo_free and self.runner.command_exists("apt-get"):
-                self.runner.run(["sudo", "-n", *_apt_command("update", "-q")], timeout=90, check=False)
+            if sudo_free and self.native_provider.is_available():
+                cmd = self.native_provider.refresh_cache_command()
+                if cmd:
+                    self.runner.run(["sudo", "-n", *cmd], timeout=90, check=False)
         except Exception:
             pass
         try:
@@ -94,12 +133,10 @@ class ApplicationRegistry:
             except Exception as exc:
                 provider_errors.append(f"{provider.source}: {exc}")
 
-        apt_provider = next((p for p in self.providers if isinstance(p, AptProvider)), None)
-        if apt_provider is not None:
-            hidden = getattr(apt_provider, "_hidden_upgradable", set())
-            if hidden:
-                names = ", ".join(sorted(hidden))
-                provider_errors.append(f"apt (sistem): {len(hidden)} arayüzsüz paket güncellenebilir → {names}")
+        hidden = getattr(self.native_provider, "_hidden_upgradable", set())
+        if hidden:
+            names = ", ".join(sorted(hidden))
+            provider_errors.append(f"{self.native_provider.display_name.lower()} (sistem): {len(hidden)} arayüzsüz paket güncellenebilir → {names}")
 
         merged = self._merge_applications(applications)
         self.applications = merged
@@ -107,15 +144,19 @@ class ApplicationRegistry:
         return ApplicationSnapshot(applications=merged, issues=issues, provider_errors=provider_errors)
 
     def list_packages(self) -> list[PackageInfo]:
-        apt_provider = next((p for p in self.providers if isinstance(p, AptProvider)), None)
-        if apt_provider is None:
-            return []
-        return apt_provider.list_all_packages()
+        return self.native_provider.list_all_packages()
 
     def update_packages(self, names: list[str]) -> None:
         if not names:
             return
-        self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", *names), timeout=1800)
+        if self.native_provider.source == SOURCE_APT:
+            self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", *names), timeout=1800)
+        elif self.native_provider.source == SOURCE_DNF:
+            self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
+        elif self.native_provider.source == SOURCE_PACMAN:
+            self.runner.run_privileged(["pacman", "-S", "--noconfirm", *names], timeout=1800)
+        elif self.native_provider.source == SOURCE_ZYPPER:
+            self.runner.run_privileged(["zypper", "--non-interactive", "update", "-y", *names], timeout=1800)
 
     def launch(self, application: UnifiedApplication) -> None:
         if application.source == SOURCE_FLATPAK:
@@ -150,9 +191,10 @@ class ApplicationRegistry:
         self.runner.spawn(["gio", "open", target])
 
     def update(self, application: UnifiedApplication) -> None:
-        if application.source == SOURCE_APT:
-            package = application.package_name
-            self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", package), timeout=1800)
+        if is_native_source(application.source):
+            prov = self.get_native_provider(application.source)
+            cmd = prov.update_command(application.package_name)
+            self.runner.run_privileged(cmd, timeout=1800)
             return
         if application.source == SOURCE_FLATPAK:
             user_base = os.path.expanduser("~/.local/share/flatpak")
@@ -171,11 +213,12 @@ class ApplicationRegistry:
 
     def update_all(self, applications: list[UnifiedApplication]) -> None:
         sources = {application.source for application in applications}
-        if SOURCE_APT in sources and self.runner.command_exists("apt-get"):
-            if self.runner.command_exists("nala"):
-                self.runner.run_privileged(["nala", "upgrade", "-y"], timeout=3600)
-            else:
-                self.runner.run_privileged(_apt_command("upgrade", "-y"), timeout=3600)
+        for native_src in NATIVE_SOURCES:
+            if native_src in sources:
+                prov = self.get_native_provider(native_src)
+                if prov.is_available():
+                    self.runner.run_privileged(prov.update_all_command(), timeout=3600)
+
         if SOURCE_FLATPAK in sources and self.runner.command_exists("flatpak"):
             self.runner.run(["flatpak", "update", "-y"], timeout=3600, check=True)
         if SOURCE_SNAP in sources and self.runner.command_exists("snap"):
@@ -185,11 +228,13 @@ class ApplicationRegistry:
                 self.runner.run(["AppImageUpdate", application.install_path], timeout=1800, check=False)
 
     def remove(self, application: UnifiedApplication, purge: bool = False) -> None:
-        if application.source == SOURCE_APT:
-            cmd = "purge" if purge else "remove"
-            self.runner.run_privileged(_apt_command(cmd, "-y", application.package_name), timeout=1800)
+        if is_native_source(application.source):
+            prov = self.get_native_provider(application.source)
+            cmd = prov.remove_command(application.package_name, purge=purge)
+            self.runner.run_privileged(cmd, timeout=1800)
             if purge:
-                self.runner.run_privileged(_apt_command("autoremove", "-y"), timeout=600)
+                if application.source == SOURCE_APT and self.runner.command_exists("apt-get"):
+                    self.runner.run_privileged(_apt_command("autoremove", "-y"), timeout=600)
                 self._remove_user_data_dirs(application.package_name)
             return
         if application.source == SOURCE_FLATPAK:
@@ -417,6 +462,9 @@ class ApplicationRegistry:
     def _preference_sort_key(self, application: UnifiedApplication) -> tuple[int, int, int, int, str]:
         source_priority = {
             SOURCE_APT: 0,
+            SOURCE_DNF: 0,
+            SOURCE_PACMAN: 0,
+            SOURCE_ZYPPER: 0,
             SOURCE_FLATPAK: 1,
             SOURCE_SNAP: 2,
             SOURCE_APPIMAGE: 3,

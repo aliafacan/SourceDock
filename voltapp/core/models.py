@@ -7,12 +7,20 @@ from dataclasses import dataclass, field
 import os
 
 SOURCE_APT = "apt"
+SOURCE_DNF = "dnf"
+SOURCE_PACMAN = "pacman"
+SOURCE_ZYPPER = "zypper"
 SOURCE_FLATPAK = "flatpak"
 SOURCE_SNAP = "snap"
 SOURCE_APPIMAGE = "appimage"
 SOURCE_PORTABLE = "portable"
 
-PACKAGE_MANAGER_SOURCES = {SOURCE_APT, SOURCE_FLATPAK, SOURCE_SNAP}
+NATIVE_SOURCES = {SOURCE_APT, SOURCE_DNF, SOURCE_PACMAN, SOURCE_ZYPPER}
+PACKAGE_MANAGER_SOURCES = {SOURCE_APT, SOURCE_DNF, SOURCE_PACMAN, SOURCE_ZYPPER, SOURCE_FLATPAK, SOURCE_SNAP}
+
+
+def is_native_source(source: str) -> bool:
+    return source in NATIVE_SOURCES
 
 APT_LOCK_NOWAIT = "-o"
 APT_LOCK_NOWAIT_VALUE = "DPkg::Lock::Timeout=0"

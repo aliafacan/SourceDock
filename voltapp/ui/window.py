@@ -252,8 +252,10 @@ class MainWindow(
         self._render_applications_list()
 
         # Packages page
+        native_prov = getattr(self.application_registry, "native_provider", None)
+        disp_name = native_prov.display_name if native_prov else "APT"
         self.packages_title_label.set_markup(
-            f'<span size="large" weight="bold">{t(lang, "packages_title")}</span>'
+            f'<span size="large" weight="bold">{t(lang, "packages_native_title").format(manager=disp_name)}</span>'
         )
         self.packages_subtitle_label.set_text(t(lang, "packages_subtitle"))
         self.packages_search_entry.set_placeholder_text(t(lang, "packages_search_placeholder"))

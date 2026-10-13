@@ -45,6 +45,9 @@ TRANSLATIONS = {
         "applications_diagnostics": "Bakım ve tanılama",
         "applications_source_all": "Tümü",
         "applications_source_apt": "APT",
+        "applications_source_dnf": "DNF",
+        "applications_source_pacman": "Pacman",
+        "applications_source_zypper": "Zypper",
         "applications_source_flatpak": "Flatpak",
         "applications_source_snap": "Snap",
         "applications_source_appimage": "AppImage",
@@ -170,10 +173,17 @@ TRANSLATIONS = {
         "appimage_register_btn": "AppImage Ekle",
         "appimage_register_done": "AppImage kaydedildi ve uygulamalar yenilendi.",
         "appimage_register_filter": "AppImage Dosyası",
-        # APT store
+        # Native store
         "store_source_apt": "APT",
-        "store_apt_password_message": "APT kurulumu için yönetici parolası gerekiyor.",
+        "store_source_dnf": "DNF",
+        "store_source_pacman": "Pacman",
+        "store_source_zypper": "Zypper",
+        "store_apt_password_message": "Paket kurulumu için yönetici parolası gerekiyor.",
         "store_apt_password_retry": "Parola kabul edilmedi. Tekrar gir.",
+        # Aşama 5: Dağıtımdan Bağımsız Mimari
+        "distro_detected": "Algılanan Dağıtım: {name}",
+        "native_manager_detected": "Yerel Paket Yöneticisi: {manager}",
+        "packages_native_title": "Sistem ({manager}) Paketleri",
         # Keyboard shortcuts hint
         "applications_keyboard_hint": "F5: Yenile | Del: Kaldır | Ctrl+F: Ara",
         # Packages tab
@@ -339,6 +349,9 @@ TRANSLATIONS = {
         "applications_diagnostics": "Maintenance and diagnostics",
         "applications_source_all": "All",
         "applications_source_apt": "APT",
+        "applications_source_dnf": "DNF",
+        "applications_source_pacman": "Pacman",
+        "applications_source_zypper": "Zypper",
         "applications_source_flatpak": "Flatpak",
         "applications_source_snap": "Snap",
         "applications_source_appimage": "AppImage",
@@ -464,10 +477,17 @@ TRANSLATIONS = {
         "appimage_register_btn": "Add AppImage",
         "appimage_register_done": "AppImage registered and app list refreshed.",
         "appimage_register_filter": "AppImage File",
-        # APT store
+        # Native store
         "store_source_apt": "APT",
-        "store_apt_password_message": "An administrator password is required to install APT packages.",
+        "store_source_dnf": "DNF",
+        "store_source_pacman": "Pacman",
+        "store_source_zypper": "Zypper",
+        "store_apt_password_message": "An administrator password is required to install packages.",
         "store_apt_password_retry": "Password was not accepted. Please try again.",
+        # Stage 5: Distro-Agnostic Architecture
+        "distro_detected": "Detected Distribution: {name}",
+        "native_manager_detected": "Native Package Manager: {manager}",
+        "packages_native_title": "System ({manager}) Packages",
         # Keyboard shortcuts hint
         "applications_keyboard_hint": "F5: Refresh | Del: Remove | Ctrl+F: Search",
         # Packages tab

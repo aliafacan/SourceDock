@@ -13,10 +13,15 @@ from gi.repository import GdkPixbuf, GLib, GObject, Gtk, Pango  # pyright: ignor
 
 from voltapp.core.errors import AuthRequiredError, BackendError, SnapClassicRequiredError
 from voltapp.core.models import (
+    NATIVE_SOURCES,
     SOURCE_APT as STORE_APT,
+    SOURCE_DNF as STORE_DNF,
     SOURCE_FLATPAK as STORE_FLATPAK,
+    SOURCE_PACMAN as STORE_PACMAN,
     SOURCE_SNAP as STORE_SNAP,
+    SOURCE_ZYPPER as STORE_ZYPPER,
     StoreResult,
+    is_native_source,
 )
 from voltapp.i18n import t
 from voltapp.ui.components.dialogs import AppDetailDialog, show_snap_classic_dialog
@@ -65,7 +70,8 @@ class StoreViewMixin:
         filter_row.set_row_spacing(6)
         filter_row.set_max_children_per_line(10)
         container.pack_start(filter_row, False, False, 0)
-        for source in ("all", STORE_FLATPAK, STORE_SNAP, STORE_APT):
+        native_mgr = getattr(self.store_registry, "native_manager", STORE_APT)
+        for source in ("all", STORE_FLATPAK, STORE_SNAP, native_mgr):
             button = Gtk.ToggleButton()
             button.get_style_context().add_class("filter-chip")
             button.connect("toggled", self.on_store_filter_toggled, source)
@@ -310,8 +316,8 @@ class StoreViewMixin:
                 self.store_registry.set_output_callback(None)
                 GLib.idle_add(self._unregister_active_op, op_key)
                 GLib.idle_add(progress_dialog.destroy)
-                msg_key = apt_msg_key if result.source == STORE_APT else "store_password_message"
-                retry_key = apt_retry_key if result.source == STORE_APT else "store_password_retry"
+                msg_key = apt_msg_key if is_native_source(result.source) else "store_password_message"
+                retry_key = apt_retry_key if is_native_source(result.source) else "store_password_retry"
                 GLib.idle_add(self._handle_store_auth_required, result, exc, retry, msg_key, retry_key, classic)
             except BackendError as exc:
                 self.store_registry.set_output_callback(None)
@@ -377,7 +383,14 @@ class StoreViewMixin:
     def _group_store_results(
         self, results: list[StoreResult]
     ) -> list[tuple[StoreResult, list[StoreResult]]]:
-        source_order = {STORE_FLATPAK: 0, STORE_SNAP: 1, STORE_APT: 2}
+        source_order = {
+            STORE_FLATPAK: 0,
+            STORE_SNAP: 1,
+            STORE_APT: 2,
+            STORE_DNF: 2,
+            STORE_PACMAN: 2,
+            STORE_ZYPPER: 2,
+        }
         grouped: dict[str, list[StoreResult]] = {}
         for r in results:
             key = r.name.strip().lower()
@@ -399,7 +412,9 @@ class StoreViewMixin:
         self.store_results_store.clear()
         filtered = [
             r for r in results
-            if self.store_filter_source == "all" or r.source == self.store_filter_source
+            if self.store_filter_source == "all"
+            or r.source == self.store_filter_source
+            or (self.store_filter_source in NATIVE_SOURCES and r.source in NATIVE_SOURCES)
         ]
         groups = self._group_store_results(filtered)
         for primary, children in groups:

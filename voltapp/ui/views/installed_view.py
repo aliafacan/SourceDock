@@ -16,14 +16,19 @@ from gi.repository import Gdk, GdkPixbuf, GLib, GObject, Gtk, Pango  # pyright: 
 
 from voltapp.core.errors import AuthRequiredError, BackendError
 from voltapp.core.models import (
+    NATIVE_SOURCES,
     SOURCE_APPIMAGE,
     SOURCE_APT,
+    SOURCE_DNF,
     SOURCE_FLATPAK,
+    SOURCE_PACMAN,
     SOURCE_PORTABLE,
     SOURCE_SNAP,
+    SOURCE_ZYPPER,
     ApplicationIssue,
     ApplicationSnapshot,
     UnifiedApplication,
+    is_native_source,
 )
 from voltapp.i18n import t, translate_backend_message
 from voltapp.ui.components.progress import OperationProgressWindow
@@ -96,7 +101,9 @@ class InstalledViewMixin:
         filter_outer.set_valign(Gtk.Align.CENTER)
         toolbar.pack_start(filter_outer, False, False, 0)
 
-        for source in ("all", "updates", SOURCE_APT, SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APPIMAGE, SOURCE_PORTABLE):
+        native_provider = getattr(self.application_registry, "native_provider", None)
+        native_key = native_provider.source if native_provider else SOURCE_APT
+        for source in ("all", "updates", native_key, SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APPIMAGE, SOURCE_PORTABLE):
             button = Gtk.ToggleButton()
             button.get_style_context().add_class("filter-chip")
             button.connect("toggled", self.on_application_filter_toggled, source)
@@ -498,7 +505,7 @@ class InstalledViewMixin:
             is_flatpak = application.source == SOURCE_FLATPAK
             self.applications_permissions_btn.set_sensitive(is_flatpak)
             self.applications_rollback_btn.set_sensitive(is_flatpak)
-            self.applications_changelog_btn.set_sensitive(application.source == SOURCE_APT)
+            self.applications_changelog_btn.set_sensitive(is_native_source(application.source))
         else:
             self.applications_launch_btn.set_sensitive(False)
             self.applications_action_location_btn.set_sensitive(False)
@@ -868,8 +875,12 @@ class InstalledViewMixin:
         for app in self.applications:
             if source == "updates" and not app.update_available:
                 continue
-            if source not in ("all", "updates") and app.source != source:
-                continue
+            if source not in ("all", "updates"):
+                if source in NATIVE_SOURCES:
+                    if app.source not in NATIVE_SOURCES:
+                        continue
+                elif app.source != source:
+                    continue
             if cat != "__all__" and cat.lower() not in app.category.lower():
                 continue
             if query and query not in app.name.lower() and query not in app.package_name.lower():
@@ -895,11 +906,14 @@ class InstalledViewMixin:
             return t(lang, "applications_source_updates")
         return {
             SOURCE_APT: "APT",
+            SOURCE_DNF: "DNF",
+            SOURCE_PACMAN: "Pacman",
+            SOURCE_ZYPPER: "Zypper",
             SOURCE_FLATPAK: "Flatpak",
             SOURCE_SNAP: "Snap",
             SOURCE_APPIMAGE: "AppImage",
             SOURCE_PORTABLE: t(lang, "source_portable"),
-        }.get(source, source)
+        }.get(source, source.upper())
 
     def _category_display_name(self, category: str, lang: str) -> str:
         cat_lower = category.lower().strip()

@@ -12,8 +12,8 @@
 | **Aşama 2** | Modüler Mimari & Dosya Bölme & Markalama | ✅ Tamamlandı |
 | **Aşama 3** | Çoklu Dil & Yerelleştirme (i18n) Temizliği | ✅ Tamamlandı |
 | **Aşama 4** | Yeni Paket Formatları (.deb, .AppImage, .tar.gz, vb.) | ✅ Tamamlandı |
-| **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ⏳ Sırada |
-| **Aşama 6** | Açık Kaynak Hazırlığı (Topluluk, CI/CD, Dokümantasyon) | ⏳ Beklemede |
+| **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ✅ Tamamlandı |
+| **Aşama 6** | Açık Kaynak Hazırlığı (Topluluk, CI/CD, Dokümantasyon) | ⏳ Sırada |
 
 ---
 
@@ -75,15 +75,18 @@
 ---
 
 ## 🐧 Aşama 5: Dağıtımdan Bağımsız Mimari (Distro-Agnostic)
-- [ ] **5.1. Çoklu Paket Yöneticisi Desteği**
-  - Sistemdeki yöneticileri otomatik tanıma:
+- [x] **5.1. Çoklu Paket Yöneticisi Desteği**
+  - Sistemdeki yöneticileri otomatik tanıma (`voltapp/backend/distro.py`):
     - Debian / Ubuntu / Zorin: `apt`
     - Fedora / RHEL: `dnf`
-    - Arch Linux: `pacman`
-    - openSUSE: `zypper`
-    - Evrensel: `flatpak`, `snap`
-- [ ] **5.2. Paket Yöneticisi Soyutlama Katmanı (Backend Abstraction)**
-  - Ortak paket arama, kurma, kaldırma ve güncelleme arayüzü.
+    - Arch Linux / Manjaro / SteamOS: `pacman`
+    - openSUSE / SUSE: `zypper`
+    - Evrensel: `flatpak`, `snap`, `appimage`, `portable`
+- [x] **5.2. Paket Yöneticisi Soyutlama Katmanı (Backend Abstraction)**
+  - Ortak paket arama, kurma, kaldırma ve güncelleme arayüzü (`BaseNativeProvider`):
+    - `AptProvider`, `DnfProvider`, `PacmanProvider`, `ZypperProvider`.
+    - `ApplicationRegistry` ve `StoreRegistry` üzerinden dinamik yönlendirme ve kilit yönetimi.
+
 
 ---
 

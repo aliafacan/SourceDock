@@ -10,11 +10,15 @@ import os
 from pathlib import Path
 
 from voltapp.core.models import (
+    APT_LOCK_NOWAIT,
+    APT_LOCK_NOWAIT_VALUE,
     SOURCE_APT,
     PackageInfo,
+    StoreResult,
     UnifiedApplication,
 )
 from voltapp.core.runner import CommandRunner
+from voltapp.backend.base_native import BaseNativeProvider
 from voltapp.backend.scanner import (
     DesktopEntryScanner,
     _clean_exec_command,
@@ -30,15 +34,17 @@ def _safe_int(value: str) -> int | None:
         return None
 
 
-class AptProvider:
+class AptProvider(BaseNativeProvider):
     """Sistemdeki APT ve DPKG paketlerini yöneten ve listeleyen sağlayıcı."""
 
     source = SOURCE_APT
+    display_name = "APT"
 
     def __init__(self, runner: CommandRunner, scanner: DesktopEntryScanner):
-        self.runner = runner
-        self.scanner = scanner
-        self._hidden_upgradable: set[str] = set()
+        super().__init__(runner, scanner)
+
+    def is_available(self) -> bool:
+        return self.runner.command_exists("dpkg-query") or self.runner.command_exists("apt")
 
     def list_applications(self) -> list[UnifiedApplication]:
         if not self.runner.command_exists("dpkg-query"):
@@ -300,4 +306,112 @@ class AptProvider:
                 packages[name].update_available = True
                 packages[name].new_version = new_ver
         return sorted(packages.values(), key=lambda p: p.name)
+
+    def search_store(self, query: str) -> list[StoreResult]:
+        if not self.runner.command_exists("apt-cache"):
+            return []
+        try:
+            res = self.runner.run(["apt-cache", "search", "--", query], timeout=30)
+            items: list[StoreResult] = []
+            pkg_names: list[str] = []
+            raw_results: list[tuple[str, str]] = []
+            for line in res.stdout.splitlines():
+                if " - " not in line:
+                    continue
+                pkg_name, description = line.split(" - ", 1)
+                pkg_name = pkg_name.strip()
+                description = description.strip()
+                if not pkg_name:
+                    continue
+                raw_results.append((pkg_name, description))
+                pkg_names.append(pkg_name)
+            raw_results = raw_results[:60]
+            pkg_names = pkg_names[:60]
+
+            versions: dict[str, str] = {}
+            if pkg_names:
+                try:
+                    policy_res = self.runner.run(["apt-cache", "policy", "--", *pkg_names], timeout=30)
+                    cur_pkg = ""
+                    for p_line in policy_res.stdout.splitlines():
+                        s = p_line.strip()
+                        if not p_line.startswith(" ") and s.endswith(":"):
+                            cur_pkg = s[:-1]
+                        elif cur_pkg and s.startswith("Candidate:"):
+                            c_ver = s.split(":", 1)[1].strip()
+                            if c_ver and c_ver != "(none)":
+                                versions[cur_pkg] = c_ver
+                except Exception:
+                    pass
+
+            for pkg_name, description in raw_results:
+                items.append(
+                    StoreResult(
+                        name=pkg_name,
+                        app_id=pkg_name,
+                        description=description,
+                        source=SOURCE_APT,
+                        version=versions.get(pkg_name, ""),
+                        remote="apt",
+                    )
+                )
+            return items
+        except Exception:
+            return []
+
+    def install_command(self, package: str) -> list[str]:
+        return ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "install", "-y", package]
+
+    def update_command(self, package: str) -> list[str]:
+        return ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "install", "--only-upgrade", "-y", package]
+
+    def update_all_command(self) -> list[str]:
+        if self.runner.command_exists("nala"):
+            return ["nala", "upgrade", "-y"]
+        return ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "upgrade", "-y"]
+
+    def remove_command(self, package: str, purge: bool = False) -> list[str]:
+        cmd = "purge" if purge else "remove"
+        return ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, cmd, "-y", package]
+
+    def refresh_cache_command(self) -> list[str]:
+        return ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "update", "-q"]
+
+    def get_lock_holders(self) -> list[tuple[str, str]]:
+        script = r'''
+locks="/var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock"
+pids=""
+if command -v fuser >/dev/null 2>&1; then
+  for lock in $locks; do
+    [ -e "$lock" ] || continue
+    found="$(fuser "$lock" 2>/dev/null || true)"
+    pids="$pids $found"
+  done
+fi
+pids="$(printf '%s\n' $pids | awk '!seen[$1]++')"
+if [ -n "$pids" ]; then
+  ps -p "$(printf '%s,' $pids | sed 's/,$//')" -o pid=,args= 2>/dev/null || true
+else
+  ps -eo pid=,args= | awk '/[a]pt |[a]pt-get |[d]pkg |[u]nattended-upgrade/ && !/wait-for-signal/ {print}'
+fi
+'''
+        try:
+            res = self.runner.run(["sh", "-lc", script], timeout=5)
+        except Exception:
+            return []
+        holders: list[tuple[str, str]] = []
+        current_pid = str(os.getpid())
+        for line in res.stdout.splitlines():
+            parts = line.strip().split(maxsplit=1)
+            if len(parts) != 2:
+                continue
+            pid, args = parts
+            if pid == current_pid:
+                continue
+            lowered = args.lower()
+            if not any(token in lowered for token in ("apt", "apt-get", "dpkg", "unattended-upgrade")):
+                continue
+            holders.append((pid, args[:140]))
+        return holders
+
 

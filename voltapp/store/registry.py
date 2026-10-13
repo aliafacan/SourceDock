@@ -14,21 +14,33 @@ from voltapp.core.errors import AuthRequiredError, BackendError, SnapClassicRequ
 from voltapp.core.models import (
     APT_LOCK_NOWAIT,
     APT_LOCK_NOWAIT_VALUE,
+    NATIVE_SOURCES,
     SOURCE_APT,
+    SOURCE_DNF,
     SOURCE_FLATPAK,
+    SOURCE_PACMAN,
     SOURCE_SNAP,
+    SOURCE_ZYPPER,
     StoreResult,
+    is_native_source,
 )
+from voltapp.backend.distro import DistroInfo, detect_distro
+from voltapp.core.runner import CommandRunner
+from voltapp.backend.dnf import DnfProvider
+from voltapp.backend.pacman import PacmanProvider
+from voltapp.backend.zypper import ZypperProvider
 
 
 class StoreRegistry:
-    """Mağazalardan (Flatpak, Snap, APT) arama ve kurulum işlemlerini yürüten sınıf."""
+    """Mağazalardan (Flatpak, Snap, APT, DNF, Pacman, Zypper) arama ve kurulum işlemlerini yürüten sınıf."""
 
-    def __init__(self):
+    def __init__(self, distro_info: DistroInfo | None = None):
         self._sudo_password: str | None = None
         self._output_callback: Callable[[str], None] | None = None
         self.host_bridge_available = self._detect_host_bridge()
         self._current_process: subprocess.Popen | None = None
+        self.distro = distro_info or detect_distro()
+        self.native_manager = self.distro.native_manager
 
     def cancel_current(self) -> None:
         proc = self._current_process
@@ -48,15 +60,28 @@ class StoreRegistry:
         if not query.strip():
             return []
         if sources is None:
-            sources = {SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_APT}
+            sources = {SOURCE_FLATPAK, SOURCE_SNAP, self.native_manager}
         results: list[StoreResult] = []
         if SOURCE_FLATPAK in sources:
             results.extend(self._search_flatpak(query))
         if SOURCE_SNAP in sources:
             results.extend(self._search_snap(query))
-        if SOURCE_APT in sources:
-            results.extend(self._search_apt(query))
+        for native_src in NATIVE_SOURCES:
+            if native_src in sources:
+                results.extend(self._search_native(native_src, query))
         return results
+
+    def _search_native(self, native_src: str, query: str) -> list[StoreResult]:
+        if native_src == SOURCE_APT:
+            return self._search_apt(query)
+        runner = CommandRunner()
+        if native_src == SOURCE_DNF:
+            return DnfProvider(runner, None).search_store(query)
+        if native_src == SOURCE_PACMAN:
+            return PacmanProvider(runner, None).search_store(query)
+        if native_src == SOURCE_ZYPPER:
+            return ZypperProvider(runner, None).search_store(query)
+        return []
 
     def _search_flatpak(self, query: str) -> list[StoreResult]:
         if not self._command_exists("flatpak"):
@@ -210,10 +235,23 @@ class StoreRegistry:
             self._install_flatpak(result)
         elif result.source == SOURCE_SNAP:
             self._install_snap(result, classic=classic)
-        elif result.source == SOURCE_APT:
-            self._install_apt(result)
+        elif is_native_source(result.source):
+            self._install_native(result)
         else:
             raise BackendError(f"Bilinmeyen kaynak: {result.source}")
+
+    def _install_native(self, result: StoreResult) -> None:
+        if result.source == SOURCE_APT:
+            self._install_apt(result)
+        elif result.source == SOURCE_DNF:
+            cmd = ["dnf", "install", "-y", result.app_id]
+            self._run_privileged_streaming(cmd, timeout=1800)
+        elif result.source == SOURCE_PACMAN:
+            cmd = ["pacman", "-S", "--noconfirm", result.app_id]
+            self._run_privileged_streaming(cmd, timeout=1800)
+        elif result.source == SOURCE_ZYPPER:
+            cmd = ["zypper", "--non-interactive", "install", "-y", result.app_id]
+            self._run_privileged_streaming(cmd, timeout=1800)
 
     def _flatpak_remote_scope(self, remote: str) -> str:
         for scope_flag in ("--user", "--system"):
@@ -323,7 +361,7 @@ class StoreRegistry:
             raise BackendError(f"Komut çalıştırılamadı: {' '.join(command)}\n{exc}") from exc
 
     def _run_privileged_streaming(self, command: list[str], timeout: int = 1800, snap_pkg: str = "") -> None:
-        self._wait_for_apt_locks(command)
+        self._wait_for_native_locks(command)
         sudo_probe = self._run(["sudo", "-n", "true"], timeout=5)
         if sudo_probe.returncode == 0:
             self._run_streaming(["sudo", "-n", *command], timeout=timeout, check=True, snap_pkg=snap_pkg)
@@ -331,7 +369,7 @@ class StoreRegistry:
 
         if not self._sudo_password:
             raise AuthRequiredError(
-                "Yönetici parolası gerekiyor. Snap kurulumu için parola gir.",
+                "Yönetici parolası gerekiyor.",
             )
 
         wrapped = self._wrap_host(["sudo", "-S", "-p", "", *command])
@@ -385,6 +423,46 @@ class StoreRegistry:
                 raise BackendError(err_msg)
         except OSError as exc:
             raise BackendError(f"Komut çalıştırılamadı: {' '.join(command)}\n{exc}") from exc
+
+    def _wait_for_native_locks(self, command: list[str], max_wait: int = 300) -> None:
+        if not command:
+            return
+        binary = command[0]
+        if binary in {"apt", "apt-get", "nala", "dpkg"}:
+            self._wait_for_apt_locks(command, max_wait)
+        elif binary == "pacman":
+            self._wait_for_pacman_locks(command, max_wait)
+        elif binary in {"dnf", "rpm"}:
+            self._wait_for_dnf_locks(command, max_wait)
+        elif binary == "zypper":
+            self._wait_for_zypper_locks(command, max_wait)
+
+    def _wait_for_pacman_locks(self, command: list[str], max_wait: int = 300) -> None:
+        lock_file = "/var/lib/pacman/db.lck"
+        started = time.monotonic()
+        while os.path.exists(lock_file):
+            if time.monotonic() - started >= max_wait:
+                raise BackendError(f"Pacman veritabanı kilitli ({lock_file}). Başka bir işlem devam ediyor.")
+            time.sleep(2)
+
+    def _wait_for_dnf_locks(self, command: list[str], max_wait: int = 300) -> None:
+        started = time.monotonic()
+        while True:
+            r = self._run(["pgrep", "-f", r"\b(dnf|rpm)\b"], timeout=5)
+            pids = [p for p in r.stdout.splitlines() if p.strip() and p.strip() != str(os.getpid())]
+            if not pids:
+                return
+            if time.monotonic() - started >= max_wait:
+                raise BackendError("DNF/RPM şu anda başka bir işlem tarafından kullanılıyor.")
+            time.sleep(2)
+
+    def _wait_for_zypper_locks(self, command: list[str], max_wait: int = 300) -> None:
+        lock_file = "/var/run/zypp.pid"
+        started = time.monotonic()
+        while os.path.exists(lock_file):
+            if time.monotonic() - started >= max_wait:
+                raise BackendError(f"Zypper kilitli ({lock_file}). Başka bir işlem devam ediyor.")
+            time.sleep(2)
 
     def _wait_for_apt_locks(self, command: list[str], max_wait: int = 300) -> None:
         if not command or command[0] not in {"apt", "apt-get", "nala", "dpkg"}:
