@@ -1,6 +1,6 @@
-# ⚡ VoltApp — Roadmap & Yapılacaklar Listesi
+# ⚡ SourceDock — Roadmap & Yapılacaklar Listesi
 
-> *VoltApp ⚡, bir Elektrik-Elektronik Mühendisinin Pikachu ve voltaj sevgisi ile Linux sistemlerini elektrik hızında, engelsizce yönetme arzusundan doğdu.*
+> *SourceDock, farklı Linux yazılım kaynaklarını anlaşılır ve güvenli bir masaüstü deneyiminde birleştirme amacıyla geliştirilir.*
 
 ---
 
@@ -24,7 +24,7 @@
 
 ## 🎯 Aşama 1: Kritik Hata Çözümü (Snap `--classic` Desteği)
 - [x] **1.1. Snap `--classic` İhtiyacını Algılama**
-  - `voltapp/store/registry.py` içindeki streaming runner'da "classic confinement" ve "--classic" çıktıları anında yakalanıp `SnapClassicRequiredError` fırlatılıyor.
+  - `sourcedock/store/registry.py` içindeki streaming runner'da "classic confinement" ve "--classic" çıktıları anında yakalanıp `SnapClassicRequiredError` fırlatılıyor.
 - [x] **1.2. Kullanıcı Güvenlik Onay Penceresi**
   - UI'da kullanıcıya dostça ve açıklayıcı bir uyarı diyaloğu (`store_snap_classic_title` / `store_snap_classic_message`) gösterilerek tam sistem erişimi izni soruluyor.
 - [x] **1.3. `--classic` Bayrağı ile Kurulumu Gerçekleştirme**
@@ -32,12 +32,12 @@
 
 ---
 
-## 🏗️ Aşama 2: Modüler Mimari & Markalama (VoltApp ⚡)
+## 🏗️ Aşama 2: Modüler Mimari & Markalama (SourceDock)
 - [x] **2.1. Kod Bölme (Clean Architecture)**
-  - 3764 satırlık devasa `ui.py` ve 1402 satırlık `applications.py` paketlere bölündü (`voltapp/core/`, `voltapp/backend/`, `voltapp/store/`, `voltapp/ui/views/`, `voltapp/ui/components/`).
+  - 3764 satırlık devasa `ui.py` ve 1402 satırlık `applications.py` paketlere bölündü (`sourcedock/core/`, `sourcedock/backend/`, `sourcedock/store/`, `sourcedock/ui/views/`, `sourcedock/ui/components/`).
   - `main.py` 26 satıra indirildi; kök dosyalar geriye dönük uyumlu re-exporter haline getirildi.
 - [x] **2.2. Yeniden Markalama & Logo**
-  - Elektrik-Elektronik Mühendisi Pikachu temalı özgün vektörel logo (`assets/voltapp.svg`, `voltapp.png` 128/64/48px) oluşturuldu ve pencere ikonu olarak bağlandı.
+  - Kaynak düğümlerini tek bir dock üzerinde birleştiren özgün vektörel logo (`assets/sourcedock.svg`, PNG türevleri) oluşturuldu ve pencere ikonu olarak bağlandı.
   - GPL-3.0 Lisansı ve çift dilli `README.md` hazırlandı, GitHub reposuna pushlandı.
 
 ---
@@ -63,7 +63,7 @@
   - Uygulamayı standart konuma (`~/Applications`) taşıma/kopyalama seçeneği.
   - Masaüstü kısayolu (`.desktop` dosyası ve menü ikonu) otomatik oluşturma ve entegrasyonu.
 - [x] **4.3. `.tar.gz` / `.tar.xz` / `.zip` Taşınabilir (Portable) Yazılımlar**
-  - Arşivleri güvenli bir dizine açma (`~/.local/share/voltapp/apps/<uygulama>`).
+  - Arşivleri güvenli bir dizine açma (`~/.local/share/sourcedock/apps/<uygulama>`).
   - Çalıştırılabilir ana dosyayı tespit edip uygulama menüsüne `.desktop` kısayolu ekleme.
   - `PortableProvider` ile yüklü uygulamalar listesinde görünme, çalıştırma ve temiz kaldırma desteği.
 - [x] **4.4. Diğer Dağıtımlar ve Paketler**
@@ -76,7 +76,7 @@
 
 ## 🐧 Aşama 5: Dağıtımdan Bağımsız Mimari (Distro-Agnostic)
 - [x] **5.1. Çoklu Paket Yöneticisi Desteği**
-  - Sistemdeki yöneticileri otomatik tanıma (`voltapp/backend/distro.py`):
+  - Sistemdeki yöneticileri otomatik tanıma (`sourcedock/backend/distro.py`):
     - Debian / Ubuntu / Zorin: `apt`
     - Fedora / RHEL: `dnf`
     - Arch Linux / Manjaro / SteamOS: `pacman`
@@ -99,7 +99,7 @@
 - [x] **6.2. Otomasyon & CI/CD**
   - Tek komutla global sistem kurulumu için `install.sh` ve `uninstall.sh`.
   - GitHub Actions CI (`.github/workflows/ci.yml`: syntax, Python 3.10/3.11/3.12 matrisi, Xvfb altında unittest çalıştırma ve paketleme doğrulaması).
-- [x] **6.3. VoltApp `.deb` Paketi & Dağıtımı**
-  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`voltapp_1.1.0_all.deb`) inşası.
-  - Bağımsız masaüstü başlatıcı (`voltapp.desktop`), masaüstü sağ tık eylemleri (Desktop Actions: Ayrıntılar, Kaldır, Güncellemeler), uygulama detay sayfası (`InstalledAppDetailsDialog`), tam ikon setleri ve MIME ilişkilendirmeleri.
+- [x] **6.3. SourceDock `.deb` Paketi & Dağıtımı**
+  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`sourcedock_1.1.0_all.deb`) inşası.
+  - Bağımsız masaüstü başlatıcı (`sourcedock.desktop`), masaüstü sağ tık eylemleri (Desktop Actions: Ayrıntılar, Kaldır, Güncellemeler), uygulama detay sayfası (`InstalledAppDetailsDialog`), tam ikon setleri ve MIME ilişkilendirmeleri.
 

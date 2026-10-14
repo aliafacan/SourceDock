@@ -1,19 +1,23 @@
-name: VoltApp CI
+name: SourceDock CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    name: Test & Build (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: GTK Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        os: ["ubuntu-22.04", "ubuntu-24.04"]
 
     steps:
       - name: Depoyu Klonla (Checkout)
@@ -25,27 +29,42 @@ jobs:
           sudo apt-get install -y \
             python3-gi \
             python3-gi-cairo \
+            python3-venv \
             gir1.2-gtk-3.0 \
             gir1.2-gdkpixbuf-2.0 \
             xvfb \
-            dpkg-dev
+            dpkg-dev \
+            desktop-file-utils \
+            appstream
 
-      - name: Python ${{ matrix.python-version }} Kur
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Verify System Python and GI
+        run: |
+          /usr/bin/python3 --version
+          /usr/bin/python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk; print(Gtk.MAJOR_VERSION, Gtk.MINOR_VERSION)"
+
+      - name: Lint
+        run: |
+          python3 -m venv /tmp/sourcedock-lint
+          /tmp/sourcedock-lint/bin/pip install -r requirements-dev.txt
+          /tmp/sourcedock-lint/bin/ruff check .
 
       - name: Sözdizimi Kontrolü (Syntax Check)
         run: |
-          python3 -m py_compile main.py
-          python3 -m py_compile $(find voltapp -name "*.py")
+          /usr/bin/python3 -m compileall -q main.py sourcedock tests tools
 
       - name: Birim Testleri Çalıştır (Unittest via Xvfb)
         run: |
-          xvfb-run -a python3 -m unittest discover -s tests -v
+          xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -v
 
       - name: Debian (.deb) Paketini Derle ve Doğrula
         run: |
-          bash packaging/build_deb.sh
-          dpkg -I packaging/voltapp_*.deb
+          bash packaging/build_deb.sh dist
+          dpkg-deb --info dist/sourcedock_*.deb
+      - name: Upload Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcedock-${{ matrix.os }}
+          path: |
+            dist/*.deb
+            dist/*.sha256
 

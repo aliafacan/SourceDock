@@ -7,9 +7,17 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock
 
-from voltapp.constants import APP_VERSION
-from voltapp.core.models import SOURCE_APT, SOURCE_FLATPAK, UnifiedApplication
-from voltapp.ui.components.app_details_dialog import _format_size, _read_desktop_comment
+from sourcedock import __version__
+from sourcedock.constants import (
+    APP_COMMAND,
+    APP_DESKTOP_ID,
+    APP_PACKAGE_NAME,
+    APP_TITLE,
+    APP_VERSION,
+    LEGACY_APP_COMMAND,
+)
+from sourcedock.core.models import SOURCE_APT, SOURCE_FLATPAK, UnifiedApplication
+from sourcedock.ui.components.app_details_dialog import _format_size, _read_desktop_comment
 
 
 class TestAppDetailsDialogHelpers(unittest.TestCase):
@@ -45,28 +53,54 @@ Exec=testapp
 
 
 class TestDesktopActionsAndVersion(unittest.TestCase):
-    """Masaüstü kısayolu eylemleri ve sürüm 1.1.0 testleri."""
+    """Masaüstü kısayolu eylemleri ve sürüm tutarlılığı testleri."""
 
     def test_version_bump(self):
-        self.assertEqual(APP_VERSION, "1.1.0")
+        self.assertRegex(APP_VERSION, r"^\d+\.\d+\.\d+$")
+        self.assertEqual(__version__, APP_VERSION)
 
-        deb_script = Path("packaging/build_deb.sh").read_text(encoding="utf-8")
-        self.assertIn('VERSION="1.1.0"', deb_script)
+    def test_sourcedock_identity_and_legacy_command_contract(self):
+        self.assertEqual(APP_TITLE, "SourceDock")
+        self.assertEqual(APP_COMMAND, "sourcedock")
+        self.assertEqual(APP_DESKTOP_ID, "sourcedock.desktop")
+        self.assertEqual(APP_PACKAGE_NAME, "sourcedock")
+        self.assertEqual(LEGACY_APP_COMMAND, "voltapp")
+        build_script = Path("packaging/build_deb.sh").read_text(encoding="utf-8")
+        self.assertIn('cat > "$DEB_ROOT/usr/bin/voltapp"', build_script)
+        self.assertIn("Replaces: voltapp", build_script)
 
     def test_desktop_actions_present(self):
-        desktop_file = Path("packaging/voltapp.desktop")
+        desktop_file = Path("packaging/sourcedock.desktop")
         self.assertTrue(desktop_file.exists())
         content = desktop_file.read_text(encoding="utf-8")
 
         self.assertIn("Actions=Details;Uninstall;Updates;", content)
         self.assertIn("[Desktop Action Details]", content)
-        self.assertIn("--details voltapp", content)
+        self.assertIn("--details sourcedock", content)
         self.assertIn("[Desktop Action Uninstall]", content)
-        self.assertIn("--uninstall voltapp", content)
+        self.assertIn("--uninstall sourcedock", content)
         self.assertIn("[Desktop Action Updates]", content)
         self.assertIn("--updates", content)
+
+    def test_gnome_shell_right_click_extension_packaged(self):
+        """Ubuntu/Zorin uygulama menüsü sağ tık entegrasyonunun paketlendiğini doğrular."""
+        metadata = Path("sourcedock/desktop/extension/metadata.json")
+        extension = Path("sourcedock/desktop/extension/extension.js")
+        build_script = Path("packaging/build_deb.sh").read_text(encoding="utf-8")
+        install_script = Path("install.sh").read_text(encoding="utf-8")
+        uninstall_script = Path("uninstall.sh").read_text(encoding="utf-8")
+
+        self.assertTrue(metadata.exists())
+        self.assertTrue(extension.exists())
+        self.assertIn('"uuid": "sourcedock-menu@aliafacan.dev"', metadata.read_text(encoding="utf-8"))
+        extension_js = extension.read_text(encoding="utf-8")
+        self.assertIn("AppMenu.prototype.setApp", extension_js)
+        self.assertIn("--details", extension_js)
+        self.assertIn("--uninstall", extension_js)
+        self.assertIn("/usr/share/gnome-shell/extensions/$EXTENSION_UUID", build_script)
+        self.assertIn("/usr/share/gnome-shell/extensions/$EXTENSION_UUID", install_script)
+        self.assertIn("/usr/share/gnome-shell/extensions/sourcedock-menu@aliafacan.dev", uninstall_script)
 
 
 if __name__ == "__main__":
     unittest.main()
-

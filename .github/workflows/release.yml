@@ -1,0 +1,31 @@
+name: Draft Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi python3-gi-cairo python3-venv gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 xvfb dpkg-dev desktop-file-utils appstream
+      - name: Validate and Test
+        run: |
+          /usr/bin/python3 -m compileall -q main.py sourcedock tests tools
+          python3 -m venv /tmp/sourcedock-lint
+          /tmp/sourcedock-lint/bin/pip install -r requirements-dev.txt
+          /tmp/sourcedock-lint/bin/ruff check .
+          xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -v
+          bash packaging/build_deb.sh dist
+      - name: Stage Draft Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/*.deb dist/*.sha256 --draft --generate-notes --title "SourceDock $RELEASE_TAG"

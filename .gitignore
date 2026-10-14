@@ -40,4 +40,7 @@ debian/debhelper-build-stamp
 debian/files
 debian/*.substvars
 debian/*.log
+/packaging/*.deb
+/packaging/*.deb.sha256
+/packaging/*.shell-extension.zip
 

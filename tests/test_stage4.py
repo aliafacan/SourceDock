@@ -10,9 +10,9 @@ import tempfile
 import unittest
 import zipfile
 
-from voltapp.core.models import SOURCE_PORTABLE, LocalPackageInfo
-from voltapp.core.runner import CommandRunner
-from voltapp.backend.local_packages import (
+from sourcedock.core.models import SOURCE_PORTABLE, LocalPackageInfo
+from sourcedock.core.runner import CommandRunner
+from sourcedock.backend.local_packages import (
     detect_package_format,
     inspect_local_package,
     inspect_deb,
@@ -20,13 +20,13 @@ from voltapp.backend.local_packages import (
     inspect_flatpakref,
     install_local_archive,
 )
-from voltapp.backend.portable import (
+from sourcedock.backend.portable import (
     PortableProvider,
     load_portable_registry,
     register_portable_app,
     unregister_portable_app,
 )
-from voltapp.backend.manager import ApplicationRegistry
+from sourcedock.backend.manager import ApplicationRegistry
 
 
 class TestStage4FormatDetection(unittest.TestCase):
@@ -44,15 +44,16 @@ class TestStage4FormatDetection(unittest.TestCase):
 
 class TestDebInspection(unittest.TestCase):
     def test_inspect_real_deb(self):
-        deb_candidates = sorted(glob.glob("packaging/voltapp_*_all.deb"))
+        deb_candidates = sorted(glob.glob("packaging/sourcedock_*_all.deb"))
         if not deb_candidates:
             self.skipTest("Deb dosyası bulunamadı.")
         deb_path = deb_candidates[-1]
         runner = CommandRunner()
         info = inspect_local_package(runner, deb_path)
         self.assertEqual(info.format, "deb")
-        self.assertEqual(info.name, "voltapp")
-        self.assertIn(info.version, ("1.0.0", "1.1.0"))
+        self.assertEqual(info.name, "sourcedock")
+        version = runner.run(["dpkg-deb", "--field", deb_path, "Version"], check=True).stdout.strip()
+        self.assertEqual(info.version, version)
         self.assertEqual(info.architecture, "all")
         self.assertGreater(info.size_bytes, 0)
         self.assertTrue(len(info.description) > 0)
@@ -98,6 +99,7 @@ class TestArchiveInstallationAndPortableProvider(unittest.TestCase):
                     ti.size = len(bin_data)
                     ti.mode = 0o755
                     import io
+
                     tar.addfile(ti, io.BytesIO(bin_data))
 
                     # 2. Desktop file
@@ -151,12 +153,14 @@ class TestApplicationRegistryIntegration(unittest.TestCase):
 class TestPackageInstallerDialog(unittest.TestCase):
     def test_dialog_creation(self):
         import gi
+
         gi.require_version("Gtk", "3.0")
         from gi.repository import Gtk
+
         if not Gtk.init_check()[0]:
             self.skipTest("GUI display (X11/Wayland) mevcut değil.")
 
-        from voltapp.ui.components.package_installer_dialog import PackageInstallerDialog
+        from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
 
         info = LocalPackageInfo(
             file_path="/tmp/fake.deb",
@@ -181,7 +185,7 @@ class TestPackageInstallerDialog(unittest.TestCase):
 class TestFlatpakInstallScope(unittest.TestCase):
     def test_flatpak_scope_command_formation(self):
         from unittest.mock import MagicMock
-        from voltapp.backend.local_packages import install_local_flatpak
+        from sourcedock.backend.local_packages import install_local_flatpak
 
         mock_runner = MagicMock()
         mock_runner.command_exists.return_value = True
@@ -212,12 +216,14 @@ class TestFlatpakInstallScope(unittest.TestCase):
 
     def test_flatpak_already_installed_graceful_recovery(self):
         from unittest.mock import MagicMock
-        from voltapp.backend.local_packages import install_local_flatpak
-        from voltapp.core.runner import BackendError
+        from sourcedock.backend.local_packages import install_local_flatpak
+        from sourcedock.core.runner import BackendError
 
         mock_runner = MagicMock()
         mock_runner.command_exists.return_value = True
-        mock_runner.run_privileged.side_effect = BackendError("hata: ai.example.App'in bu sürümü zaten kurulu. already installed.")
+        mock_runner.run_privileged.side_effect = BackendError(
+            "hata: ai.example.App'in bu sürümü zaten kurulu. already installed."
+        )
 
         # Hata fırlatılmamalı, nazikçe karşılanıp başarı kabul edilmeli
         try:
@@ -228,7 +234,8 @@ class TestFlatpakInstallScope(unittest.TestCase):
 
 class TestAppImageMove(unittest.TestCase):
     def test_appimage_is_moved(self):
-        from voltapp.backend.local_packages import install_local_appimage
+        from sourcedock.backend.local_packages import install_local_appimage
+
         runner = CommandRunner()
         with tempfile.TemporaryDirectory() as tmp_downloads, tempfile.TemporaryDirectory() as tmp_apps:
             src = Path(tmp_downloads) / "TestApp-x86_64.AppImage"
@@ -241,7 +248,7 @@ class TestAppImageMove(unittest.TestCase):
 
 class TestPackageVersionComparison(unittest.TestCase):
     def test_compare_versions(self):
-        from voltapp.backend.local_packages import compare_versions
+        from sourcedock.backend.local_packages import compare_versions
 
         self.assertEqual(compare_versions("0.6.1-1", "0.6.1-1"), 0)
         self.assertEqual(compare_versions("0.6.0", "0.6.1-1"), -1)
@@ -251,8 +258,8 @@ class TestPackageVersionComparison(unittest.TestCase):
 
     def test_get_installed_package_status_deb(self):
         from unittest.mock import MagicMock
-        from voltapp.backend.local_packages import get_installed_package_status
-        from voltapp.core.models import LocalPackageInfo
+        from sourcedock.backend.local_packages import get_installed_package_status
+        from sourcedock.core.models import LocalPackageInfo
 
         mock_runner = MagicMock()
         info = LocalPackageInfo(
@@ -295,8 +302,8 @@ class TestPackageVersionComparison(unittest.TestCase):
 class TestLaunchLocalPackage(unittest.TestCase):
     def test_launch_flatpak(self):
         from unittest.mock import MagicMock
-        from voltapp.backend.local_packages import launch_local_package
-        from voltapp.core.models import LocalPackageInfo
+        from sourcedock.backend.local_packages import launch_local_package
+        from sourcedock.core.models import LocalPackageInfo
 
         mock_runner = MagicMock()
         mock_runner.command_exists.return_value = True
@@ -312,8 +319,8 @@ class TestLaunchLocalPackage(unittest.TestCase):
 
     def test_launch_appimage(self):
         from unittest.mock import MagicMock
-        from voltapp.backend.local_packages import launch_local_package
-        from voltapp.core.models import LocalPackageInfo
+        from sourcedock.backend.local_packages import launch_local_package
+        from sourcedock.core.models import LocalPackageInfo
 
         with tempfile.NamedTemporaryFile(suffix=".AppImage", delete=False) as tf:
             tf.write(b"#!/bin/sh\n")
@@ -336,4 +343,3 @@ class TestLaunchLocalPackage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.aliafacan.SourceDock</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>SourceDock</name>
+  <summary>Manage Linux applications and packages</summary>
+  <summary xml:lang="tr">Linux uygulamalarını ve paketlerini yönet</summary>
+  <description>
+    <p>SourceDock brings installed applications, software sources, updates and local package previews together in a native GTK interface.</p>
+    <p>Supported providers include native distribution package managers, Flatpak, Snap, AppImage and portable archives. Provider availability depends on the host system.</p>
+  </description>
+  <launchable type="desktop-id">sourcedock.desktop</launchable>
+  <developer id="aliafacan.dev"><name>Ali Afacan</name></developer>
+  <url type="homepage">https://github.com/aliafacan/SourceDock</url>
+  <url type="bugtracker">https://github.com/aliafacan/SourceDock/issues</url>
+  <provides><binary>sourcedock</binary></provides>
+  <categories><category>System</category><category>PackageManager</category></categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.3.0" date="2026-10-14" type="development">
+      <description><p>SourceDock rebrand with compatibility aliases, responsive navigation, unified updates and safer local package handling.</p></description>
+    </release>
+  </releases>
+</component>

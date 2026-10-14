@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
-"""VoltApp ⚡ - Giriş noktası (Entry Point)."""
+"""SourceDock - Giriş noktası (Entry Point)."""
 
 import os
 import sys
 
 # VS Code / Snap ortamlarından çalıştırıldığında snap kütüphanelerinin sızmasını önleme
-if not os.environ.get("_VOLTAPP_CLEAN_ENV"):
+if not os.environ.get("_SOURCEDOCK_CLEAN_ENV"):
     _clean_env = dict(os.environ)
-    _clean_env["_VOLTAPP_CLEAN_ENV"] = "1"
+    _clean_env["_SOURCEDOCK_CLEAN_ENV"] = "1"
     _needs_restart = False
 
     # Snap'e ait GTK ve modül değişkenlerini temizle
     _SNAP_VARS = (
-        "GTK_PATH", "GTK3_MODULES", "GTK_EXE_PREFIX", "GTK_IM_MODULE_FILE",
-        "GDK_PIXBUF_MODULEDIR", "GDK_PIXBUF_MODULE_FILE", "GIO_MODULE_DIR",
-        "GSETTINGS_SCHEMA_DIR", "LOCPATH",
+        "GTK_PATH",
+        "GTK3_MODULES",
+        "GTK_EXE_PREFIX",
+        "GTK_IM_MODULE_FILE",
+        "GDK_PIXBUF_MODULEDIR",
+        "GDK_PIXBUF_MODULE_FILE",
+        "GIO_MODULE_DIR",
+        "GSETTINGS_SCHEMA_DIR",
+        "LOCPATH",
     )
     for _var in _SNAP_VARS:
         if _var in _clean_env:
@@ -55,9 +61,19 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from voltapp.constants import APP_ICON_NAME, APP_TITLE
-from voltapp.preferences import PreferencesStore
-from voltapp.ui.window import MainWindow
+from sourcedock.constants import (
+    APP_COMMAND,
+    APP_DESKTOP_ID,
+    APP_ICON_NAME,
+    APP_PACKAGE_NAME,
+    APP_TITLE,
+    APP_VERSION,
+    LEGACY_APP_COMMAND,
+    LEGACY_APP_DESKTOP_ID,
+)
+from sourcedock.preferences import PreferencesStore
+from sourcedock.theme import get_theme_css, resolve_theme
+from sourcedock.ui.window import MainWindow
 
 # WM_CLASS ayarları
 GLib.set_prgname(APP_ICON_NAME)
@@ -65,28 +81,57 @@ GLib.set_application_name(APP_TITLE)
 
 
 def main() -> None:
+    if "--version" in sys.argv:
+        print(APP_VERSION)
+        return
+    if "--help" in sys.argv:
+        import argparse
+
+        parser = argparse.ArgumentParser(
+            prog=APP_COMMAND, description="Linux application and package manager"
+        )
+        parser.add_argument("file", nargs="?", help="Preview a local package")
+        parser.add_argument("--details", metavar="DESKTOP_ID", help="Show installed application details")
+        parser.add_argument("--uninstall", metavar="DESKTOP_ID", help="Confirm application removal")
+        parser.add_argument("--updates", action="store_true", help="Open the updates center")
+        parser.add_argument("--version", action="store_true", help="Print version")
+        parser.print_help()
+        return
+    if os.geteuid() == 0:
+        print(
+            "Run SourceDock from your normal user session. Administrator access is requested for package operations.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     if "--register-mime" in sys.argv:
-        from voltapp.backend.mime_integration import set_as_default_package_handler
+        from sourcedock.backend.mime_integration import set_as_default_package_handler
+
         ok, msg = set_as_default_package_handler()
         print(msg)
         sys.exit(0 if ok else 1)
 
     prefs_store = PreferencesStore()
 
+    # appstream:// URI desteği
+    for arg in list(sys.argv[1:]):
+        if arg.startswith("appstream://") or arg.startswith("appstream:"):
+            app_id = arg.replace("appstream://", "").replace("appstream:", "").strip()
+            sys.argv = [sys.argv[0], "--details", app_id]
+            break
+
     # Uygulama Ayrıntıları (App Details)
     if "--details" in sys.argv:
         from gi.repository import Gdk
-        from voltapp.backend.manager import ApplicationRegistry
-        from voltapp.ui.components.app_details_dialog import InstalledAppDetailsDialog
-        from voltapp.core.models import UnifiedApplication
-        from voltapp.theme import get_theme_css
+        from sourcedock.backend.manager import ApplicationRegistry
+        from sourcedock.ui.components.app_details_dialog import InstalledAppDetailsDialog
+        from sourcedock.core.models import UnifiedApplication
 
         prefs = prefs_store.load()
         lang = prefs.language
         registry = ApplicationRegistry()
 
         try:
-            is_dark = prefs.theme == "dark"
+            is_dark = resolve_theme(prefs.theme) == "dark"
             def_settings = Gtk.Settings.get_default()
             if def_settings:
                 def_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
@@ -96,34 +141,45 @@ def main() -> None:
                 if scr_settings:
                     scr_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
                 provider = Gtk.CssProvider()
-                provider.load_from_data(get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8"))
-                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                provider.load_from_data(
+                    get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8")
+                )
+                Gtk.StyleContext.add_provider_for_screen(
+                    screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
         except Exception:
             pass
 
         idx = sys.argv.index("--details")
-        target_name = sys.argv[idx + 1] if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-") else "voltapp"
-
-        snapshot = registry.load()
-        target_app = next(
-            (a for a in snapshot.applications if a.package_name == target_name or a.name.lower() == target_name.lower() or target_name in a.id),
-            None,
+        target_name = (
+            sys.argv[idx + 1]
+            if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-")
+            else APP_COMMAND
         )
 
-        if not target_app:
+        target_app = registry.find_application(target_name)
+        if not target_app and target_name.lower() in (
+            APP_COMMAND,
+            APP_DESKTOP_ID,
+            LEGACY_APP_COMMAND,
+            LEGACY_APP_DESKTOP_ID,
+        ):
             target_app = UnifiedApplication(
-                id="apt:voltapp",
-                name="VoltApp ⚡",
+                id=f"apt:{APP_PACKAGE_NAME}",
+                name=APP_TITLE,
                 source="apt",
-                version="1.1.0",
-                icon="voltapp",
-                executable="/usr/bin/voltapp",
-                desktop_file="/usr/share/applications/voltapp.desktop",
-                install_path="/usr/share/voltapp",
+                version=APP_VERSION,
+                icon=APP_ICON_NAME,
+                executable=f"/usr/bin/{APP_COMMAND}",
+                desktop_file=f"/usr/share/applications/{APP_DESKTOP_ID}",
+                install_path=f"/usr/lib/{APP_PACKAGE_NAME}",
                 category="System",
-                package_name="voltapp",
+                package_name=APP_PACKAGE_NAME,
                 update_available=False,
             )
+        elif not target_app:
+            print(f"Installed application could not be identified: {target_name}", file=sys.stderr)
+            sys.exit(1)
 
         dialog = InstalledAppDetailsDialog(
             application=target_app,
@@ -139,9 +195,8 @@ def main() -> None:
     # Uygulamayı Kaldır (Uninstall CLI/Action)
     if "--uninstall" in sys.argv:
         from gi.repository import Gdk
-        from voltapp.backend.manager import ApplicationRegistry
-        from voltapp.theme import get_theme_css
-        from voltapp.i18n import t
+        from sourcedock.backend.manager import ApplicationRegistry
+        from sourcedock.i18n import t
 
         prefs = prefs_store.load()
         lang = prefs.language
@@ -151,13 +206,24 @@ def main() -> None:
             screen = Gdk.Screen.get_default()
             if screen:
                 provider = Gtk.CssProvider()
-                provider.load_from_data(get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8"))
-                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                provider.load_from_data(
+                    get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8")
+                )
+                Gtk.StyleContext.add_provider_for_screen(
+                    screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
         except Exception:
             pass
 
         idx = sys.argv.index("--uninstall")
-        target_name = sys.argv[idx + 1] if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-") else "voltapp"
+        target_name = (
+            sys.argv[idx + 1]
+            if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-")
+            else APP_COMMAND
+        )
+
+        app = registry.find_application(target_name)
+        display_name = app.name if app else target_name.replace(".desktop", "").capitalize()
 
         confirm = Gtk.MessageDialog(
             title=APP_TITLE,
@@ -165,9 +231,7 @@ def main() -> None:
             buttons=Gtk.ButtonsType.NONE,
             text=t(lang, "details_remove_confirm_title"),
         )
-        confirm.format_secondary_text(
-            t(lang, "details_remove_confirm_text", name=target_name.capitalize())
-        )
+        confirm.format_secondary_text(t(lang, "details_remove_confirm_text", name=display_name))
         confirm.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         del_btn = confirm.add_button(t(lang, "details_btn_remove"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
@@ -176,20 +240,22 @@ def main() -> None:
         confirm.destroy()
 
         if resp == Gtk.ResponseType.OK:
-            if target_name.lower() == "voltapp":
+            if target_name.lower() in (
+                APP_COMMAND,
+                APP_DESKTOP_ID,
+                LEGACY_APP_COMMAND,
+                LEGACY_APP_DESKTOP_ID,
+            ):
                 uninstall_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.sh")
                 if os.path.exists(uninstall_script):
                     registry.runner.run_privileged(["bash", uninstall_script])
                 else:
-                    registry.runner.run_privileged(["apt-get", "remove", "-y", "voltapp"])
+                    registry.runner.run_privileged(["apt-get", "remove", "-y", APP_PACKAGE_NAME])
+            elif app:
+                registry.remove(app)
             else:
-                snapshot = registry.load()
-                app = next(
-                    (a for a in snapshot.applications if a.package_name == target_name or a.name.lower() == target_name.lower()),
-                    None,
-                )
-                if app:
-                    registry.remove(app)
+                print(f"Installed application could not be identified: {target_name}", file=sys.stderr)
+                sys.exit(1)
         sys.exit(0)
 
     # Dosya yöneticisinden çift tıklanarak veya terminalden paket dosyası verildiyse aç
@@ -212,10 +278,9 @@ def main() -> None:
         # STANDALONE MINI-INSTALLER:
         # Büyük ana pencere açılmaz; sadece şık, hafif mini kurulum penceresi açılır!
         from gi.repository import Gdk
-        from voltapp.backend.manager import ApplicationRegistry
-        from voltapp.ui.components.package_installer_dialog import PackageInstallerDialog
-        from voltapp.theme import get_theme_css
-        from voltapp.i18n import t
+        from sourcedock.backend.manager import ApplicationRegistry
+        from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
+        from sourcedock.i18n import t
 
         target_file = target_files[0]
         prefs = prefs_store.load()
@@ -223,7 +288,7 @@ def main() -> None:
         registry = ApplicationRegistry()
 
         # Tema ayarlarını ekrana uygula
-        is_dark = prefs.theme == "dark"
+        is_dark = resolve_theme(prefs.theme) == "dark"
         try:
             def_settings = Gtk.Settings.get_default()
             if def_settings:
@@ -234,8 +299,12 @@ def main() -> None:
                 if scr_settings:
                     scr_settings.set_property("gtk-application-prefer-dark-theme", is_dark)
                 provider = Gtk.CssProvider()
-                provider.load_from_data(get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8"))
-                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                provider.load_from_data(
+                    get_theme_css(prefs.theme, getattr(prefs, "scale", "100")).encode("utf-8")
+                )
+                Gtk.StyleContext.add_provider_for_screen(
+                    screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
         except Exception:
             pass
 
@@ -273,4 +342,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -48,8 +48,8 @@ window.icon-settings-window separator,
 window.icon-settings-window menu,
 window.icon-settings-window treeview,
 window.icon-settings-window scrolledwindow {{
-    background-color: {colors['window_bg']};
-    color: {colors['text']};
+    background-color: {colors["window_bg"]};
+    color: {colors["text"]};
 }}
 
 window.icon-settings-window notebook > stack scrolledwindow,
@@ -58,67 +58,67 @@ window.icon-settings-window notebook > stack scrolledwindow > viewport {{
 }}
 
 window.icon-settings-window box {{
-    color: {colors['text']};
+    color: {colors["text"]};
 }}
 
 window.icon-settings-window label {{
-    color: {colors['text']};
+    color: {colors["text"]};
 }}
 
 window.icon-settings-window menu menuitem {{
-    color: {colors['text']};
+    color: {colors["text"]};
 }}
 
 window.icon-settings-window .dim-label {{
-    color: {colors['muted']};
+    color: {colors["muted"]};
 }}
 
 window.icon-settings-window button {{
-    background: {colors['surface_alt']};
-    color: {colors['text']};
+    background: {colors["surface_alt"]};
+    color: {colors["text"]};
     border-radius: 12px;
-    border: 1px solid {colors['border']};
+    border: 1px solid {colors["border"]};
     box-shadow: none;
     padding: 8px 16px;
 }}
 
 window.icon-settings-window button:hover {{
-    background: {colors['surface']};
+    background: {colors["surface"]};
 }}
 
 window.icon-settings-window button.suggested-action {{
-    background: {colors['accent']};
-    color: {colors['accent_text']};
-    border-color: {colors['accent']};
+    background: {colors["accent"]};
+    color: {colors["accent_text"]};
+    border-color: {colors["accent"]};
 }}
 
 window.icon-settings-window button.suggested-action:hover {{
-    background: shade({colors['accent']}, 1.08);
+    background: shade({colors["accent"]}, 1.08);
 }}
 
 window.icon-settings-window button.destructive-action {{
-    background: {colors['danger']};
-    color: {colors['danger_text']};
-    border-color: {colors['danger']};
+    background: {colors["danger"]};
+    color: {colors["danger_text"]};
+    border-color: {colors["danger"]};
 }}
 
 window.icon-settings-window button.outline-accent {{
     background: transparent;
-    color: {colors['accent']};
-    border-color: {colors['accent']};
+    color: {colors["accent"]};
+    border-color: {colors["accent"]};
 }}
 
 window.icon-settings-window button.outline-danger {{
     background: transparent;
-    color: {colors['danger']};
-    border-color: {colors['danger']};
+    color: {colors["danger"]};
+    border-color: {colors["danger"]};
 }}
 
 window.icon-settings-window entry {{
-    background: {colors['input_bg']};
-    color: {colors['text']};
+    background: {colors["input_bg"]};
+    color: {colors["text"]};
     border-radius: 10px;
-    border: 1px solid {colors['input_border']};
+    border: 1px solid {colors["input_border"]};
 }}
 
 window.icon-settings-window combobox,
@@ -132,45 +132,45 @@ window.icon-settings-window combobox box {{
 
 window.icon-settings-window combobox button.combo,
 window.icon-settings-window combobox button {{
-    background: {colors['input_bg']};
-    color: {colors['text']};
+    background: {colors["input_bg"]};
+    color: {colors["text"]};
     border-radius: 10px;
-    border: 1px solid {colors['input_border']};
+    border: 1px solid {colors["input_border"]};
     padding: 6px 12px;
 }}
 
 window.icon-settings-window combobox button.combo:hover,
 window.icon-settings-window combobox button:hover {{
-    background: {colors['surface']};
+    background: {colors["surface"]};
 }}
 
 window.icon-settings-window combobox arrow {{
-    color: {colors['muted']};
+    color: {colors["muted"]};
 }}
 
 window.icon-settings-window treeview.view {{
-    background: {colors['surface']};
-    color: {colors['text']};
-    border: 1px solid {colors['border']};
+    background: {colors["surface"]};
+    color: {colors["text"]};
+    border: 1px solid {colors["border"]};
 }}
 
 window.icon-settings-window treeview header button,
 window.icon-settings-window treeview header button box,
 window.icon-settings-window treeview header button label,
 window.icon-settings-window treeview header button image {{
-    background: {colors['surface_soft']};
-    color: {colors['text']};
+    background: {colors["surface_soft"]};
+    color: {colors["text"]};
     box-shadow: none;
 }}
 
 window.icon-settings-window treeview header button {{
     border-radius: 10px 10px 0 0;
-    border: 1px solid {colors['border']};
+    border: 1px solid {colors["border"]};
     padding: 8px 12px;
 }}
 
 window.icon-settings-window treeview header button:hover {{
-    background: {colors['surface_alt']};
+    background: {colors["surface_alt"]};
 }}
 
 window.icon-settings-window treeview.view row {{
@@ -180,12 +180,12 @@ window.icon-settings-window treeview.view row {{
 
 window.icon-settings-window treeview.view:selected,
 window.icon-settings-window treeview.view:selected:focus {{
-    background: {colors['accent']};
-    color: {colors['accent_text']};
+    background: {colors["accent"]};
+    color: {colors["accent_text"]};
 }}
 
 window.icon-settings-window frame {{
-    border-color: {colors['border']};
+    border-color: {colors["border"]};
 }}
 
 window.icon-settings-window notebook > header.top {{
@@ -201,24 +201,24 @@ window.icon-settings-window notebook > header.top tabs {{
 }}
 
 window.icon-settings-window notebook > header.top tab {{
-    background: {colors['surface_alt']};
-    border: 1px solid {colors['border']};
+    background: {colors["surface_alt"]};
+    border: 1px solid {colors["border"]};
     border-bottom: none;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     padding: 8px 14px;
     margin-right: 3px;
-    color: {colors['muted']};
+    color: {colors["muted"]};
 }}
 
 window.icon-settings-window notebook > header.top tab:checked {{
-    background: {colors['surface']};
-    color: {colors['text']};
+    background: {colors["surface"]};
+    color: {colors["text"]};
 }}
 
 window.icon-settings-window notebook > stack {{
-    background: {colors['surface']};
-    border: 1px solid {colors['border']};
+    background: {colors["surface"]};
+    border: 1px solid {colors["border"]};
     border-radius: 0 8px 8px 8px;
     padding: 18px;
 }}
@@ -237,9 +237,9 @@ window.icon-settings-window button.filter-chip {{
 }}
 
 window.icon-settings-window button.filter-chip:checked {{
-    background: {colors['accent']};
-    color: {colors['accent_text']};
-    border-color: {colors['accent']};
+    background: {colors["accent"]};
+    color: {colors["accent_text"]};
+    border-color: {colors["accent"]};
 }}
 
 window.icon-settings-window button.compact-action {{
@@ -253,31 +253,31 @@ window.icon-settings-window listbox {{
 }}
 
 window.icon-settings-window expander.diagnostics-expander {{
-    color: {colors['text']};
+    color: {colors["text"]};
 }}
 
 window.icon-settings-window .action-bar {{
     background: transparent;
-    border-top: 1px solid {colors['border']};
+    border-top: 1px solid {colors["border"]};
     padding-top: 12px;
 }}
 
 window.icon-settings-window progressbar trough {{
-    background: {colors['surface_alt']};
+    background: {colors["surface_alt"]};
     border-radius: 999px;
     min-height: 8px;
 }}
 
 window.icon-settings-window progressbar progress,
 window.icon-settings-window progressbar progress.pulse {{
-    background: {colors['accent']};
+    background: {colors["accent"]};
     border-radius: 999px;
     min-height: 8px;
 }}
 
 window.icon-settings-window textview,
 window.icon-settings-window textview text {{
-    background: {colors['surface']};
-    color: {colors['text']};
+    background: {colors["surface"]};
+    color: {colors["text"]};
 }}
 """

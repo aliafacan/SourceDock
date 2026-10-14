@@ -1,2 +1,2 @@
-# VoltApp test suite
+# SourceDock test suite
 

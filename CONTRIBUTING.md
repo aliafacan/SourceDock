@@ -7,11 +7,11 @@
 ---
 
 <a id="-türkçe"></a>
-# 🇹🇷 VoltApp — Geliştirici & Katkı Kılavuzu (Contributing Guide)
+# 🇹🇷 SourceDock — Geliştirici & Katkı Kılavuzu (Contributing Guide)
 
-> *VoltApp ⚡, bir Elektrik-Elektronik Mühendisinin Pikachu ve voltaj sevgisi ile Linux sistemlerini elektrik hızında, engelsizce yönetme arzusundan doğdu.*
+> *SourceDock, farklı Linux yazılım kaynaklarını anlaşılır ve güvenli bir masaüstü deneyiminde birleştirme amacıyla geliştirilir.*
 
-Açık kaynak dünyasına ve VoltApp projesine katkıda bulunmak istediğiniz için teşekkür ederiz! Bu belge, projenin mimari standartlarını, kodlama kurallarını ve geliştirme iş akışını açıklar.
+Açık kaynak dünyasına ve SourceDock projesine katkıda bulunmak istediğiniz için teşekkür ederiz! Bu belge, projenin mimari standartlarını, kodlama kurallarını ve geliştirme iş akışını açıklar.
 
 ---
 
@@ -23,7 +23,7 @@ Açık kaynak dünyasına ve VoltApp projesine katkıda bulunmak istediğiniz i�
 
 ### Modüler Dizin Yapısı:
 ```text
-voltapp/
+sourcedock/
 ├── core/                  # İş mantığından bağımsız temel çekirdek
 │   ├── models.py          # Veri modelleri ve tip tanımları
 │   ├── errors.py          # Proje geneli hata sınıfları
@@ -74,7 +74,7 @@ voltapp/
 ## 🌍 2. Çift Dilli Yerelleştirme (i18n) Zorunluluğu
 
 Kullanıcı arayüzünde görünen **hiçbir metin koda doğrudan (hardcoded) yazılmamalıdır**.
-- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) hem `tr` hem de `en` dillerinde [`voltapp/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/voltapp/i18n.py) dosyasına eklenmelidir.
+- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) hem `tr` hem de `en` dillerinde [`sourcedock/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/sourcedock/i18n.py) dosyasına eklenmelidir.
 - Arayüzde `t(lang, "anahtar_adi")` fonksiyonu kullanılmalıdır.
 - Ayarlar penceresinden dil değiştirildiğinde arayüzün anında güncellenebilmesi için dinamik yenileme (`_refresh_texts`) metoduna dahil edilmelidir.
 
@@ -117,7 +117,7 @@ Uygulamayı Debian paketi olarak derlemek için:
 ```bash
 ./packaging/build_deb.sh
 ```
-Oluşturulan paket `packaging/voltapp_1.1.0_all.deb` dosyasında yer alacaktır.
+Oluşturulan paket `packaging/sourcedock_<version>_all.deb` dosyasında yer alacaktır. Sürüm kaynağı `sourcedock/constants.py` dosyasıdır.
 
 ---
 
@@ -148,11 +148,11 @@ Her türlü soru, öneri ve güvenlik bildirimi için proje yöneticisine [aliaf
 ---
 
 <a id="-english"></a>
-# 🇬🇧 VoltApp — Developer & Contributing Guide
+# 🇬🇧 SourceDock — Developer & Contributing Guide
 
-> *VoltApp ⚡ was born from an Electrical & Electronics Engineer's passion for Pikachu, high-voltage electricity, and a dream to manage Linux applications at lightning speed without distribution barriers.*
+> *SourceDock is built to bring Linux software sources together in a clear, safe and native desktop experience.*
 
-Thank you for your interest in contributing to VoltApp! This guide outlines the project's architectural standards, coding conventions, and development workflow.
+Thank you for your interest in contributing to SourceDock! This guide outlines the project's architectural standards, coding conventions, and development workflow.
 
 ---
 
@@ -164,7 +164,7 @@ Thank you for your interest in contributing to VoltApp! This guide outlines the 
 
 ### Project Structure Overview:
 ```text
-voltapp/
+sourcedock/
 ├── core/                  # Core domain models and utilities
 │   ├── models.py          # Unified data models & type definitions
 │   ├── errors.py          # Custom error hierarchy
@@ -215,7 +215,7 @@ voltapp/
 ## 🌍 2. Bilingual Localization (i18n) Requirement
 
 **Zero Hardcoded Strings:**
-- Every new label, button text, error message, or tooltip must be defined in both `en` and `tr` within [`voltapp/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/voltapp/i18n.py).
+- Every new label, button text, error message, or tooltip must be defined in both `en` and `tr` within [`sourcedock/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/sourcedock/i18n.py).
 - Use `t(lang, "key_name")` in UI components.
 - Ensure all text elements are registered in `_refresh_texts()` so language changes apply instantly without requiring an application restart.
 
@@ -258,7 +258,7 @@ To build the standalone installation package:
 ```bash
 ./packaging/build_deb.sh
 ```
-The output file will be generated at `packaging/voltapp_1.1.0_all.deb`.
+The output file is `packaging/sourcedock_<version>_all.deb`. `sourcedock/constants.py` is the version source.
 
 ---
 

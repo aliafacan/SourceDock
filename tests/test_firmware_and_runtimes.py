@@ -7,18 +7,18 @@ from unittest.mock import MagicMock
 
 import subprocess
 
-from voltapp.core.models import (
+from sourcedock.core.models import (
     SOURCE_FIRMWARE,
     SOURCE_FLATPAK,
     SOURCE_SNAP,
     UnifiedApplication,
 )
-from voltapp.core.runner import CommandRunner
-from voltapp.backend.firmware import FirmwareProvider
-from voltapp.backend.flatpak import FlatpakProvider
-from voltapp.backend.snap import SnapProvider
-from voltapp.backend.manager import ApplicationRegistry
-from voltapp.backend.scanner import DesktopEntryScanner
+from sourcedock.core.runner import CommandRunner
+from sourcedock.backend.firmware import FirmwareProvider
+from sourcedock.backend.flatpak import FlatpakProvider
+from sourcedock.backend.snap import SnapProvider
+from sourcedock.backend.manager import ApplicationRegistry
+from sourcedock.backend.scanner import DesktopEntryScanner
 
 
 class TestFirmwareProvider(unittest.TestCase):
@@ -42,12 +42,7 @@ class TestFirmwareProvider(unittest.TestCase):
                     "Name": "UEFI dbx",
                     "Summary": "Secure Boot dbx",
                     "Version": "371",
-                    "Releases": [
-                        {
-                            "Version": "426",
-                            "Summary": "Updated dbx entries"
-                        }
-                    ]
+                    "Releases": [{"Version": "426", "Summary": "Updated dbx entries"}],
                 }
             ]
         }

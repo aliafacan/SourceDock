@@ -7,11 +7,11 @@
 ---
 
 <a id="-türkçe"></a>
-# 🇹🇷 VoltApp — Topluluk Kuralları (Code of Conduct)
+# 🇹🇷 SourceDock — Topluluk Kuralları (Code of Conduct)
 
 ## Bizim Taahhüdümüz
 
-VoltApp topluluğunun üyeleri, katkıda bulunanları ve yöneticileri olarak; yaş, beden ölçüsü, engellilik durumu, etnik köken, cinsiyet kimliği ve ifadesi, deneyim seviyesi, eğitim, sosyo-ekonomik durum, milliyet, kişisel görünüm, ırk, din veya cinsel kimlik ve yönelim gözetmeksizin herkes için tacizden ve ayrımcılıktan uzak, saygılı bir deneyim sunmayı taahhüt ediyoruz.
+SourceDock topluluğunun üyeleri, katkıda bulunanları ve yöneticileri olarak; yaş, beden ölçüsü, engellilik durumu, etnik köken, cinsiyet kimliği ve ifadesi, deneyim seviyesi, eğitim, sosyo-ekonomik durum, milliyet, kişisel görünüm, ırk, din veya cinsel kimlik ve yönelim gözetmeksizin herkes için tacizden ve ayrımcılıktan uzak, saygılı bir deneyim sunmayı taahhüt ediyoruz.
 
 Herkese açık, misafirperver, çeşitliliği kucaklayan ve sağlıklı bir topluluk oluşturmak için olumlu ve yapıcı bir şekilde hareket etmeyi kabul ediyoruz.
 
@@ -57,11 +57,11 @@ Kabul edilemez davranış örnekleri, proje yöneticilerine [aliafacan.dev@gmail
 ---
 
 <a id="-english"></a>
-# 🇬🇧 VoltApp — Code of Conduct
+# 🇬🇧 SourceDock — Code of Conduct
 
 ## Our Pledge
 
-We as members, contributors, and leaders of the VoltApp community pledge to make participation in our project and our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or sexual identity and orientation.
+We as members, contributors, and leaders of the SourceDock community pledge to make participation in our project and our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or sexual identity and orientation.
 
 We pledge to act and interact in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community.
 

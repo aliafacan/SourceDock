@@ -1,0 +1,8 @@
+{
+  "name": "SourceDock Menu Integration",
+  "description": "Right-click any application in Ubuntu / Zorin OS application menu to view details or uninstall with SourceDock",
+  "uuid": "sourcedock-menu@aliafacan.dev",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 2
+}
+

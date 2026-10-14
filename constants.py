@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Sabitler."""
 
-APP_TITLE = "VoltApp"
-APP_ICON_NAME = "voltapp"
-APP_VERSION = "0.3.0"
+from sourcedock.constants import (
+    APP_COMMAND,
+    APP_DESKTOP_ID,
+    APP_ICON_NAME,
+    APP_ID,
+    APP_PACKAGE_NAME,
+    APP_TITLE,
+    APP_VERSION,
+    LEGACY_APP_COMMAND,
+    LEGACY_APP_DESKTOP_ID,
+    LEGACY_PACKAGE_NAME,
+)

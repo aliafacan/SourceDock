@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Geriye dönük uyumluluk için applications re-export."""
 
-from voltapp.core.models import (
+from sourcedock.core.models import (
     DESKTOP_DIRS,
     PACKAGE_MANAGER_SOURCES,
     SOURCE_APPIMAGE,
@@ -16,14 +16,14 @@ from voltapp.core.models import (
     PackageInfo,
     UnifiedApplication,
 )
-from voltapp.core.runner import CommandRunner
-from voltapp.backend.scanner import DesktopEntryScanner
-from voltapp.backend.apt import AptProvider
-from voltapp.backend.flatpak import FlatpakProvider
-from voltapp.backend.snap import SnapProvider
-from voltapp.backend.appimage import AppImageProvider
-from voltapp.backend.portable import PortableProvider
-from voltapp.backend.manager import ApplicationRegistry
+from sourcedock.core.runner import CommandRunner
+from sourcedock.backend.scanner import DesktopEntryScanner
+from sourcedock.backend.apt import AptProvider
+from sourcedock.backend.flatpak import FlatpakProvider
+from sourcedock.backend.snap import SnapProvider
+from sourcedock.backend.appimage import AppImageProvider
+from sourcedock.backend.portable import PortableProvider
+from sourcedock.backend.manager import ApplicationRegistry
 
 __all__ = [
     "DESKTOP_DIRS",

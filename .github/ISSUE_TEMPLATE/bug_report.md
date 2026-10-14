@@ -1,6 +1,6 @@
 ---
 name: Hata Bildirimi (Bug Report)
-about: VoltApp'te karşılaştığınız bir sorunu bildirin
+about: SourceDock'te karşılaştığınız bir sorunu bildirin
 title: '[HATA] '
 labels: bug
 assignees: ''
@@ -30,7 +30,12 @@ Varsa terminal çıktısı veya ekran görüntüsü ekleyin.
  - Dağıtım (Distro) ve Sürüm: [Örn. Zorin OS 17.1, Ubuntu 24.04, Fedora 40]
  - Masaüstü Ortamı: [Örn. GNOME, KDE, XFCE]
  - İlgili Paket Türü: [Örn. .deb, Flatpak, Snap, AppImage, RPM]
- - VoltApp Sürümü: [Örn. 1.0.0 veya commit hash]
+ - SourceDock Sürümü: [Örn. 1.0.0 veya commit hash]
+ - Python / GTK sürümleri:
+ - Paket sağlayıcısı ve ilgili kaynak:
+ - Tema, dil, ölçek ve pencere boyutu:
+
+Log paylaşmadan önce parola, token, kullanıcı adı ve kişisel dosya yollarını maskeleyin.
 
 **Ek Bağlam**
 Sorunla ilgili belirtmek istediğiniz ek bilgiler.

@@ -4,11 +4,12 @@
 import unittest
 
 import gi
+
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from voltapp.i18n import TRANSLATIONS, t
-from voltapp.ui.views.help_view import HelpDialog, HelpViewMixin
+from sourcedock.i18n import TRANSLATIONS, t
+from sourcedock.ui.views.help_view import HelpDialog, HelpViewMixin
 
 
 class TestHelpAndTooltips(unittest.TestCase):
@@ -111,7 +112,9 @@ class TestHelpAndTooltips(unittest.TestCase):
             for key in required_keys:
                 self.assertIn(key, TRANSLATIONS[lang], f"Missing key '{key}' in '{lang}' translation.")
                 val = t(lang, key)
-                self.assertTrue(len(val.strip()) > 0, f"Value for key '{key}' in '{lang}' should not be empty.")
+                self.assertTrue(
+                    len(val.strip()) > 0, f"Value for key '{key}' in '{lang}' should not be empty."
+                )
 
     def test_packages_column_labels(self):
         """Paketler sekmesi sütun başlıklarının güncellendiğini doğrular."""
@@ -134,4 +137,3 @@ class TestHelpAndTooltips(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

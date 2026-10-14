@@ -1,6 +1,6 @@
 ---
 name: Özellik İsteği (Feature Request)
-about: VoltApp için yeni bir fikir veya geliştirme önerin
+about: SourceDock için yeni bir fikir veya geliştirme önerin
 title: '[ÖNERİ] '
 labels: enhancement
 assignees: ''

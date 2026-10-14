@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
-from voltapp.core.models import (
+from sourcedock.core.models import (
     NATIVE_SOURCES,
     SOURCE_APT,
     SOURCE_DNF,
@@ -19,15 +19,15 @@ from voltapp.core.models import (
     UnifiedApplication,
     is_native_source,
 )
-from voltapp.core.runner import CommandRunner
-from voltapp.backend.distro import DistroInfo, detect_distro, parse_os_release
-from voltapp.backend.base_native import BaseNativeProvider
-from voltapp.backend.apt import AptProvider
-from voltapp.backend.dnf import DnfProvider
-from voltapp.backend.pacman import PacmanProvider
-from voltapp.backend.zypper import ZypperProvider
-from voltapp.backend.manager import ApplicationRegistry
-from voltapp.store.registry import StoreRegistry
+from sourcedock.core.runner import CommandRunner
+from sourcedock.backend.distro import DistroInfo, detect_distro, parse_os_release
+from sourcedock.backend.base_native import BaseNativeProvider
+from sourcedock.backend.apt import AptProvider
+from sourcedock.backend.dnf import DnfProvider
+from sourcedock.backend.pacman import PacmanProvider
+from sourcedock.backend.zypper import ZypperProvider
+from sourcedock.backend.manager import ApplicationRegistry
+from sourcedock.store.registry import StoreRegistry
 
 
 class TestDistroDetection(unittest.TestCase):
@@ -48,9 +48,11 @@ PRETTY_NAME="Fedora Linux 40 (Workstation Edition)"
 
     def test_detect_fedora(self):
         content = 'NAME="Fedora Linux"\nID=fedora\nID_LIKE="rhel centos"\nVERSION_ID="40"\n'
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.is_file", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=content):
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_text", return_value=content),
+        ):
             mock_runner = MagicMock()
             mock_runner.command_exists.side_effect = lambda cmd: cmd in ("dnf", "rpm")
             info = detect_distro(runner=mock_runner)
@@ -60,9 +62,11 @@ PRETTY_NAME="Fedora Linux 40 (Workstation Edition)"
 
     def test_detect_arch(self):
         content = 'NAME="Arch Linux"\nID=arch\nPRETTY_NAME="Arch Linux"\n'
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.is_file", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=content):
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_text", return_value=content),
+        ):
             mock_runner = MagicMock()
             mock_runner.command_exists.side_effect = lambda cmd: cmd == "pacman"
             info = detect_distro(runner=mock_runner)
@@ -72,9 +76,11 @@ PRETTY_NAME="Fedora Linux 40 (Workstation Edition)"
 
     def test_detect_opensuse(self):
         content = 'NAME="openSUSE Tumbleweed"\nID="opensuse-tumbleweed"\nID_LIKE="opensuse suse"\n'
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.is_file", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=content):
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_text", return_value=content),
+        ):
             mock_runner = MagicMock()
             mock_runner.command_exists.side_effect = lambda cmd: cmd in ("zypper", "rpm")
             info = detect_distro(runner=mock_runner)
@@ -83,9 +89,11 @@ PRETTY_NAME="Fedora Linux 40 (Workstation Edition)"
 
     def test_detect_zorin_ubuntu(self):
         content = 'NAME="Zorin OS"\nID=zorin\nID_LIKE="ubuntu debian"\nVERSION_ID="18"\n'
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.is_file", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=content):
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_text", return_value=content),
+        ):
             mock_runner = MagicMock()
             mock_runner.command_exists.side_effect = lambda cmd: cmd in ("apt", "dpkg-query", "apt-get")
             info = detect_distro(runner=mock_runner)
@@ -127,7 +135,9 @@ class TestNativeProviders(unittest.TestCase):
                 stdout="firefox\t124.0-1.fc40\t150000000\tMozilla Firefox Browser\ncurl\t8.6.0-1.fc40\t500000\tCommand line tool for transferring data\n",
             ),
             # dnf check-update
-            subprocess.CompletedProcess(args=[], returncode=100, stdout="firefox.x86_64 125.0-1.fc40 updates\n"),
+            subprocess.CompletedProcess(
+                args=[], returncode=100, stdout="firefox.x86_64 125.0-1.fc40 updates\n"
+            ),
         ]
         provider = DnfProvider(runner, MagicMock())
         pkgs = provider.list_all_packages()
@@ -145,7 +155,9 @@ class TestNativeProviders(unittest.TestCase):
         self.assertEqual(provider.update_command("neovim"), ["pacman", "-S", "--noconfirm", "neovim"])
         self.assertEqual(provider.update_all_command(), ["pacman", "-Syu", "--noconfirm"])
         self.assertEqual(provider.remove_command("neovim"), ["pacman", "-R", "--noconfirm", "neovim"])
-        self.assertEqual(provider.remove_command("neovim", purge=True), ["pacman", "-Rns", "--noconfirm", "neovim"])
+        self.assertEqual(
+            provider.remove_command("neovim", purge=True), ["pacman", "-Rns", "--noconfirm", "neovim"]
+        )
         self.assertEqual(provider.refresh_cache_command(), ["pacman", "-Sy"])
 
     def test_pacman_parsing(self):
@@ -169,10 +181,16 @@ class TestNativeProviders(unittest.TestCase):
         runner.command_exists.return_value = True
         provider = ZypperProvider(runner, MagicMock())
 
-        self.assertEqual(provider.install_command("htop"), ["zypper", "--non-interactive", "install", "-y", "htop"])
-        self.assertEqual(provider.update_command("htop"), ["zypper", "--non-interactive", "update", "-y", "htop"])
+        self.assertEqual(
+            provider.install_command("htop"), ["zypper", "--non-interactive", "install", "-y", "htop"]
+        )
+        self.assertEqual(
+            provider.update_command("htop"), ["zypper", "--non-interactive", "update", "-y", "htop"]
+        )
         self.assertEqual(provider.update_all_command(), ["zypper", "--non-interactive", "update", "-y"])
-        self.assertEqual(provider.remove_command("htop"), ["zypper", "--non-interactive", "remove", "-y", "-u", "htop"])
+        self.assertEqual(
+            provider.remove_command("htop"), ["zypper", "--non-interactive", "remove", "-y", "-u", "htop"]
+        )
         self.assertEqual(provider.refresh_cache_command(), ["zypper", "--non-interactive", "refresh"])
 
 

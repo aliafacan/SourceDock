@@ -1,178 +1,108 @@
-<div align="center">
+<img src="assets/sourcedock.png" width="80" alt="SourceDock" />
 
-<img src="assets/voltapp.png" alt="VoltApp Logo" width="140" style="border-radius: 28px;"/>
+# SourceDock
 
-# VoltApp ⚡
-### Universal, Blazing-Fast Linux Package & App Manager
-*Evrensel, Şimşek Hızında Linux Paket ve Uygulama Yöneticisi*
+Linux uygulamaları ve paketleri için GTK 3 yönetim aracı. / A native GTK 3 application and package manager for Linux.
 
-[![VoltApp CI](https://github.com/aliafacan/VoltApp/actions/workflows/ci.yml/badge.svg)](https://github.com/aliafacan/VoltApp/actions)
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
-[![GTK](https://img.shields.io/badge/GUI-GTK%203-4A90D9?style=flat&logo=gnome&logoColor=white)](https://www.gtk.org/)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Linux](https://img.shields.io/badge/Platform-Linux%20Universal-FCC624?style=flat&logo=linux&logoColor=black)](https://kernel.org)
+[![SourceDock CI](https://github.com/aliafacan/SourceDock/actions/workflows/ci.yml/badge.svg)](https://github.com/aliafacan/SourceDock/actions)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
-<br/>
+## Kurulum / Install
 
-[ 🇹🇷 **Türkçe** ](#-türkçe) &nbsp;&bull;&nbsp; [ 🇬🇧 **English** ](#-english)
+Debian ailesi, Python 3.10+ ve GTK 3 gerekir. `.deb` paketi diğer dağıtımların kurulum biçimi değildir.
 
-</div>
-
----
-
-<a id="-türkçe"></a>
-# 🇹🇷 Türkçe
-
-## ⚡ VoltApp'in Hikayesi
-
-> *"VoltApp ⚡; bir Elektrik-Elektronik Mühendisinin Pikachu ve voltaj sevgisi ile Linux ekosistemindeki tüm uygulamaları dağıtım engellerine takılmadan, elektrik hızında yönetme tutkusundan doğdu."*
-
----
-
-## 🌟 Temel Özellikler
-
-- **🔌 Evrensel Çoklu Mağaza Desteği:** **Flathub (Flatpak)**, **Snap Store** ve yerel paket depolarındaki (**APT / DNF / Pacman / Zypper**) uygulamaları tek ekrandan arayın, kurun ve güncelleyin.
-- **📦 Çoklu Format ve Bağımsız Mini Kurucu:** `.deb`, `.AppImage`, `.flatpak` veya `.rpm` dosyalarına çift tıklandığında akıllı sürüm algılamalı (Kurulu/Tekrar Kur, Güncelle, Eski Sürüme Dön, Yeni Kur) bağımsız mini kurulum penceresi açılır.
-- **🛡️ Akıllı Snap Confinement Yönetimi:** Geliştirici IDE'leri (Antigravity, VS Code, JetBrains vb.) için gerekli `--classic` yetkilendirmelerini otomatik algılar ve kullanıcı onay diyaloğu sunar.
-- **⚙️ Sistem, Bellenim & Çalışma Ortamı Güncellemeleri:** Donanım bellenimleri (`fwupd` / UEFI dbx) ve Flatpak/Snap sistem platformları/çalışma ortamları (Mesa, GNOME, KDE, Wine) için tam güncelleme desteği.
-- **🔍 Uygulama Detayları ve Masaüstü Sağ Tık Eylemleri (Desktop Actions):** Zorin OS / GNOME masaüstü menüsünden doğrudan VoltApp ayrıntılarını açma veya kaldırma eylemleri; uygulama listesinde çift tık veya sağ tık ile sürüm, boyut, kaynak ve izinleri inceleyebileceğiniz kapsamlı detay penceresi.
-- **⚡ Modern ve Hızlı GTK Arayüzü:** Koyu/Açık tema, `%90-%125` arayüz ölçekleme, yerleşik Kullanıcı Kılavuzu (`F1`) ve her işlem için etkileşimli araç ipuçları (tooltips).
-- **🌍 Çift Dilli (i18n):** Türkçe ve İngilizce dilleri arasında çalışma anında anında geçiş.
-- **🐧 Dağıtım Bağımsız:** Ubuntu, Zorin OS, Debian, Fedora, Arch Linux, Manjaro, openSUSE ve genel Linux dağıtımlarını otomatik tanır.
-
----
-
-## 🚀 Kurulum ve Kullanım
-
-### Seçenek 1: Debian (.deb) Paketi ile Kurulum (Önerilen)
 ```bash
-# Paketi derleyin:
 ./packaging/build_deb.sh
-
-# Tek komutla kurun:
-sudo apt install ./packaging/voltapp_1.1.0_all.deb
+sudo apt install ./packaging/sourcedock_1.3.0_all.deb
+sourcedock
 ```
 
-### Seçenek 2: Otomatik Kurulum Betiği (Global Installer)
+Aynı sürüm yeniden derlendiyse `apt install --reinstall` kullanın. SHA-256 kontrolü:
+
 ```bash
-sudo ./install.sh
+cd packaging
+sha256sum -c sourcedock_1.3.0_all.deb.sha256
 ```
 
-### Seçenek 3: Kurulum Yapmadan Çalıştırma
-```bash
-# Sistem bağımlılıkları:
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
+Kaynak koddan çalıştırma / Run from source:
 
-# Çalıştır:
-./run.sh
-# veya
+```bash
 python3 main.py
 ```
 
-### Bağımsız Mini Kurucu Kullanımı
-Herhangi bir paket dosyasını bağımsız mini kurucu penceresiyle açmak için:
-```bash
-voltapp /yol/paket.deb
-# veya
-voltapp /yol/uygulama.AppImage
-```
+GTK bağımlılıkları / GTK dependencies: `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-gdkpixbuf-2.0`.
+Flatpak, Snap ve fwupd isteğe bağlıdır. Uygulamayı normal kullanıcı olarak çalıştırın; paket işlemleri gerektiğinde yetki ister.
 
----
-
-## 🧪 Birim Testleri Çalıştırma
+GNOME uygulama menüsü sağ tık eylemleri / GNOME application-menu actions:
 
 ```bash
-python3 -m unittest discover -s tests -v
+gnome-extensions enable sourcedock-menu@aliafacan.dev
 ```
 
----
-
-## 🤝 Katkıda Bulunma & Topluluk
-
-- Katkı rehberi için: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Topluluk kuralları için: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Yol haritası için: [ROADMAP.md](ROADMAP.md)
-- İletişim: [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com)
-
----
----
-
-<a id="-english"></a>
-# 🇬🇧 English
-
-## ⚡ The Story Behind VoltApp
-
-> *"VoltApp was born from an Electrical & Electronics Engineer's passion for Pikachu, high-voltage electricity, and a dream to manage Linux applications at lightning speed without distribution barriers."*
-
----
-
-## 🌟 Key Features
-
-- **🔌 Universal Multi-Store Catalog:** Search, install, and update applications from **Flathub (Flatpak)**, **Snap Store**, and native package managers (**APT / DNF / Pacman / Zypper**) in one place.
-- **📦 Multi-Format & Standalone Mini-Installer:** Double-click any `.deb`, `.AppImage`, `.flatpak`, or `.rpm` file to open a lightweight mini-installer with intelligent version detection (Installed/Reinstall, Update, Downgrade, Fresh Install).
-- **🛡️ Smart Snap Confinement Handling:** Automatically detects `--classic` confinement requirements for developer IDEs (such as Antigravity, VS Code, JetBrains) with seamless confirmation dialogs.
-- **⚙️ System, Firmware & Runtime Updates:** Full update support for hardware firmware (`fwupd` / UEFI dbx) and Flatpak/Snap platform runtimes (Mesa, GNOME, KDE, Wine).
-- **🔍 Application Details & Desktop Actions:** Native Zorin OS / GNOME desktop actions for opening App Details, direct uninstall, and update checks right from the application menu; comprehensive in-app details dialog with version comparison, launch, and safe uninstall.
-- **⚡ Blazing GTK User Interface:** Clean dark/light theme styling, `90%-125%` UI scaling, integrated User Guide (`F1`), and localized interactive tooltips.
-- **🌍 Fully Bilingual (i18n):** Native support for English and Turkish with instant runtime switching.
-- **🐧 Distro-Agnostic Engine:** Auto-detects Debian, Ubuntu, Zorin OS, Fedora, Arch Linux, Manjaro, openSUSE, and generic Linux platforms.
-
----
-
-## 🚀 Installation & Usage
-
-### Option 1: Debian (.deb) Package (Recommended)
-```bash
-# Build the package:
-./packaging/build_deb.sh
-
-# Install with single command:
-sudo apt install ./packaging/voltapp_1.1.0_all.deb
-```
-
-### Option 2: Automatic Global Installer Script
-```bash
-sudo ./install.sh
-```
-
-### Option 3: Run Without Installing
-```bash
-# System dependencies:
-sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
-
-# Run:
-./run.sh
-# or
-python3 main.py
-```
-
-### Standalone Mini-Installer Usage
-To open any package in the dedicated lightweight installer window:
-```bash
-voltapp /path/to/package.deb
-# or
-voltapp /path/to/application.AppImage
-```
-
----
-
-## 🧪 Running Unit Tests
+Kurulumdan sonra oturumu kapatıp açmak gerekebilir. Kullanıcı dizininde eski bir eklenti varsa sistem kopyasını gölgeleyebilir; güncel eklentiyi yüklemek için:
 
 ```bash
-python3 -m unittest discover -s tests -v
+gnome-extensions pack --force --out-dir packaging sourcedock/desktop/extension
+gnome-extensions install --force packaging/sourcedock-menu@aliafacan.dev.shell-extension.zip
 ```
 
----
+`install.sh`, APT tarafından yönetilen dosyaların üzerine yazmaz. `.deb` kaldırma için `sudo apt remove sourcedock` kullanın. Ayrıntılar: [Sorun Giderme](docs/TROUBLESHOOTING.md).
 
-## 🤝 Contributing & Community
+`voltapp` komutu ve eski MIME masaüstü kimliği, SourceDock geçişi için bir sürüm boyunca uyumluluk alias'ı olarak korunur.
 
-- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Project roadmap: [ROADMAP.md](ROADMAP.md)
-- Maintainer contact: [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com)
+## Ekran Görüntüleri / Screenshots
 
----
+Çalışan uygulamadan gerçek sağlayıcı verileriyle alınmıştır; kurulum ve kaldırma işlemleri bu görüntüler için çalıştırılmamıştır.
 
-## 📄 License
+![Kurulu uygulamalar, koyu tema](docs/screenshots/installed-dark-tr-100-1366x768.png)
+![Keşfet, açık tema](docs/screenshots/discover-light-en-100-1366x768.png)
 
-Distributed under the **GNU General Public License v3.0 (GPL-3.0)**. See [`LICENSE`](LICENSE) for more details.
+[Güncellemeler](docs/screenshots/updates-dark-tr-100-1366x768.png) ·
+[Ayrıntılar](docs/screenshots/details-light-en-100-1366x768.png) ·
+[Mini Kurucu](docs/screenshots/installer-dark-tr-100-1366x768.png)
+
+## Özellikler / Features
+
+- Kalıcı sol gezinme, global arama, kurulu uygulamalar ve ayrı sistem paketi görünümü.
+- APT/DNF/Pacman/Zypper, Flatpak, Snap, firmware ve runtime verileri için birleşik güncelleme listesi.
+- Kaynak filtreleri, mağazada kart/tablo görünümü ve bilinen AppStream kimlikleriyle kaynak karşılaştırması.
+- Gerçek metadata varsa yayıncı, lisans, web sitesi ve ekran görüntüleri; bilinmeyen bilgiler uydurulmaz.
+- `.deb`, `.rpm`, `.AppImage`, Flatpak ve portable arşivler için bağımsız kurulum önizlemesi.
+- Güvenli portable sahiplik kontrolü, sınırlandırılmış arşiv açma ve dosyayı çalıştırmayan AppImage incelemesi.
+- Kaynakları salt okunur inceleme; uygulama listesini dışa/içe aktarma ve kurulumdan önce hedef önizlemesi.
+- İşlem geçmişi, kişisel bilgilerin maskelenmesi, kullanıcı kontrollü temizleme ve dışa aktarma.
+- Türkçe/İngilizce, Sistem/Açık/Koyu tema, 90/100/110/125% ölçek ve klavye erişimi.
+
+Provider availability and real installation behavior depend on the host distribution. AppImage metadata currently uses the filename and ELF header; unknown signatures and publishers remain unverified. Native restore requires a matching distribution; Flatpak restore requires an explicit remote and uses user scope.
+
+## Dağıtımlar / Compatibility
+
+Zorin OS 18.1 üzerinde pencere açılışı, gerçek uygulama/paket verileri ve arayüz akışları doğrulandı. Ayrıcalıklı paket işlemleri otomatik testlerde taklit edilir.
+
+Ubuntu 22.04/24.04 için sistem Python ve GI kullanan CI tanımlandı; uzaktaki CI sonucu burada doğrulanmış kabul edilmez. Debian, Fedora, openSUSE ve Arch için gerçek kurulum testleri bekliyor.
+
+Tam durum tablosu: [Compatibility](docs/COMPATIBILITY.md).
+
+## Sık Sorulanlar / FAQ
+
+**Yeni derlediğim paket neden kurulmadı?** APT aynı sürümü atlayabilir. Yeni sürüm numarası veya `--reinstall` kullanın.
+
+**Sağ tık eylemleri neden görünmüyor?** GNOME Shell eklentisi etkin olmalı. Eski kullanıcı kopyası ve oturum önbelleği için [Sorun Giderme](docs/TROUBLESHOOTING.md) bölümüne bakın.
+
+**Portable uygulamam neden kaldırılamıyor?** Eski ya da değiştirilmiş kayıtların sahipliği doğrulanamıyorsa dizin silinmez. Bu koruma kişisel dosyaları korur.
+
+**Why is cancellation unavailable?** Native package database and firmware operations must finish. External APT/DPKG processes are read-only entries in SourceDock's process view.
+
+**Why are there no ratings or screenshots for an app?** SourceDock shows only available provider metadata.
+
+## Katkı / Contribute
+
+```bash
+/usr/bin/python3 -m unittest discover -s tests -v
+```
+
+CI runs GUI tests under Xvfb. Development lint: install `requirements-dev.txt` into a virtual environment, then run `ruff check .`.
+
+[Katkı Rehberi](CONTRIBUTING.md) · [Mimari](docs/ARCHITECTURE.md) ·
+[Tasarım](docs/UI_DESIGN.md) · [Uygulama Raporu](docs/ROADMAP_IMPLEMENTATION.md) ·
+[Değişiklikler](CHANGELOG.md) · [Güvenlik](SECURITY.md) · [Lisans](LICENSE)
