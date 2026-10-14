@@ -44,3 +44,6 @@ debian/*.log
 /packaging/*.deb.sha256
 /packaging/*.shell-extension.zip
 
+# Shareable UI showcase artifacts
+/artifacts/
+
