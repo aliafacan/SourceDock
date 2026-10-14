@@ -75,6 +75,8 @@ class MainWindow(
         self.store_results: list[StoreResult] = []
         self.store_filter_source = "all"
         self.store_busy = False
+        self._store_search_generation = 0
+        self._store_search_timeout_id = 0
         self.store_filter_buttons: dict[str, Gtk.ToggleButton] = {}
         self.installed_package_ids: set[str] = set()
         self._icon_pixbuf_cache: dict[str, GdkPixbuf.Pixbuf | None] = {}

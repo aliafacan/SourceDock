@@ -6,12 +6,12 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, GObject, Gtk, Pango
+from gi.repository import GdkPixbuf, GLib, GObject, Gtk, Pango
 
 from sourcedock.backend.updates import build_update_catalog
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.i18n import t
-from sourcedock.ui.components.common import ContentState, icon_button, set_status
+from sourcedock.ui.components.common import ContentState, icon_button, set_status, style_tree_view
 
 
 class UpdatesViewMixin:
@@ -70,8 +70,11 @@ class UpdatesViewMixin:
         self.updates_reboot_banner.get_style_context().add_class("warning-text")
         self.updates_reboot_banner.set_no_show_all(True)
         container.pack_start(self.updates_reboot_banner, False, False, 0)
-        self.updates_model = Gtk.TreeStore(bool, str, str, str, str, GObject.TYPE_PYOBJECT)
+        self.updates_model = Gtk.TreeStore(
+            bool, str, str, str, str, GObject.TYPE_PYOBJECT, GdkPixbuf.Pixbuf
+        )
         self.updates_tree = Gtk.TreeView(model=self.updates_model)
+        style_tree_view(self.updates_tree)
         toggle = Gtk.CellRendererToggle()
         toggle.connect("toggled", self._on_update_toggled)
         column = Gtk.TreeViewColumn("", toggle, active=0)
@@ -93,7 +96,22 @@ class UpdatesViewMixin:
             renderer.set_property("ellipsize", Pango.EllipsizeMode.END)
             if index != 1:
                 renderer.set_property("xalign", 0.0)
-            column = Gtk.TreeViewColumn(t(self.preferences.language, key), renderer, text=index)
+            if index == 1:
+                column = Gtk.TreeViewColumn(t(self.preferences.language, key))
+                icon_renderer = Gtk.CellRendererPixbuf()
+                icon_renderer.set_property("xpad", 4)
+                column.pack_start(icon_renderer, False)
+                column.add_attribute(icon_renderer, "pixbuf", 6)
+                column.set_cell_data_func(
+                    icon_renderer,
+                    lambda _column, cell, model, iterator, _data: cell.set_property(
+                        "visible", model.get_value(iterator, 5) is not None
+                    ),
+                )
+                column.pack_start(renderer, True)
+                column.add_attribute(renderer, "text", index)
+            else:
+                column = Gtk.TreeViewColumn(t(self.preferences.language, key), renderer, text=index)
             column.set_expand(index == 1)
             column.set_resizable(True)
             self.updates_tree.append_column(column)
@@ -102,6 +120,7 @@ class UpdatesViewMixin:
                 column.set_cell_data_func(renderer, self._update_name_cell_data)
             else:
                 column.set_cell_data_func(renderer, self._update_detail_cell_data)
+
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scroller.add(self.updates_tree)
@@ -195,12 +214,21 @@ class UpdatesViewMixin:
                         "",
                         "",
                         None,
+                        None,
                     ],
                 )
             app = item.application
             self.updates_model.append(
                 groups[item.group],
-                [False, app.name, app.source.upper(), app.version or "-", item.new_version or "-", item],
+                [
+                    False,
+                    app.name,
+                    app.source.upper(),
+                    app.version or "-",
+                    item.new_version or "-",
+                    item,
+                    self._get_update_pixbuf(app),
+                ],
             )
         self.updates_tree.expand_all()
         self.updates_apply_btn.set_sensitive(False)
@@ -223,6 +251,15 @@ class UpdatesViewMixin:
         self._refresh_updates_texts()
         self._refresh_update_count()
         return False
+
+    def _get_update_pixbuf(self, application):
+        getter = getattr(self, "_get_app_pixbuf", None)
+        if getter is None:
+            return None
+        try:
+            return getter(application)
+        except Exception:
+            return None
 
     def _on_update_toggled(self, _cell, path):
         iterator = self.updates_model.get_iter(path)

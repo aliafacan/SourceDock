@@ -1,7 +1,7 @@
 {
   "real_data": true,
-  "applications": 122,
-  "packages": 2882,
+  "applications": 123,
+  "packages": 2881,
   "cases": [
     {
       "requested": [
@@ -678,8 +678,8 @@
   ],
   "performance_fixture_records": 1000,
   "render_ms": [
-    87.4,
-    44.35,
-    44.24
+    56.64,
+    37.31,
+    36.88
   ]
 }

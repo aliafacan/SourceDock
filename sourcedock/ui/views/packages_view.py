@@ -10,12 +10,13 @@ import gi
 
 gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, GObject, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
+from gi.repository import Gdk, GLib, GObject, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.core.models import PackageInfo, UnifiedApplication
 from sourcedock.i18n import t
 from sourcedock.ui.components.progress import OperationProgressWindow
+from sourcedock.ui.components.common import style_tree_view
 
 _PC_NAME = 0
 _PC_VERSION = 1
@@ -74,11 +75,13 @@ class PackagesViewMixin:
             GObject.TYPE_PYOBJECT,
         )
         self.packages_tree = Gtk.TreeView(model=self.packages_store)
+        style_tree_view(self.packages_tree)
         self.packages_tree.set_headers_visible(True)
-        self.packages_tree.set_activate_on_single_click(True)
+        self.packages_tree.set_activate_on_single_click(False)
         self.packages_tree.set_rubber_banding(True)
         self.packages_tree.connect("row-activated", self._on_packages_tree_activated)
         self.packages_tree.connect("button-press-event", self.on_packages_tree_button_press)
+        self.packages_tree.connect("key-press-event", self._on_packages_tree_key_press)
 
         pkg_sel = self.packages_tree.get_selection()
         pkg_sel.set_mode(Gtk.SelectionMode.MULTIPLE)
@@ -286,6 +289,20 @@ class PackagesViewMixin:
         model = tree.get_model()
         package = model.get_value(model.get_iter(path), _PC_PKG)
         self.on_show_application_details(None, self._application_for_package(package))
+
+    def _on_packages_tree_key_press(self, tree: Gtk.TreeView, event) -> bool:
+        if Gdk.keyval_name(event.keyval) not in ("space", "KP_Space"):
+            return False
+        selection = tree.get_selection()
+        _model, paths = selection.get_selected_rows()
+        path = paths[-1] if paths else tree.get_cursor()[0]
+        if path is None:
+            return False
+        if selection.path_is_selected(path):
+            selection.unselect_path(path)
+        else:
+            selection.select_path(path)
+        return True
 
     def _on_packages_details_clicked(self, *_args) -> None:
         package = self._selected_package()

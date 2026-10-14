@@ -36,7 +36,7 @@ from sourcedock.i18n import t, translate_backend_message
 from sourcedock.ui.components.progress import OperationProgressWindow
 from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
 from sourcedock.ui.components.app_details_dialog import InstalledAppDetailsDialog
-from sourcedock.ui.components.common import ContentState, icon_button, set_status
+from sourcedock.ui.components.common import ContentState, icon_button, set_status, style_tree_view
 
 _AC_ICON = 0
 _AC_NAME = 1
@@ -166,6 +166,7 @@ class InstalledViewMixin:
             GObject.TYPE_PYOBJECT,
         )
         self.applications_tree = Gtk.TreeView(model=self.applications_store)
+        style_tree_view(self.applications_tree)
         self.applications_tree.set_headers_visible(True)
         self.applications_tree.set_activate_on_single_click(False)
         self.applications_tree.set_enable_search(False)
@@ -174,7 +175,7 @@ class InstalledViewMixin:
         self.applications_tree.get_style_context().add_class("applications-tree")
         self.applications_tree.connect("row-activated", self.on_application_tree_activated)
         self.applications_tree.connect("button-press-event", self.on_application_tree_button_press)
-        self.applications_tree.connect("button-release-event", self.on_application_tree_button_release)
+        self.applications_tree.connect("key-press-event", self.on_applications_tree_key_press)
         self.applications_tree.connect("query-tooltip", self.on_applications_tree_query_tooltip)
 
         selection = self.applications_tree.get_selection()
@@ -467,30 +468,19 @@ class InstalledViewMixin:
                 return True
         return False
 
-    def on_application_tree_button_release(self, _tree: Gtk.TreeView, event) -> bool:
-        if event.button != 1 or self.applications_loading or self.applications_busy:
+    def on_applications_tree_key_press(self, tree: Gtk.TreeView, event) -> bool:
+        if Gdk.keyval_name(event.keyval) not in ("space", "KP_Space"):
             return False
-        if event.state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK):
+        selection = tree.get_selection()
+        model, paths = selection.get_selected_rows()
+        path = paths[-1] if paths else tree.get_cursor()[0]
+        if path is None:
             return False
-
-        path_info = self.applications_tree.get_path_at_pos(int(event.x), int(event.y))
-        if not path_info:
-            return False
-
-        path = path_info[0]
-        model = self.applications_store
-        it = model.get_iter(path)
-        if it is None:
-            return False
-
-        application: UnifiedApplication = model.get_value(it, _AC_APP)
-        GLib.idle_add(self._open_application_details_from_click, application)
-        return False
-
-    def _open_application_details_from_click(self, application: UnifiedApplication) -> bool:
-        if not self.applications_loading and not self.applications_busy:
-            self.on_show_application_details(None, application)
-        return False
+        if selection.path_is_selected(path):
+            selection.unselect_path(path)
+        else:
+            selection.select_path(path)
+        return True
 
     def on_applications_tree_query_tooltip(
         self,

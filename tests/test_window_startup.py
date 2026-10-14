@@ -9,7 +9,13 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 
-from sourcedock.core.models import PackageInfo, SOURCE_APT, SOURCE_FLATPAK, UnifiedApplication
+from sourcedock.core.models import (
+    ApplicationSnapshot,
+    PackageInfo,
+    SOURCE_APT,
+    SOURCE_FLATPAK,
+    UnifiedApplication,
+)
 from sourcedock.i18n import t
 from sourcedock.preferences import AppPreferences, PreferencesStore
 from sourcedock.ui.window import MainWindow
@@ -74,6 +80,33 @@ class TestMainWindowStartup(unittest.TestCase):
         self.assertEqual(application.installed_size_kib, 2048)
         self.assertTrue(application.update_available)
         self.assertEqual(application.update_note, "1.1")
+
+    def test_package_single_click_only_selects(self):
+        self._load_packages("example-lib")
+        with patch.object(self.window, "on_show_application_details") as details:
+            self.window.packages_tree.get_selection().select_path("0")
+        details.assert_not_called()
+        self.assertFalse(self.window.packages_tree.get_activate_on_single_click())
+
+    def test_installed_single_click_only_selects(self):
+        application = UnifiedApplication(
+            "apt:example",
+            "Example",
+            SOURCE_APT,
+            package_name="example",
+            executable="example",
+            desktop_file="/usr/share/applications/example.desktop",
+        )
+        self.window._finish_applications_load(ApplicationSnapshot([application]))
+        with patch.object(self.window, "on_show_application_details") as details:
+            self.window.applications_tree.get_selection().select_path("0")
+        details.assert_not_called()
+        self.assertFalse(self.window.applications_tree.get_activate_on_single_click())
+        with patch.object(self.window, "on_show_application_details") as details:
+            self.window.applications_tree.row_activated(
+                Gtk.TreePath.new_from_indices([0]), self.window.applications_tree_col_app
+            )
+        details.assert_called_once()
 
     def test_details_button_keeps_the_native_package_identity(self):
         self._load_packages("example")

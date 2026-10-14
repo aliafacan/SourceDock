@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, patch
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf, Gtk
 
 from sourcedock.backend.updates import build_update_catalog
 from sourcedock.core.models import (
@@ -127,6 +128,14 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertEqual(self.window.store_state.get_visible_child_name(), "state")
         self.assertEqual(self.window.store_state.body.get_text(), "Provider offline")
 
+    def test_discovery_card_click_opens_details(self):
+        result = StoreResult("Editor", "editor", "Description", SOURCE_APT, "1", "native")
+        with patch.object(self.window, "_open_store_detail_dialog") as open_details:
+            self.window._finish_store_search([result], None)
+            card = self.window.store_cards.get_children()[0].get_child()
+            card.clicked()
+        open_details.assert_called_once_with(result)
+
     def _updates(self):
         apps = [
             UnifiedApplication(
@@ -170,6 +179,15 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertEqual(len(self.window._selected_updates()), 4)
         self.window._on_update_toggled(None, "0:0")
         self.assertEqual(len(self.window._selected_updates()), 3)
+
+    def test_update_rows_include_application_icons(self):
+        items = self._updates()
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 1, 1)
+        with patch.object(self.window, "_get_app_pixbuf", return_value=pixbuf):
+            self.window._finish_updates_load(items, [], None)
+        iterator = self.window.updates_model.get_iter("0:0")
+        self.assertIs(self.window.updates_model.get_value(iterator, 6), pixbuf)
+        self.assertEqual(self.window.updates_tree.get_grid_lines(), Gtk.TreeViewGridLines.HORIZONTAL)
 
     def test_firmware_requires_confirmation(self):
         self.window._finish_updates_load(self._updates(), [], None)

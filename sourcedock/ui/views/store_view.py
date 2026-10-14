@@ -28,7 +28,7 @@ from sourcedock.core.models import (
 from sourcedock.i18n import t
 from sourcedock.ui.components.dialogs import AppDetailDialog, show_snap_classic_dialog
 from sourcedock.ui.components.progress import OperationProgressWindow
-from sourcedock.ui.components.common import AppCard, ContentState, icon_button, set_status
+from sourcedock.ui.components.common import AppCard, ContentState, icon_button, set_status, style_tree_view
 
 _SC_ICON = 0
 _SC_NAME = 1
@@ -59,6 +59,7 @@ class StoreViewMixin:
 
         self.store_search_entry = Gtk.SearchEntry()
         self.store_search_entry.set_hexpand(True)
+        self.store_search_entry.connect("search-changed", self._on_store_search_changed)
         self.store_search_entry.connect("activate", self.on_store_search)
         search_row.pack_start(self.store_search_entry, True, True, 0)
 
@@ -111,6 +112,7 @@ class StoreViewMixin:
             GObject.TYPE_PYOBJECT,
         )
         self.store_tree = Gtk.TreeView(model=self.store_results_store)
+        style_tree_view(self.store_tree)
         self.store_tree.set_headers_visible(True)
         self.store_tree.set_enable_search(False)
         self.store_tree.set_rubber_banding(False)
@@ -246,6 +248,32 @@ class StoreViewMixin:
         self.header_search.set_text(query)
         self.on_store_search()
 
+    def _on_store_search_changed(self, _entry: Gtk.SearchEntry) -> None:
+        """Debounce live discovery search so typing never starts one process per key."""
+        if self._store_search_timeout_id:
+            try:
+                GLib.source_remove(self._store_search_timeout_id)
+            except (TypeError, ValueError):
+                pass
+            self._store_search_timeout_id = 0
+        if not self.store_search_entry.get_text().strip():
+            self._store_search_generation += 1
+            self.store_busy = False
+            self.store_results = []
+            self._render_store_results([])
+            self.store_state.show_state(
+                t(self.preferences.language, "store_start"),
+                t(self.preferences.language, "store_start_body"),
+            )
+            self._set_store_status(t(self.preferences.language, "store_empty"), "#666666")
+            return
+        self._store_search_timeout_id = GLib.timeout_add(350, self._run_debounced_store_search)
+
+    def _run_debounced_store_search(self) -> bool:
+        self._store_search_timeout_id = 0
+        self.on_store_search()
+        return False
+
     def on_store_filter_toggled(self, button: Gtk.ToggleButton, source: str) -> None:
         if not hasattr(self, "store_results_store") or self.store_results_store is None:
             return
@@ -263,10 +291,18 @@ class StoreViewMixin:
         query = self.store_search_entry.get_text().strip()
         if not query:
             return
+        if self._store_search_timeout_id:
+            try:
+                GLib.source_remove(self._store_search_timeout_id)
+            except (TypeError, ValueError):
+                pass
+            self._store_search_timeout_id = 0
+        self._store_search_generation += 1
+        generation = self._store_search_generation
         self.store_busy = True
         self.store_state.show_state(t(self.preferences.language, "store_searching"), loading=True)
         self.store_search_btn.set_sensitive(False)
-        self.store_search_entry.set_sensitive(False)
+        self.store_search_entry.set_sensitive(True)
         self._set_store_status(t(self.preferences.language, "store_searching"), "#666666")
         self.store_results_store.clear()
 
@@ -274,15 +310,19 @@ class StoreViewMixin:
             try:
                 sources = None if self.store_filter_source == "all" else {self.store_filter_source}
                 results = self.store_registry.search(query, sources=sources)
-                GLib.idle_add(self._finish_store_search, results, None)
+                GLib.idle_add(self._finish_store_search, results, None, generation)
             except BackendError as exc:
-                GLib.idle_add(self._finish_store_search, [], str(exc))
+                GLib.idle_add(self._finish_store_search, [], str(exc), generation)
             except Exception as exc:
-                GLib.idle_add(self._finish_store_search, [], str(exc))
+                GLib.idle_add(self._finish_store_search, [], str(exc), generation)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _finish_store_search(self, results: list[StoreResult], error: str | None) -> bool:
+    def _finish_store_search(
+        self, results: list[StoreResult], error: str | None, generation: int | None = None
+    ) -> bool:
+        if generation is not None and generation != self._store_search_generation:
+            return False
         self.store_busy = False
         self.store_search_btn.set_sensitive(True)
         self.store_search_entry.set_sensitive(True)

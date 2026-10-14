@@ -101,6 +101,10 @@ combobox, combobox box {{ background: transparent; }}
 combobox button {{ background: @surface; padding: 5px 8px; }}
 scrolledwindow, viewport {{ background: transparent; }}
 treeview, treeview.view {{ background: @surface; color: @text; border: none; }}
+treeview.data-table.view row:nth-child(even) {{ background-color: @surface; }}
+treeview.data-table.view row:nth-child(odd) {{ background-color: shade(@surface, 0.96); }}
+treeview.data-table.view row:not(:selected) {{ border-bottom: 1px solid @border; }}
+treeview.data-table.view row:hover {{ background-color: @surface_hover; }}
 treeview header button {{ background: @background; border: none; border-bottom: 1px solid @border;
                          border-radius: 0; padding: 8px; font-weight: bold; }}
 treeview header button label {{ color: @muted; }}

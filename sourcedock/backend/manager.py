@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 
 from sourcedock.core.errors import BackendError
 from sourcedock.core.models import (
@@ -136,13 +137,24 @@ class ApplicationRegistry:
     def load(self) -> ApplicationSnapshot:
         applications: list[UnifiedApplication] = []
         provider_errors: list[str] = []
-        for provider in self.providers:
+
+        def load_provider(provider):
             try:
-                applications.extend(provider.list_applications())
+                return provider, provider.list_applications(), None
             except BackendError as exc:
-                provider_errors.append(f"{provider.source}: {exc}")
+                return provider, [], f"{provider.source}: {exc}"
             except Exception as exc:
-                provider_errors.append(f"{provider.source}: {exc}")
+                return provider, [], f"{provider.source}: {exc}"
+
+        # Provider scans are independent. Keeping them off the UI thread is
+        # already important, and running them concurrently shortens first paint.
+        with ThreadPoolExecutor(max_workers=max(1, min(6, len(self.providers)))) as pool:
+            futures = [pool.submit(load_provider, provider) for provider in self.providers]
+            for future in futures:
+                _provider, found, error = future.result()
+                applications.extend(found)
+                if error:
+                    provider_errors.append(error)
 
         hidden = getattr(self.native_provider, "_hidden_upgradable", set())
         if hidden:

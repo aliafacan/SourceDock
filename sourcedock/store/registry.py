@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 import os
 import platform
 import shutil
@@ -94,6 +95,7 @@ class StoreRegistry:
         self.provider_errors = []
         self.missing_sources = []
         self._metadata = None
+        self._search_cache: dict[tuple[str, tuple[str, ...]], list[StoreResult]] = {}
 
     def cancel_current(self) -> bool:
         return self._stream_runner.cancel_current()
@@ -109,11 +111,19 @@ class StoreRegistry:
         self._output_callback = callback
 
     def search(self, query: str, sources: set[str] | None = None) -> list[StoreResult]:
-        if not query.strip():
+        normalized_query = query.strip()
+        if not normalized_query:
             return []
         if sources is None:
             sources = {SOURCE_FLATPAK, SOURCE_SNAP, self.native_manager}
-        results: list[StoreResult] = []
+        source_order = tuple(sorted(sources))
+        cache_key = (normalized_query.casefold(), source_order)
+        cached = self._search_cache.get(cache_key)
+        if cached is not None:
+            self.provider_errors = []
+            self.missing_sources = []
+            return list(cached)
+
         self.provider_errors = []
         self.missing_sources = []
         commands = {
@@ -124,19 +134,38 @@ class StoreRegistry:
             SOURCE_PACMAN: "pacman",
             SOURCE_ZYPPER: "zypper",
         }
-        for source in sorted(sources):
-            if not self._command_exists(commands.get(source, source)):
-                self.missing_sources.append(source)
-                continue
+        results: list[StoreResult] = []
+
+        def search_source(source: str):
+            command = commands.get(source, source)
+            if not self._command_exists(command):
+                return source, [], None, True
             try:
                 if source == SOURCE_FLATPAK:
-                    results.extend(self._search_flatpak(query))
+                    found = self._search_flatpak(normalized_query)
                 elif source == SOURCE_SNAP:
-                    results.extend(self._search_snap(query))
+                    found = self._search_snap(normalized_query)
                 else:
-                    results.extend(self._search_native(source, query))
+                    found = self._search_native(source, normalized_query)
+                return source, found, None, False
             except BackendError as exc:
-                self.provider_errors.append(f"{source.upper()}: {exc}")
+                return source, [], str(exc), False
+            except Exception as exc:
+                return source, [], str(exc), False
+
+        # Flatpak, Snap and the native package manager are independent remote
+        # lookups. Running them together makes live search feel immediate.
+        with ThreadPoolExecutor(max_workers=max(1, min(4, len(source_order)))) as pool:
+            futures = [pool.submit(search_source, source) for source in source_order]
+            for future in futures:
+                source, found, error, missing = future.result()
+                if missing:
+                    self.missing_sources.append(source)
+                elif error:
+                    self.provider_errors.append(f"{source.upper()}: {error}")
+                else:
+                    results.extend(found)
+
         if not results and self.provider_errors:
             raise BackendError("\n".join(self.provider_errors))
         if self._metadata is None:
@@ -162,6 +191,9 @@ class StoreRegistry:
             if is_native_source(result.source):
                 result = replace(result, is_application=_looks_like_desktop_package(result))
             enriched.append(result)
+        if len(self._search_cache) >= 12:
+            self._search_cache.pop(next(iter(self._search_cache)))
+        self._search_cache[cache_key] = list(enriched)
         return enriched
 
     def _search_native(self, native_src: str, query: str) -> list[StoreResult]:

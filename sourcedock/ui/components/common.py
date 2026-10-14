@@ -23,6 +23,13 @@ def set_status(label, message: str, error: bool = False) -> None:
     context.add_class("error-text" if error else "dim-label")
 
 
+def style_tree_view(tree: Gtk.TreeView) -> None:
+    """Keep dense tables easy to scan with separators and row striping."""
+    tree.set_rules_hint(True)
+    tree.set_grid_lines(Gtk.TreeViewGridLines.HORIZONTAL)
+    tree.get_style_context().add_class("data-table")
+
+
 class ContentState(Gtk.Stack):
     def __init__(self, content):
         super().__init__()
@@ -130,9 +137,9 @@ class AppCard(Gtk.Button):
         action_label = (
             t(language, "store_installed_badge") if installed else t(language, "store_open_details")
         )
-        action = Gtk.Label(label=action_label)
-        action.get_style_context().add_class("card-action")
-        footer.pack_end(action, False, False, 0)
+        action_label_widget = Gtk.Label(label=action_label)
+        action_label_widget.get_style_context().add_class("card-action")
+        footer.pack_end(action_label_widget, False, False, 0)
         footer.pack_end(
             Gtk.Image.new_from_icon_name(
                 "emblem-ok-symbolic" if installed else "go-next-symbolic", Gtk.IconSize.BUTTON
