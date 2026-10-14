@@ -1024,17 +1024,17 @@ class InstalledViewMixin:
             pass
         return pb
 
-    def _get_app_pixbuf(self, application: UnifiedApplication) -> GdkPixbuf.Pixbuf | None:
-        cache_key = f"app:{application.id}"
+    def _get_app_pixbuf(self, application: UnifiedApplication, size: int = 32) -> GdkPixbuf.Pixbuf | None:
+        cache_key = f"app:{application.id}:{size}"
         if cache_key in self._icon_pixbuf_cache:
             return self._icon_pixbuf_cache[cache_key]
 
         icon_name = application.icon
         if icon_name and os.path.exists(icon_name):
             try:
-                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_name, 24, 24, True)
+                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(icon_name, size, size, True)
                 if pb:
-                    pb = self._scale_pixbuf_safe(pb, 24)
+                    pb = self._scale_pixbuf_safe(pb, size)
                 self._icon_pixbuf_cache[cache_key] = pb
                 return pb
             except Exception:
@@ -1044,9 +1044,9 @@ class InstalledViewMixin:
         for name in (icon_name, application.package_name, "application-x-executable"):
             if name and theme.has_icon(name):
                 try:
-                    pb = theme.load_icon(name, 24, Gtk.IconLookupFlags.FORCE_SIZE)
+                    pb = theme.load_icon(name, size, Gtk.IconLookupFlags.FORCE_SIZE)
                     if pb:
-                        pb = self._scale_pixbuf_safe(pb, 24)
+                        pb = self._scale_pixbuf_safe(pb, size)
                     self._icon_pixbuf_cache[cache_key] = pb
                     return pb
                 except Exception:
