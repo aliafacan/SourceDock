@@ -106,8 +106,10 @@ python3 main.py /ornek/paket.deb
 
 Yeni bir özellik eklediğinizde veya hata düzelttiğinizde lütfen mevcut testlerin geçtiğinden emin olun ve gerekirse yeni testler ekleyin:
 ```bash
-python3 -m unittest discover -s tests -v
+python3 tools/run_tests.py
 ```
+
+GTK testleri için Xvfb/Openbox komutları ve atlanan testlerin yorumu: [test katmanları](tests/README.md).
 
 ---
 
@@ -129,7 +131,7 @@ Oluşturulan paket `packaging/sourcedock_<version>_all.deb` dosyasında yer alac
    ```
 2. Değişikliklerinizi yapın ve test edin:
    ```bash
-   python3 -m unittest discover -s tests -v
+   python3 tools/run_tests.py
    ```
 3. Anlaşılır bir commit mesajı yazın (Conventional Commits önerilir):
    - `feat: Yeni özellik açıklaması`
@@ -247,8 +249,10 @@ python3 main.py /path/to/sample.deb
 
 Ensure all unit tests pass before submitting changes:
 ```bash
-python3 -m unittest discover -s tests -v
+python3 tools/run_tests.py
 ```
+
+See [test layers](tests/README.md) for Xvfb/Openbox setup and explicit skip reporting.
 
 ---
 
@@ -270,7 +274,7 @@ The output file is `packaging/sourcedock_<version>_all.deb`. `sourcedock/constan
    ```
 2. Make your changes and run the test suite:
    ```bash
-   python3 -m unittest discover -s tests -v
+   python3 tools/run_tests.py
    ```
 3. Write clear commit messages following Conventional Commits:
    - `feat: New feature summary`

@@ -32,9 +32,10 @@ status. The standalone installer keeps its independent entry point and confirmat
 Neutral charcoal or white surfaces, readable text, thin borders, restrained electric
 yellow for the principal action, green for success, red for destructive actions.
 System font; 4/8/12/16/24/32 spacing; symbolic GTK icons; visible keyboard focus.
-Repeated application items have at most 8px corner radius. Screen sections are
-unframed. Loading uses a spinner, never fabricated progress. Theme supports System,
-Light and Dark, with 90/100/110/125 percent scale.
+Repeated application items use a 10px corner radius (within the 10-14px spec). Screen
+sections are unframed. Loading uses a spinner, never fabricated progress. Theme supports
+System, Light and Dark, with 90/100/110/125 percent scale. Interactive surfaces use
+150ms transitions that collapse to instant when the desktop requests reduced motion.
 
 ## Implementation order
 

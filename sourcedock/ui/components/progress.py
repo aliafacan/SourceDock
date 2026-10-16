@@ -15,6 +15,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango  # pyright: ignore[reportMissing
 
 
 from sourcedock.i18n import t
+from sourcedock.ui.components.common import make_window_movable
 
 
 class OperationProgressWindow(Gtk.Window):
@@ -27,6 +28,7 @@ class OperationProgressWindow(Gtk.Window):
         parent: Gtk.Window,
         on_progress: Callable[[float, str], None] | None = None,
         language: str = "tr",
+        cancel_fn: Callable[[], bool] | None = None,
     ) -> None:
         super().__init__(title=title)
         self.language = language
@@ -37,7 +39,8 @@ class OperationProgressWindow(Gtk.Window):
         self.set_skip_pager_hint(False)
         self.set_decorated(True)
         self.set_type_hint(Gdk.WindowTypeHint.NORMAL)
-        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        make_window_movable(self, independent=True)
         self.get_style_context().add_class("icon-settings-window")
         self._done = False
         self._on_progress = on_progress
@@ -98,6 +101,14 @@ class OperationProgressWindow(Gtk.Window):
         button_row.set_halign(Gtk.Align.END)
         content.pack_start(button_row, False, False, 0)
 
+        self._cancel_fn = cancel_fn
+        if cancel_fn is not None:
+            self._cancel_btn = Gtk.Button(label=t(self.language, "btn_cancel"))
+            self._cancel_btn.connect("clicked", self._on_cancel_clicked)
+            button_row.pack_start(self._cancel_btn, False, False, 0)
+        else:
+            self._cancel_btn = None
+
         self._minimize_btn = Gtk.Button(label=t(self.language, "progress_minimize"))
         self._minimize_btn.connect("clicked", lambda _button: self.iconify())
         button_row.pack_start(self._minimize_btn, False, False, 0)
@@ -109,6 +120,7 @@ class OperationProgressWindow(Gtk.Window):
         button_row.pack_start(self._close_btn, False, False, 0)
 
         self._pulse_source: int | None = GLib.timeout_add(80, self._pulse)
+        self.connect("destroy", lambda _widget: self._stop_pulse())
         self.show_all()
 
     def _short_error(self, message: str) -> str:
@@ -453,20 +465,29 @@ class OperationProgressWindow(Gtk.Window):
         self._progress.set_fraction(1.0 if success else 0.0)
         self._progress.set_text("%100" if success else "")
         self._progress.set_show_text(success)
-        color = "#59d38c" if success else "#ff7f7f"
         self._title_label.set_text(
             t(self.language, "progress_done") if success else t(self.language, "progress_failed")
         )
         status = message if success else self._short_error(message)
-        self._status_label.set_markup(
-            f'<span foreground="{color}" weight="bold">{GLib.markup_escape_text(status)}</span>'
-        )
+        self._status_label.set_text(status)
+        self._status_label.get_style_context().remove_class("success-text")
+        self._status_label.get_style_context().remove_class("error-text")
+        self._status_label.get_style_context().add_class("success-text" if success else "error-text")
         self._append_detail(message)
         self._fire_progress()
         self._close_btn.set_sensitive(True)
         self._close_btn.grab_focus()
+        if hasattr(self, "_cancel_btn") and self._cancel_btn is not None:
+            self._cancel_btn.set_visible(False)
         if success:
             GLib.timeout_add(2000, self._auto_close)
+
+    def _on_cancel_clicked(self, _button=None) -> None:
+        if getattr(self, "_cancel_btn", None) is not None:
+            self._cancel_btn.set_sensitive(False)
+            self._cancel_btn.set_label(t(self.language, "progress_cancelling"))
+        if self._cancel_fn:
+            self._cancel_fn()
 
     def _auto_close(self) -> bool:
         if self._done:
@@ -475,6 +496,9 @@ class OperationProgressWindow(Gtk.Window):
 
     def _on_delete_event(self, _window: Gtk.Window, _event) -> bool:
         if not self._done:
+            if self._cancel_fn is not None:
+                self._on_cancel_clicked()
+                return True
             self.iconify()
             return True
         return False

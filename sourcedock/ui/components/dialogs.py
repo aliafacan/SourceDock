@@ -16,8 +16,20 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from sourcedock.core.models import SOURCE_FLATPAK, StoreResult
-from sourcedock.i18n import t
+from sourcedock.core.models import SOURCE_FLATPAK, SOURCE_SNAP, StoreResult, is_native_source
+from sourcedock.core.icons import find_flatpak_icon_path, find_snap_icon_path
+from sourcedock.ui.components.common import display_store_name, prepare_dialog
+from sourcedock.i18n import source_name, t
+
+
+def _store_variant_identity(result: StoreResult) -> str:
+    """Normalize provider variants to the same selectable app identity."""
+    identity = re.sub(r"[^a-z0-9.+:-]+", "", (result.identity or "").casefold())
+    package_id = re.sub(r"[^a-z0-9.+:-]+", "", (result.app_id or "").casefold())
+    aliases = {
+        "firefox": "org.mozilla.firefox",
+    }
+    return aliases.get(identity or package_id, identity or package_id)
 
 
 class AppDetailDialog(Gtk.Dialog):
@@ -33,13 +45,12 @@ class AppDetailDialog(Gtk.Dialog):
         parent: Gtk.Window,
     ) -> None:
         super().__init__(
-            title=primary_result.name,
+            title=display_store_name(primary_result),
             transient_for=parent,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            modal=True,
+            destroy_with_parent=True,
         )
-        self.set_default_size(740, 580)
-        self.set_resizable(True)
-        self.get_style_context().add_class("icon-settings-window")
+        prepare_dialog(self, width=720, height=380, independent=True)
 
         self._primary = primary_result
         self._installed_ids = installed_package_ids
@@ -47,19 +58,14 @@ class AppDetailDialog(Gtk.Dialog):
         self._language = language
         self._selected_result = primary_result
         self._source_combo: Gtk.ComboBoxText | None = None
+        self._screenshots_done = False
+        self._screenshot_timeout_id = 0
 
+        primary_identity = _store_variant_identity(primary_result)
         seen_sources: set[str] = {primary_result.source}
         self._alternates: list[StoreResult] = []
         for r in all_results:
-            if r.source not in seen_sources and (
-                (primary_result.identity and r.identity == primary_result.identity)
-                or (
-                    not primary_result.identity
-                    and not r.identity
-                    and re.sub(r"[^a-z0-9.+:-]+", "", r.app_id.casefold())
-                    == re.sub(r"[^a-z0-9.+:-]+", "", primary_result.app_id.casefold())
-                )
-            ):
+            if r.source not in seen_sources and _store_variant_identity(r) == primary_identity:
                 self._alternates.append(r)
                 seen_sources.add(r.source)
 
@@ -72,8 +78,12 @@ class AppDetailDialog(Gtk.Dialog):
         self._build_content()
         self.connect("response", lambda _d, _r: self.destroy())
         self.show_all()
+        # Gtk.show_all() can re-show rows hidden by _set_source_metadata().
+        # Reapply visibility after the complete widget tree is realized.
+        self._set_source_metadata(self._primary)
 
         if self._flatpak_app_id:
+            self._screenshot_timeout_id = GLib.timeout_add_seconds(12, self._on_screenshot_timeout)
             threading.Thread(target=self._load_screenshots_async, daemon=True).start()
 
     def _build_content(self) -> None:
@@ -82,7 +92,8 @@ class AppDetailDialog(Gtk.Dialog):
 
         outer_scroll = Gtk.ScrolledWindow()
         outer_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        outer_scroll.set_min_content_height(420)
+        outer_scroll.set_min_content_height(0)
+        outer_scroll.set_propagate_natural_height(True)
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         main_box.set_margin_start(24)
@@ -103,13 +114,15 @@ class AppDetailDialog(Gtk.Dialog):
 
         name_label = Gtk.Label()
         name_label.set_markup(
-            f'<span size="xx-large" weight="bold">{GLib.markup_escape_text(self._primary.name)}</span>'
+            f'<span size="xx-large" weight="bold">{GLib.markup_escape_text(display_store_name(self._primary))}</span>'
         )
         name_label.set_xalign(0)
         name_label.set_line_wrap(True)
         info_vbox.pack_start(name_label, False, False, 0)
 
-        self._meta_base_parts: list[str] = [self._primary.source.capitalize(), self._primary.remote]
+        self._meta_base_parts: list[str] = [source_name(self._language, self._primary.source)]
+        if self._primary.remote:
+            self._meta_base_parts.append(self._primary.remote)
         if self._primary.version:
             self._meta_base_parts.append(f"v{self._primary.version}")
         self._meta_size_str: str = self._primary.download_size_str or ""
@@ -131,8 +144,9 @@ class AppDetailDialog(Gtk.Dialog):
             all_opts = [self._primary] + self._alternates
             for opt in all_opts:
                 ver_s = f" (v{opt.version})" if opt.version else ""
-                source_name = t(self._language, f"store_source_{opt.source}")
-                self._source_combo.append(opt.app_id, f"{source_name} · {opt.remote}{ver_s}")
+                source_label = source_name(self._language, opt.source)
+                remote = f" · {opt.remote}" if opt.remote else ""
+                self._source_combo.append(opt.app_id, f"{source_label}{remote}{ver_s}")
             self._source_combo.set_active(0)
             self._source_combo.connect("changed", self._on_source_changed)
             source_row.pack_start(self._source_combo, False, False, 0)
@@ -157,33 +171,68 @@ class AppDetailDialog(Gtk.Dialog):
         header_box.pack_start(btn_box, False, False, 0)
         main_box.pack_start(header_box, False, False, 0)
         main_box.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 0)
-        trust = Gtk.Label(label=t(self._language, "security_unknown"))
+        self._publisher_status_label = Gtk.Label(
+            label=(
+                t(self._language, "security_publisher_metadata", publisher=self._primary.publisher)
+                if self._primary.publisher
+                else t(self._language, "security_publisher_unknown")
+            )
+        )
+        trust = self._publisher_status_label
         trust.set_xalign(0)
         trust.get_style_context().add_class("warning-text")
         main_box.pack_start(trust, False, False, 0)
         sandbox = Gtk.Label(
             label=t(
                 self._language,
-                "security_flatpak" if self._primary.source == SOURCE_FLATPAK else "security_native",
+                "security_flatpak"
+                if self._primary.source == SOURCE_FLATPAK
+                else "security_snap"
+                if self._primary.source == SOURCE_SNAP
+                else "security_native",
             )
         )
+        self._sandbox_label = sandbox
         sandbox.set_xalign(0)
         sandbox.set_line_wrap(True)
         main_box.pack_start(sandbox, False, False, 0)
-        for value in (self._primary.publisher, self._primary.license, self._primary.homepage):
-            if value:
-                label = Gtk.Label(label=value, xalign=0)
-                label.set_line_wrap(True)
-                label.set_selectable(True)
-                main_box.pack_start(label, False, False, 0)
+        self._sandbox_label = sandbox
+        self._signature_label = Gtk.Label(
+            label=t(self._language, self._signature_security_key(self._primary.source)), xalign=0
+        )
+        self._signature_label.set_line_wrap(True)
+        self._signature_label.get_style_context().add_class("dim-label")
+        main_box.pack_start(self._signature_label, False, False, 0)
+
+        self._source_fields: dict[str, tuple[Gtk.Box, Gtk.Label]] = {}
+        for field_name, label_key in (
+            ("publisher", "store_detail_publisher"),
+            ("license", "store_detail_license"),
+            ("homepage", "store_detail_homepage"),
+        ):
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            caption = Gtk.Label(label=t(self._language, label_key) + ":", xalign=0)
+            caption.get_style_context().add_class("dim-label")
+            caption.set_size_request(110, -1)
+            value = Gtk.Label(xalign=0)
+            value.set_line_wrap(True)
+            value.set_selectable(True)
+            row.pack_start(caption, False, False, 0)
+            row.pack_start(value, True, True, 0)
+            main_box.pack_start(row, False, False, 0)
+            self._source_fields[field_name] = (row, value)
+
+        self._transition_label = Gtk.Label(label=t(self._language, "store_transition_warning"), xalign=0)
+        self._transition_label.set_line_wrap(True)
+        self._transition_label.get_style_context().add_class("warning-text")
+        main_box.pack_start(self._transition_label, False, False, 0)
 
         desc_text = self._primary.description.strip()
-        if desc_text:
-            desc_lbl = Gtk.Label(label=desc_text)
-            desc_lbl.set_xalign(0)
-            desc_lbl.set_line_wrap(True)
-            desc_lbl.set_selectable(True)
-            main_box.pack_start(desc_lbl, False, False, 0)
+        desc_lbl = Gtk.Label(label=desc_text, xalign=0)
+        self._description_label = desc_lbl
+        desc_lbl.set_line_wrap(True)
+        desc_lbl.set_selectable(True)
+        main_box.pack_start(desc_lbl, False, False, 0)
 
         if self._flatpak_app_id:
             self._screenshots_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -199,10 +248,13 @@ class AppDetailDialog(Gtk.Dialog):
             self._screenshots_scroll.add(self._screenshots_inner)
             self._screenshots_box.pack_start(self._screenshots_scroll, True, True, 0)
             self._screenshots_scroll.hide()
+            self._screenshots_box.set_no_show_all(True)
+            self._screenshots_box.hide()
             main_box.pack_start(self._screenshots_box, True, True, 0)
 
         outer_scroll.add(main_box)
         content.pack_start(outer_scroll, True, True, 0)
+        self._set_source_metadata(self._primary)
 
     def _update_install_btn(self, result: StoreResult) -> None:
         is_installed = f"{result.source}:{result.app_id}" in self._installed_ids
@@ -213,21 +265,69 @@ class AppDetailDialog(Gtk.Dialog):
             self._install_btn.set_label(t(self._language, "store_install_btn"))
             self._install_btn.set_sensitive(True)
 
+    def _set_source_metadata(self, result: StoreResult) -> None:
+        if hasattr(self, "_description_label"):
+            self._description_label.set_text(result.description.strip())
+            self._description_label.set_visible(bool(result.description.strip()))
+        if hasattr(self, "_transition_label"):
+            description = result.description.casefold()
+            is_transition = result.source == "apt" and (
+                "transitional package" in description or "snap" in description
+            )
+            self._transition_label.set_visible(is_transition)
+        for field_name in ("publisher", "license", "homepage"):
+            row, value_label = self._source_fields.get(field_name, (None, None))
+            if row is None or value_label is None:
+                continue
+            value = getattr(result, field_name, "") or ""
+            value_label.set_text(value)
+            row.set_visible(bool(value.strip()))
+
     def _on_source_changed(self, combo: Gtk.ComboBoxText) -> None:
         active_idx = combo.get_active()
         all_opts = [self._primary] + self._alternates
         if 0 <= active_idx < len(all_opts):
             chosen = all_opts[active_idx]
             self._selected_result = chosen
+            self._publisher_status_label.set_text(
+                t(self._language, "security_publisher_metadata", publisher=chosen.publisher)
+                if chosen.publisher
+                else t(self._language, "security_publisher_unknown")
+            )
             self._load_icon(chosen, 96)
             self._update_install_btn(chosen)
+            self._set_source_metadata(chosen)
+            if hasattr(self, "_sandbox_label"):
+                self._sandbox_label.set_text(
+                    t(
+                        self._language,
+                        "security_flatpak"
+                        if chosen.source == SOURCE_FLATPAK
+                        else "security_snap"
+                        if chosen.source == SOURCE_SNAP
+                        else "security_native",
+                    )
+                )
+                self._signature_label.set_text(t(self._language, self._signature_security_key(chosen.source)))
 
-            parts = [chosen.source.capitalize(), chosen.remote]
+            parts = [source_name(self._language, chosen.source)]
+            if chosen.remote:
+                parts.append(chosen.remote)
             if chosen.version:
                 parts.append(f"v{chosen.version}")
             if chosen.download_size_str:
                 parts.append(chosen.download_size_str)
             self._meta_label.set_text("  ·  ".join(parts))
+
+    @staticmethod
+    def _signature_security_key(source: str) -> str:
+        if source == SOURCE_FLATPAK:
+            return "security_signature_flatpak"
+        if source == SOURCE_SNAP:
+            return "security_signature_snap"
+        if is_native_source(source):
+            return "security_signature_native"
+        return "security_signature_local"
 
     def _on_install_clicked(self, _btn: Gtk.Button) -> None:
         self.destroy()
@@ -241,8 +341,31 @@ class AppDetailDialog(Gtk.Dialog):
                 return
             except Exception:
                 pass
+        if result.source == SOURCE_FLATPAK:
+            flatpak_path = find_flatpak_icon_path(result.app_id, result.remote)
+            if flatpak_path:
+                try:
+                    self._icon_image.set_from_pixbuf(
+                        GdkPixbuf.Pixbuf.new_from_file_at_scale(flatpak_path, size, size, True)
+                    )
+                    return
+                except Exception:
+                    pass
+        if result.source == SOURCE_SNAP:
+            snap_path = find_snap_icon_path(result.app_id)
+            if snap_path:
+                try:
+                    self._icon_image.set_from_pixbuf(
+                        GdkPixbuf.Pixbuf.new_from_file_at_scale(snap_path, size, size, True)
+                    )
+                    return
+                except Exception:
+                    pass
         theme = Gtk.IconTheme.get_default()
-        for name in (result.app_id, result.name.lower(), "application-x-executable"):
+        generic_names = {"application-x-executable", "application-x-executable-symbolic"}
+        candidates = [result.app_id] if result.app_id and result.app_id not in generic_names else []
+        candidates.append("package-x-generic")
+        for name in candidates:
             if theme.has_icon(name):
                 try:
                     pb = theme.load_icon(name, size, Gtk.IconLookupFlags.GENERIC_FALLBACK)
@@ -250,7 +373,7 @@ class AppDetailDialog(Gtk.Dialog):
                     return
                 except Exception:
                     pass
-        self._icon_image.set_from_icon_name("application-x-executable", Gtk.IconSize.DIALOG)
+        self._icon_image.set_from_icon_name("package-x-generic", Gtk.IconSize.DIALOG)
 
     def _load_screenshots_async(self) -> None:
         if not self._flatpak_app_id:
@@ -304,10 +427,16 @@ class AppDetailDialog(Gtk.Dialog):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _on_screenshots_done(self, pixbufs: list) -> bool:
-        if not hasattr(self, "_screenshots_status_label"):
+        if not hasattr(self, "_screenshots_status_label") or self._screenshots_done:
             return False
+        self._screenshots_done = True
+        if self._screenshot_timeout_id:
+            GLib.source_remove(self._screenshot_timeout_id)
+            self._screenshot_timeout_id = 0
         if not pixbufs:
             self._screenshots_status_label.set_text(t(self._language, "store_screenshots_none"))
+            self._screenshots_scroll.hide()
+            self._screenshots_box.hide()
             return False
         self._screenshots_status_label.set_text("")
         for pb in pixbufs:
@@ -315,6 +444,17 @@ class AppDetailDialog(Gtk.Dialog):
             self._screenshots_inner.pack_start(img, False, False, 0)
         self._screenshots_inner.show_all()
         self._screenshots_scroll.show()
+        self._screenshots_box.show()
+        return False
+
+    def _on_screenshot_timeout(self) -> bool:
+        if self._screenshots_done or not hasattr(self, "_screenshots_status_label"):
+            return False
+        self._screenshots_done = True
+        self._screenshot_timeout_id = 0
+        self._screenshots_status_label.set_text(t(self._language, "store_screenshots_none"))
+        self._screenshots_scroll.hide()
+        self._screenshots_box.hide()
         return False
 
 
@@ -329,9 +469,10 @@ def ask_sudo_password(
     dialog = Gtk.Dialog(
         title=t(language, "password_title"),
         transient_for=parent,
-        flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+        modal=True,
+        destroy_with_parent=True,
     )
-    dialog.get_style_context().add_class("icon-settings-window")
+    prepare_dialog(dialog, width=480, height=220)
     dialog.add_button(t(language, "password_cancel"), Gtk.ResponseType.CANCEL)
     ok_btn = dialog.add_button(t(language, "password_continue"), Gtk.ResponseType.OK)
     ok_btn.get_style_context().add_class("suggested-action")
@@ -361,20 +502,83 @@ def ask_sudo_password(
 
 
 def show_snap_classic_dialog(parent: Gtk.Window, language: str, app_name: str) -> bool:
-    """Snap classic confinement izni onay penceresi."""
-    dialog = Gtk.MessageDialog(
-        transient_for=parent,
-        flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-        type=Gtk.MessageType.WARNING,
-        buttons=Gtk.ButtonsType.NONE,
-        text=t(language, "store_snap_classic_title"),
+    """Show the explicit, non-default Snap Classic permission confirmation."""
+    return _run_risk_confirmation(
+        parent,
+        title=t(language, "store_snap_classic_title"),
+        body=t(language, "store_snap_classic_message", name=app_name),
+        cancel_label=t(language, "store_snap_classic_cancel"),
+        confirm_label=t(language, "store_snap_classic_confirm"),
+        icon_name="security-high-symbolic",
     )
-    dialog.get_style_context().add_class("icon-settings-window")
-    dialog.format_secondary_text(t(language, "store_snap_classic_message", name=app_name))
-    dialog.add_button(t(language, "store_snap_classic_cancel"), Gtk.ResponseType.CANCEL)
-    confirm_btn = dialog.add_button(t(language, "store_snap_classic_confirm"), Gtk.ResponseType.OK)
-    confirm_btn.get_style_context().add_class("suggested-action")
 
+
+def show_firmware_confirmation(parent: Gtk.Window, language: str) -> bool:
+    """Show a shared firmware confirmation with power and reboot guidance."""
+    return _run_risk_confirmation(
+        parent,
+        title=t(language, "firmware_confirm_title"),
+        body=t(language, "firmware_confirm_body"),
+        cancel_label=t(language, "firmware_confirm_cancel"),
+        confirm_label=t(language, "firmware_confirm_apply"),
+        icon_name="computer-symbolic",
+    )
+
+
+def _run_risk_confirmation(
+    parent: Gtk.Window,
+    *,
+    title: str,
+    body: str,
+    cancel_label: str,
+    confirm_label: str,
+    icon_name: str,
+) -> bool:
+    dialog = Gtk.Dialog(
+        title=title,
+        transient_for=parent,
+        modal=True,
+        destroy_with_parent=True,
+    )
+    prepare_dialog(dialog, width=540, height=340)
+    content = dialog.get_content_area()
+    content.set_spacing(0)
+    content.set_margin_start(20)
+    content.set_margin_end(20)
+    content.set_margin_top(18)
+    content.set_margin_bottom(8)
+
+    scroll = Gtk.ScrolledWindow()
+    scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    scroll.set_min_content_height(180)
+    panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+    icon = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
+    icon.set_pixel_size(48)
+    header.pack_start(icon, False, False, 0)
+    title_label = Gtk.Label(label=title, xalign=0)
+    title_label.get_style_context().add_class("section-title")
+    title_label.set_line_wrap(True)
+    header.pack_start(title_label, True, True, 0)
+    panel.pack_start(header, False, False, 0)
+    panel.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 0)
+
+    for paragraph in (part.strip() for part in body.split("\n\n")):
+        if not paragraph:
+            continue
+        label = Gtk.Label(label=paragraph, xalign=0)
+        label.set_line_wrap(True)
+        label.set_selectable(True)
+        panel.pack_start(label, False, False, 0)
+    scroll.add(panel)
+    content.pack_start(scroll, True, True, 0)
+
+    cancel_button = dialog.add_button(cancel_label, Gtk.ResponseType.CANCEL)
+    confirm_button = dialog.add_button(confirm_label, Gtk.ResponseType.OK)
+    confirm_button.get_style_context().add_class("destructive-action")
+    dialog.set_default_response(Gtk.ResponseType.CANCEL)
+    dialog.show_all()
+    cancel_button.grab_focus()
     response = dialog.run()
     dialog.destroy()
     return response == Gtk.ResponseType.OK

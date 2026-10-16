@@ -14,7 +14,10 @@ import time
 from sourcedock.core.errors import BackendError
 
 NATIVE_OPERATION_LOCK = threading.RLock()
-CRITICAL_COMMANDS = {"apt", "apt-get", "dpkg", "dnf", "rpm", "pacman", "zypper", "snap", "fwupdmgr"}
+CRITICAL_COMMANDS = {
+    "apt", "apt-get", "dpkg", "dnf", "rpm", "pacman", "zypper", "flatpak", "snap",
+    "fwupdmgr", "AppImageUpdate",
+}
 
 
 def redact_text(text: str, secrets=()) -> str:
@@ -24,12 +27,39 @@ def redact_text(text: str, secrets=()) -> str:
     home = str(Path.home())
     if home != "/":
         text = text.replace(home, "~")
+    text = re.sub(r"(?<![\w])/(?:home/[^/\s]+|Users/[^/\s]+|root)(?=/|\s|$)", "~", text)
     text = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", text)
     return re.sub(r"(?i)(password|token|secret|authorization)(\s*[:=]\s*)[^\s]+", r"\1\2[redacted]", text)
 
 
 def critical_command(command: list[str]) -> bool:
-    return any(Path(arg).name in CRITICAL_COMMANDS for arg in command[:6])
+    read_only = {
+        "apt": {"list", "search", "show", "policy", "depends", "rdepends", "changelog"},
+        "apt-get": {"check", "source", "changelog"},
+        "dpkg": {"-s", "--status", "-l", "--list", "-L", "--listfiles", "-S", "--search"},
+        "dnf": {"list", "info", "search", "check-update", "repoquery", "repolist"},
+        "pacman": {"-Q", "-Qi", "-Ql", "-Qq", "-Qu", "-Qs", "-Si", "-Ss"},
+        "zypper": {"search", "info", "list-updates", "repos"},
+        "flatpak": {"list", "search", "info", "history", "remotes", "remote-info", "remote-ls"},
+        "snap": {"list", "find", "info", "changes", "tasks", "version"},
+        "fwupdmgr": {"get-devices", "get-updates", "get-history", "get-releases"},
+    }
+    for index, arg in enumerate(command[:6]):
+        program = Path(arg).name
+        if program not in CRITICAL_COMMANDS:
+            continue
+        arguments = iter(command[index + 1:])
+        for action in arguments:
+            if action in ("-o", "--option", "-c", "--config-file"):
+                next(arguments, None)
+                continue
+            if action in read_only.get(program, set()):
+                return False
+            if action.startswith("-") and action != "--":
+                continue
+            return True
+        return True
+    return False
 
 
 def terminate_process(process: subprocess.Popen, force: bool = False) -> None:

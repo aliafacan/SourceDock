@@ -22,26 +22,69 @@ def metadata_paths():
     return sorted(paths)
 
 
+XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+
+
+def _locale_parts(value: str) -> tuple[str, str]:
+    normalized = (value or "").strip().casefold().replace("-", "_").split(".", 1)[0]
+    language_base = normalized.split("_", 1)[0].split("@", 1)[0]
+    return normalized, language_base
+
+
+def _text(element) -> str:
+    return " ".join(" ".join(element.itertext()).split()).strip()
+
+
 def _localized(component, tag, language):
+    """Select one locale without flattening sibling translated paragraphs.
+
+    AppStream descriptions commonly store one unlabelled ``description`` node
+    containing localized ``p`` children. Selecting only the outer node would
+    concatenate every language into the detail view.
+    """
     elements = component.findall(tag)
-    preferred = next(
-        (
-            element
-            for element in elements
-            if element.get("{http://www.w3.org/XML/1998/namespace}lang") == language
-        ),
-        None,
-    )
-    if preferred is None:
-        preferred = next(
-            (
-                element
-                for element in elements
-                if not element.get("{http://www.w3.org/XML/1998/namespace}lang")
-            ),
-            None,
-        )
-    return " ".join(preferred.itertext()).strip() if preferred is not None else ""
+    requested, language_base = _locale_parts(language)
+
+    def rank(value: str) -> int | None:
+        normalized, base = _locale_parts(value)
+        if normalized == requested and normalized:
+            return 0
+        if base == language_base and base:
+            return 1
+        if base == "en":
+            return 2
+        if not normalized:
+            return 3
+        return None
+
+    direct = [
+        (rank(element.get(XML_LANG, "")), element)
+        for element in elements
+        if element.get(XML_LANG) is not None
+        or not any(child.get(XML_LANG) is not None for child in element)
+    ]
+    direct = [(priority, element) for priority, element in direct if priority is not None]
+    if direct:
+        priority = min(priority for priority, _element in direct)
+        selected = [element for item_priority, element in direct if item_priority == priority]
+        return "\n\n".join(text for text in (_text(element) for element in selected) if text)
+
+    for element in elements:
+        children = list(element)
+        localized_children = [child for child in children if child.get(XML_LANG) is not None]
+        if not localized_children:
+            text = _text(element)
+            if text:
+                return text
+            continue
+        ranked_children = [(rank(child.get(XML_LANG, "")), child) for child in children]
+        ranked_children = [(priority, child) for priority, child in ranked_children if priority is not None]
+        if ranked_children:
+            priority = min(priority for priority, _child in ranked_children)
+            selected = [child for item_priority, child in ranked_children if item_priority == priority]
+            return "\n\n".join(text for text in (_text(child) for child in selected) if text)
+
+    return ""
 
 
 def load_metadata(paths=None, language="en"):

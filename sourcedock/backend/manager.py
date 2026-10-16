@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 import re
 import shutil
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+import time
 
 from sourcedock.core.errors import BackendError
 from sourcedock.core.models import (
@@ -58,14 +60,36 @@ def _apt_command(*args: str) -> list[str]:
     return ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, *args]
 
 
+def _flatpak_purge_data_path(app_id: str) -> Path:
+    if (
+        not isinstance(app_id, str)
+        or len(app_id) > 255
+        or not re.fullmatch(r"(?:[A-Za-z_][A-Za-z0-9_]*\.){2,}[A-Za-z_-][A-Za-z0-9_-]*", app_id)
+    ):
+        raise BackendError("Invalid Flatpak application ID for data removal.")
+    data_dir = Path.home() / ".var" / "app" / app_id
+    try:
+        for component in (data_dir, *data_dir.parents):
+            if component.is_symlink():
+                raise BackendError(f"Unsafe Flatpak data path: symbolic link at {component}")
+            if component.exists() and not component.is_dir():
+                raise BackendError(f"Unsafe Flatpak data path: not a directory at {component}")
+    except OSError as exc:
+        raise BackendError(f"Could not validate Flatpak data path {data_dir}: {exc}") from exc
+    return data_dir
+
+
 class ApplicationRegistry:
     """Sistemdeki tüm kurulu paket kaynaklarını yöneten ana kayıt defteri."""
+
+    PROVIDER_TIMEOUT_SECONDS = 5.0
 
     def __init__(self, distro_info: DistroInfo | None = None, runner: CommandRunner | None = None):
         self.runner = runner or CommandRunner()
         self.scanner = DesktopEntryScanner(self.runner)
         self.distro = distro_info or detect_distro(self.runner)
         self.applications: list[UnifiedApplication] = []
+        self.last_provider_metrics: dict[str, object] = {}
 
         self._native_providers: dict[str, BaseNativeProvider] = {
             SOURCE_APT: AptProvider(self.runner, self.scanner),
@@ -134,39 +158,136 @@ class ApplicationRegistry:
         except Exception:
             pass
 
-    def load(self) -> ApplicationSnapshot:
+    def _load_provider(self, provider):
+        started_at = time.perf_counter()
+        try:
+            found = provider.list_applications()
+            return provider, found, None, (time.perf_counter() - started_at) * 1000
+        except BackendError as exc:
+            return provider, [], f"{provider.source}: {exc}", (time.perf_counter() - started_at) * 1000
+        except Exception as exc:
+            return provider, [], f"{provider.source}: {exc}", (time.perf_counter() - started_at) * 1000
+
+    def _collect_provider_results(
+        self,
+        on_result: Callable[[list[UnifiedApplication], list[str]], None] | None = None,
+        timeout_seconds: float | None = None,
+    ) -> tuple[list[UnifiedApplication], list[str]]:
+        """Collect independent read-only scans without waiting on a stalled provider.
+
+        A timed-out worker is deliberately left to finish in the background. The
+        returned snapshot is authoritative only for providers that completed; no
+        destructive command is cancelled or retried from this path.
+        """
         applications: list[UnifiedApplication] = []
         provider_errors: list[str] = []
+        provider_metrics: dict[str, float] = {}
+        timed_out: list[str] = []
+        timeout = self.PROVIDER_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
+        executor = ThreadPoolExecutor(max_workers=max(1, min(6, len(self.providers))))
+        future_to_provider = {
+            executor.submit(self._load_provider, provider): provider for provider in self.providers
+        }
+        pending = set(future_to_provider)
+        started_at = time.perf_counter()
+        deadline = None if timeout is None else started_at + max(0.0, timeout)
 
-        def load_provider(provider):
-            try:
-                return provider, provider.list_applications(), None
-            except BackendError as exc:
-                return provider, [], f"{provider.source}: {exc}"
-            except Exception as exc:
-                return provider, [], f"{provider.source}: {exc}"
+        try:
+            while pending:
+                remaining = None if deadline is None else max(0.0, deadline - time.perf_counter())
+                done, pending = wait(pending, timeout=remaining, return_when=FIRST_COMPLETED)
+                if not done:
+                    break
+                for future in done:
+                    provider = future_to_provider[future]
+                    result = future.result()
+                    result_provider, found, error, *duration = result
+                    source = result_provider.source if result_provider is not None else provider.source
+                    provider_metrics[source] = round(
+                        float(duration[0]) if duration else (time.perf_counter() - started_at) * 1000, 1
+                    )
+                    applications.extend(found)
+                    if error:
+                        provider_errors.append(error)
+                    if on_result:
+                        on_result(applications, provider_errors)
 
-        # Provider scans are independent. Keeping them off the UI thread is
-        # already important, and running them concurrently shortens first paint.
-        with ThreadPoolExecutor(max_workers=max(1, min(6, len(self.providers)))) as pool:
-            futures = [pool.submit(load_provider, provider) for provider in self.providers]
-            for future in futures:
-                _provider, found, error = future.result()
-                applications.extend(found)
-                if error:
-                    provider_errors.append(error)
+            if pending:
+                elapsed_ms = round((time.perf_counter() - started_at) * 1000, 1)
+                for future in pending:
+                    provider = future_to_provider[future]
+                    timed_out.append(provider.source)
+                    provider_metrics[provider.source] = elapsed_ms
+                    provider_errors.append(
+                        f"{provider.source}: timeout after {timeout:g}s"
+                        if timeout is not None
+                        else f"{provider.source}: timeout"
+                    )
+                    future.cancel()
+        finally:
+            # Do not make the UI thread wait for a provider that ignored its own
+            # command timeout. Running workers are read-only and are not reused.
+            executor.shutdown(wait=False, cancel_futures=True)
 
-        hidden = getattr(self.native_provider, "_hidden_upgradable", set())
-        if hidden:
-            names = ", ".join(sorted(hidden))
-            provider_errors.append(
-                f"{self.native_provider.display_name.lower()} (sistem): {len(hidden)} arayüzsüz paket güncellenebilir → {names}"
-            )
+        self.last_provider_metrics = {
+            "timeout_seconds": timeout,
+            "sources": provider_metrics,
+            "timed_out": timed_out,
+            "completed": [source for source in provider_metrics if source not in timed_out],
+        }
+        return applications, provider_errors
+
+    def _build_snapshot(
+        self, applications: list[UnifiedApplication], provider_errors: list[str], include_hidden: bool = True
+    ) -> ApplicationSnapshot:
+        errors = list(provider_errors)
+        notices: list[str] = []
+        if include_hidden:
+            hidden = getattr(self.native_provider, "_hidden_upgradable", set())
+            if hidden:
+                names = ", ".join(sorted(hidden))
+                notices.append(
+                    f"{self.native_provider.display_name.lower()} (sistem): {len(hidden)} arayüzsüz paket güncellenebilir → {names}"
+                )
 
         merged = self._merge_applications(applications)
         self.applications = merged
-        issues = self.diagnose(merged)
-        return ApplicationSnapshot(applications=merged, issues=issues, provider_errors=provider_errors)
+        return ApplicationSnapshot(
+            applications=merged,
+            issues=self.diagnose(merged),
+            provider_errors=errors,
+            provider_notices=notices,
+        )
+
+    def load(self, provider_timeout_seconds: float | None = None) -> ApplicationSnapshot:
+        applications, provider_errors = self._collect_provider_results(
+            timeout_seconds=provider_timeout_seconds
+        )
+        return self._build_snapshot(applications, provider_errors)
+
+    def load_progressive(
+        self,
+        on_snapshot: Callable[[ApplicationSnapshot, bool], None],
+        provider_timeout_seconds: float | None = None,
+    ) -> ApplicationSnapshot:
+        """Load providers concurrently and publish each completed snapshot."""
+        applications: list[UnifiedApplication] = []
+        provider_errors: list[str] = []
+
+        def publish(current_applications: list[UnifiedApplication], current_errors: list[str]) -> None:
+            applications[:] = current_applications
+            provider_errors[:] = current_errors
+            on_snapshot(self._build_snapshot(applications, provider_errors, include_hidden=False), False)
+
+        collected_applications, collected_errors = self._collect_provider_results(
+            on_result=publish, timeout_seconds=provider_timeout_seconds
+        )
+        applications[:] = collected_applications
+        provider_errors[:] = collected_errors
+
+        snapshot = self._build_snapshot(applications, provider_errors)
+        on_snapshot(snapshot, True)
+        return snapshot
 
     def list_packages(self) -> list[PackageInfo]:
         return self.native_provider.list_all_packages()
@@ -312,20 +433,26 @@ class ApplicationRegistry:
             cmd = prov.remove_command(application.package_name, purge=purge)
             self.runner.run_privileged(cmd, timeout=1800)
             if purge:
-                if application.source == SOURCE_APT and self.runner.command_exists("apt-get"):
-                    self.runner.run_privileged(_apt_command("autoremove", "-y"), timeout=600)
                 self._remove_user_data_dirs(application.package_name)
             return
         if application.source == SOURCE_FLATPAK:
+            if purge:
+                _flatpak_purge_data_path(application.package_name)
             user_base = os.path.expanduser("~/.local/share/flatpak")
             scope = "--user" if application.install_path.startswith(user_base) else "--system"
             self.runner.run(
                 ["flatpak", "uninstall", scope, "-y", application.package_name], timeout=1800, check=True
             )
             if purge:
-                data_dir = os.path.expanduser(f"~/.var/app/{application.package_name}")
-                if os.path.isdir(data_dir):
-                    shutil.rmtree(data_dir, ignore_errors=True)
+                # Recheck after the provider operation, which can take minutes.
+                data_dir = _flatpak_purge_data_path(application.package_name)
+                try:
+                    if data_dir.exists():
+                        shutil.rmtree(data_dir)
+                except OSError as exc:
+                    raise BackendError(
+                        f"Flatpak was uninstalled, but its data could not be removed at {data_dir}: {exc}"
+                    ) from exc
                 self._remove_user_data_dirs(application.package_name.rsplit(".", 1)[-1].lower())
             return
         if application.source == SOURCE_SNAP:
@@ -353,13 +480,13 @@ class ApplicationRegistry:
         prov = self.get_native_provider()
         cmd = prov.remove_command(package_name, purge=purge)
         self.runner.run_privileged(cmd, timeout=1800)
-        if purge and prov.source == SOURCE_APT and self.runner.command_exists("apt-get"):
-            self.runner.run_privileged(_apt_command("autoremove", "-y"), timeout=600)
 
-    def flatpak_cleanup(self) -> None:
-        if self.runner.command_exists("flatpak"):
-            self.runner.run(["flatpak", "uninstall", "--user", "--unused", "-y"], timeout=300, check=False)
-            self.runner.run_privileged(["flatpak", "uninstall", "--system", "--unused", "-y"], timeout=300)
+    def flatpak_cleanup(self, plan=None) -> None:
+        if plan is None:
+            raise BackendError("Review a Flatpak cleanup plan before removing components.")
+        from sourcedock.backend.flatpak_cleanup import apply_cleanup
+
+        apply_cleanup(self.runner, plan)
 
     def flatpak_history(self, app_id: str) -> list[dict]:
         result = self.runner.run(["flatpak", "remote-info", "--log", "flathub", app_id], timeout=30)

@@ -1,0 +1,82 @@
+#!/usr/bin/python3
+"""Minimal polkit helper proof-of-concept for SourceDock.
+
+This is a reference implementation for review. It is deliberately *not* part of
+the shipped .deb and must not be enabled before the authorization boundary has
+an independent review and distribution tests. See docs/AUTHORIZATION.md and
+packaging/polkit/dev.aliafacan.sourcedock.policy.
+
+Design rules enforced here:
+
+* A fixed operation enum, never a free-form command line.
+* Package IDs and local paths are strictly validated.
+* Only the native package manager runs, through an argv list. No shell, no
+  ``sudo``, no privilege re-execution.
+* The local-package path must be a regular, non-symlink file inside the staging
+  root owned by SourceDock.
+
+The helper is intentionally small so its whole surface can be audited at once.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+
+ALLOWED_OPERATIONS = ("install-local", "remove-package")
+
+# The staging root shown to the user before an authenticated install.
+STAGING_ROOT = "/var/cache/sourcedock/"
+
+PACKAGE_ID = re.compile(r"^[a-z0-9][a-z0-9+._-]{0,199}$")
+APT_GET = "/usr/bin/apt-get"
+
+
+def _refuse(message: str) -> int:
+    print(f"refused: {message}", file=sys.stderr)
+    return 2
+
+
+def resolve_local_package(path: str) -> str:
+    """Return the real path of a staged package or raise ValueError."""
+    if not isinstance(path, str) or not path:
+        raise ValueError("empty local package path")
+    if os.path.islink(path):
+        raise ValueError("local package must not be a symbolic link")
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(STAGING_ROOT):
+        raise ValueError("local package is outside the managed staging root")
+    if not os.path.isfile(resolved):
+        raise ValueError("local package must be a regular file")
+    return resolved
+
+
+def build_command(operation: str, target: str) -> list[str]:
+    """Map a validated operation to a fixed argv list."""
+    if operation == "install-local":
+        return [APT_GET, "install", "-y", "--no-install-recommends", "--", resolve_local_package(target)]
+    if operation == "remove-package":
+        name = (target or "").strip()
+        if not PACKAGE_ID.match(name):
+            raise ValueError("invalid package id")
+        return [APT_GET, "purge", "-y", name]
+    raise ValueError(f"unsupported operation: {operation}")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 3:
+        return _refuse("usage: sourcedock-helper <operation> <target>")
+    operation, target = argv[1], argv[2]
+    if operation not in ALLOWED_OPERATIONS:
+        return _refuse("unsupported operation")
+    try:
+        command = build_command(operation, target)
+    except ValueError as exc:
+        return _refuse(str(exc))
+    os.execv(command[0], command)
+    return 127  # pragma: no cover - os.execv never returns on success
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

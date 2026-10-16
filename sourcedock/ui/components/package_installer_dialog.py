@@ -21,8 +21,8 @@ from sourcedock.backend.manager import ApplicationRegistry
 from sourcedock.backend.local_packages import launch_local_package
 from sourcedock.backend.mime_integration import get_icon_path
 from sourcedock.i18n import t, translate_backend_message
-from sourcedock.ui.components.common import set_status
-from sourcedock.backend.previews import preview_deb_install
+from sourcedock.ui.components.common import make_window_movable, prepare_dialog, set_status
+from sourcedock.backend.previews import preview_install_plan
 
 
 class PackageInstallerDialog(Gtk.Dialog):
@@ -42,7 +42,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         super().__init__(
             title=t(language, "package_installer_title"),
             transient_for=parent,
-            flags=Gtk.DialogFlags.MODAL if parent else 0,
+            modal=bool(parent),
+            destroy_with_parent=bool(parent),
         )
         self.info = info or LocalPackageInfo(file_path="", format="deb", name="")
         self.language = language
@@ -57,7 +58,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.is_installed = self.pkg_status.is_installed
         self.is_reinstall = self.pkg_status.status == "same_version"
 
-        self.set_default_size(520, 460)
+        prepare_dialog(self, width=520, height=460, independent=True)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_resizable(True)
         self.get_style_context().add_class("icon-settings-window")
@@ -120,58 +121,50 @@ class PackageInstallerDialog(Gtk.Dialog):
         name_badge_box.pack_start(title_lbl, False, False, 0)
 
         badge_lbl = Gtk.Label()
-        badge_text, badge_color = self._format_badge()
-        badge_lbl.set_markup(
-            f'<span foreground="white" background="{badge_color}" weight="bold">  {badge_text}  </span>'
-        )
+        badge_text = self._format_badge()
+        badge_lbl.set_text(f"  {badge_text}  ")
+        badge_lbl.get_style_context().add_class("package-badge")
         badge_lbl.set_valign(Gtk.Align.CENTER)
         name_badge_box.pack_start(badge_lbl, False, False, 0)
 
         status = self.pkg_status.status
         if status == "same_version":
             inst_badge = Gtk.Label()
-            inst_badge.set_markup(
-                f'<span foreground="#065f46" background="#a7f3d0" weight="bold">  ✓ {t(self.language, "package_installer_already_installed_badge")}  </span>'
-            )
+            inst_badge.set_text(f"  ✓ {t(self.language, 'package_installer_already_installed_badge')}  ")
+            inst_badge.get_style_context().add_class("package-status-success")
             inst_badge.set_valign(Gtk.Align.CENTER)
             name_badge_box.pack_start(inst_badge, False, False, 0)
         elif status == "upgradable":
             inst_badge = Gtk.Label()
-            inst_badge.set_markup(
-                f'<span foreground="#1e40af" background="#dbeafe" weight="bold">  ⬆ {t(self.language, "package_installer_update_badge")}  </span>'
-            )
+            inst_badge.set_text(f"  ↑ {t(self.language, 'package_installer_update_badge')}  ")
+            inst_badge.get_style_context().add_class("package-status-warning")
             inst_badge.set_valign(Gtk.Align.CENTER)
             name_badge_box.pack_start(inst_badge, False, False, 0)
         elif status == "downgrade":
             inst_badge = Gtk.Label()
-            inst_badge.set_markup(
-                f'<span foreground="#92400e" background="#fef3c7" weight="bold">  ⬇ {t(self.language, "package_installer_downgrade_badge")}  </span>'
-            )
+            inst_badge.set_text(f"  ↓ {t(self.language, 'package_installer_downgrade_badge')}  ")
+            inst_badge.get_style_context().add_class("package-status-danger")
             inst_badge.set_valign(Gtk.Align.CENTER)
             name_badge_box.pack_start(inst_badge, False, False, 0)
 
         # Sürüm Bilgisi Satırı
         if status == "upgradable" and self.pkg_status.installed_version:
             ver_lbl = Gtk.Label()
-            ver_lbl.set_markup(
-                f'<span foreground="#888888">v{GLib.markup_escape_text(self.pkg_status.installed_version)}</span> '
-                f'<span foreground="#2563eb" weight="bold">➔ v{GLib.markup_escape_text(self.info.version)}</span>'
-            )
+            ver_lbl.set_text(f"v{self.pkg_status.installed_version} → v{self.info.version}")
+            ver_lbl.get_style_context().add_class("package-version-change")
             ver_lbl.set_xalign(0)
             title_vbox.pack_start(ver_lbl, False, False, 0)
         elif status == "downgrade" and self.pkg_status.installed_version:
             ver_lbl = Gtk.Label()
-            ver_lbl.set_markup(
-                f'<span foreground="#888888">v{GLib.markup_escape_text(self.pkg_status.installed_version)}</span> '
-                f'<span foreground="#d97706" weight="bold">➔ v{GLib.markup_escape_text(self.info.version)}</span>'
-            )
+            ver_lbl.set_text(f"v{self.pkg_status.installed_version} → v{self.info.version}")
+            ver_lbl.get_style_context().add_class("package-version-change")
+            ver_lbl.get_style_context().add_class("downgrade")
             ver_lbl.set_xalign(0)
             title_vbox.pack_start(ver_lbl, False, False, 0)
         elif self.info.version:
             ver_lbl = Gtk.Label()
-            ver_lbl.set_markup(
-                f'<span foreground="#888888">v{GLib.markup_escape_text(self.info.version)}</span>'
-            )
+            ver_lbl.set_text(f"v{self.info.version}")
+            ver_lbl.get_style_context().add_class("dim-label")
             ver_lbl.set_xalign(0)
             title_vbox.pack_start(ver_lbl, False, False, 0)
 
@@ -192,7 +185,8 @@ class PackageInstallerDialog(Gtk.Dialog):
                 installed_version=self.pkg_status.installed_version,
                 new_version=self.info.version,
             )
-            hint_lbl.set_markup(f'<span foreground="#2563eb">ℹ {GLib.markup_escape_text(hint_msg)}</span>')
+            hint_lbl.set_text(f"ℹ {hint_msg}")
+            hint_lbl.get_style_context().add_class("package-version-change")
             hint_lbl.set_line_wrap(True)
             hint_lbl.set_xalign(0)
             hint_box.pack_start(hint_lbl, True, True, 0)
@@ -205,7 +199,8 @@ class PackageInstallerDialog(Gtk.Dialog):
                 "package_installer_downgrade_hint",
                 installed_version=self.pkg_status.installed_version,
             )
-            hint_lbl.set_markup(f'<span foreground="#d97706">⚠ {GLib.markup_escape_text(hint_msg)}</span>')
+            hint_lbl.set_text(f"⚠ {hint_msg}")
+            hint_lbl.get_style_context().add_class("warning-text")
             hint_lbl.set_line_wrap(True)
             hint_lbl.set_xalign(0)
             hint_box.pack_start(hint_lbl, True, True, 0)
@@ -213,9 +208,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         elif status == "same_version":
             hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             hint_lbl = Gtk.Label()
-            hint_lbl.set_markup(
-                f'<span foreground="#059669">ℹ {t(self.language, "package_installer_already_installed_hint")}</span>'
-            )
+            hint_lbl.set_text(f"ℹ {t(self.language, 'package_installer_already_installed_hint')}")
+            hint_lbl.get_style_context().add_class("success-text")
             hint_lbl.set_line_wrap(True)
             hint_lbl.set_xalign(0)
             hint_box.pack_start(hint_lbl, True, True, 0)
@@ -264,7 +258,7 @@ class PackageInstallerDialog(Gtk.Dialog):
                 Path(self.info.file_path).name,
             )
             row = self._add_grid_row(
-                self.grid, row, t(self.language, "details_install_path") + ":", self.info.file_path
+                self.grid, row, t(self.language, "package_installer_file_path") + ":", self.info.file_path
             )
         row = self._add_grid_row(
             self.grid,
@@ -290,7 +284,7 @@ class PackageInstallerDialog(Gtk.Dialog):
             dependency_text.set_line_wrap(True)
             dependency_text.set_max_width_chars(58)
             self.preview_container.pack_start(dependency_text, False, False, 0)
-        if self.info.format == "deb":
+        if self.info.format in ("deb", "rpm"):
             self.plan_button = Gtk.Button(label=t(self.language, "package_plan"))
             self.plan_button.connect("clicked", self._on_preview_plan)
             self.preview_container.pack_start(self.plan_button, False, False, 0)
@@ -535,9 +529,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.progress_bar.set_fraction(1.0)
         self.progress_status_label.set_text(t(self.language, "progress_done"))
 
-        self.result_badge_label.set_markup(
-            f'<span foreground="#059669" size="large" weight="bold">✓ {t(self.language, "package_installer_install_success")}</span>'
-        )
+        self.result_badge_label.set_text(f"✓ {t(self.language, 'package_installer_install_success')}")
+        self.result_badge_label.get_style_context().add_class("success-text")
         if deleted_file:
             self.result_detail_label.set_text(t(self.language, "package_installer_deleted_notice"))
             self.result_detail_label.show()
@@ -565,9 +558,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.progress_status_label.set_text(t(self.language, "progress_failed"))
 
         clean_err = translate_backend_message(self.language, error_msg)
-        self.result_badge_label.set_markup(
-            f'<span foreground="#dc2626" size="large" weight="bold">✗ {t(self.language, "package_installer_install_failed")}</span>'
-        )
+        self.result_badge_label.set_text(f"✗ {t(self.language, 'package_installer_install_failed')}")
+        self.result_badge_label.get_style_context().add_class("error-text")
         self.result_detail_label.set_text(clean_err)
         self.result_detail_label.show()
 
@@ -584,8 +576,10 @@ class PackageInstallerDialog(Gtk.Dialog):
         dialog = Gtk.Dialog(
             title=t(self.language, "password_title"),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            modal=True,
+            destroy_with_parent=True,
         )
+        make_window_movable(dialog)
         dialog.get_style_context().add_class("icon-settings-window")
         dialog.add_button(t(self.language, "password_cancel"), Gtk.ResponseType.CANCEL)
         dialog.add_button(t(self.language, "password_continue"), Gtk.ResponseType.OK)
@@ -599,6 +593,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         content.set_margin_bottom(14)
 
         msg = t(self.language, "applications_password_retry" if failed else "applications_password_message")
+        msg = f"{msg}\n\n{t(self.language, 'password_operation', operation=self.info.name)}"
         lbl = Gtk.Label(label=msg)
         lbl.set_line_wrap(True)
         lbl.set_xalign(0)
@@ -651,7 +646,7 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         def worker():
             try:
-                text = preview_deb_install(self.registry.runner, self.info.file_path)
+                text = preview_install_plan(self.registry.runner, self.info)
             except Exception as exc:
                 text = str(exc)
             GLib.idle_add(self._show_preview_plan, text)
@@ -666,6 +661,7 @@ class PackageInstallerDialog(Gtk.Dialog):
             title=t(self.language, "package_plan"), transient_for=self, modal=True, destroy_with_parent=True
         )
         dialog.set_default_size(620, 400)
+        make_window_movable(dialog)
         dialog.add_button(t(self.language, "dialog_close"), Gtk.ResponseType.CLOSE)
         view = Gtk.TextView()
         view.set_editable(False)
@@ -729,16 +725,16 @@ class PackageInstallerDialog(Gtk.Dialog):
         img.set_pixel_size(48)
         return img
 
-    def _format_badge(self) -> tuple[str, str]:
+    def _format_badge(self) -> str:
         badges = {
-            "deb": ("DEB", "#2b78e4"),
-            "appimage": ("AppImage", "#7b42bc"),
-            "archive": ("PORTABLE", "#d97706"),
-            "flatpakref": ("Flatpak", "#329932"),
-            "flatpak": ("Flatpak", "#329932"),
-            "rpm": ("RPM", "#c2410c"),
+            "deb": "DEB",
+            "appimage": "AppImage",
+            "archive": "PORTABLE",
+            "flatpakref": "Flatpak",
+            "flatpak": "Flatpak",
+            "rpm": "RPM",
         }
-        return badges.get(self.info.format, (self.info.format.upper(), "#6b7280"))
+        return badges.get(self.info.format, self.info.format.upper())
 
     def _format_file_size(self, size_bytes: int) -> str:
         if size_bytes >= 1024 * 1024 * 1024:

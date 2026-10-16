@@ -135,7 +135,8 @@ Icon=software-update-available
         pass
 
     # İkonu hicolor ikon dizinlerine de kopyala (sistem menüleri için)
-    _install_system_icons()
+    if custom_dest is None:
+        _install_system_icons()
 
     # Masaüstü veritabanını yenile
     if shutil.which("update-desktop-database"):

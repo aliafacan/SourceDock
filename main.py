@@ -196,7 +196,8 @@ def main() -> None:
     if "--uninstall" in sys.argv:
         from gi.repository import Gdk
         from sourcedock.backend.manager import ApplicationRegistry
-        from sourcedock.i18n import t
+        from sourcedock.core.models import UnifiedApplication
+        from sourcedock.ui.components.app_details_dialog import InstalledAppDetailsDialog
 
         prefs = prefs_store.load()
         lang = prefs.language
@@ -223,39 +224,34 @@ def main() -> None:
         )
 
         app = registry.find_application(target_name)
-        display_name = app.name if app else target_name.replace(".desktop", "").capitalize()
+        removal_operation = None
+        if target_name.lower() in (
+            APP_COMMAND, APP_DESKTOP_ID, LEGACY_APP_COMMAND, LEGACY_APP_DESKTOP_ID,
+        ):
+            if app is None:
+                app = UnifiedApplication(
+                    id=f"{registry.native_provider.source}:{APP_PACKAGE_NAME}",
+                    name=APP_TITLE, source=registry.native_provider.source, package_name=APP_PACKAGE_NAME,
+                )
 
-        confirm = Gtk.MessageDialog(
-            title=APP_TITLE,
-            type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.NONE,
-            text=t(lang, "details_remove_confirm_title"),
-        )
-        confirm.format_secondary_text(t(lang, "details_remove_confirm_text", name=display_name))
-        confirm.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
-        del_btn = confirm.add_button(t(lang, "details_btn_remove"), Gtk.ResponseType.OK)
-        del_btn.get_style_context().add_class("destructive-action")
-        confirm.show_all()
-        resp = confirm.run()
-        confirm.destroy()
-
-        if resp == Gtk.ResponseType.OK:
-            if target_name.lower() in (
-                APP_COMMAND,
-                APP_DESKTOP_ID,
-                LEGACY_APP_COMMAND,
-                LEGACY_APP_DESKTOP_ID,
-            ):
+            def remove_self():
                 uninstall_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.sh")
                 if os.path.exists(uninstall_script):
-                    registry.runner.run_privileged(["bash", uninstall_script])
+                    registry.runner.run_privileged(["bash", uninstall_script], timeout=1800)
                 else:
-                    registry.runner.run_privileged(["apt-get", "remove", "-y", APP_PACKAGE_NAME])
-            elif app:
-                registry.remove(app)
-            else:
-                print(f"Installed application could not be identified: {target_name}", file=sys.stderr)
-                sys.exit(1)
+                    registry.remove(app)
+
+            removal_operation = remove_self
+        if app is None:
+            print(f"Installed application could not be identified: {target_name}", file=sys.stderr)
+            sys.exit(1)
+        dialog = InstalledAppDetailsDialog(
+            application=app, registry=registry, language=lang, parent=None,
+            standalone=True, removal_operation=removal_operation,
+        )
+        dialog.show_all()
+        GLib.idle_add(dialog._on_remove_clicked, None)
+        Gtk.main()
         sys.exit(0)
 
     # Dosya yöneticisinden çift tıklanarak veya terminalden paket dosyası verildiyse aç

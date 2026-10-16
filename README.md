@@ -98,10 +98,10 @@ Tam durum tablosu: [Compatibility](docs/COMPATIBILITY.md).
 ## Katkı / Contribute
 
 ```bash
-/usr/bin/python3 -m unittest discover -s tests -v
+/usr/bin/python3 tools/run_tests.py
 ```
 
-CI runs GUI tests under Xvfb. Development lint: install `requirements-dev.txt` into a virtual environment, then run `ruff check .`.
+CI runs guarded GUI tests under Xvfb + Openbox. See [test layers](tests/README.md) for full GTK and isolated X11 commands; a display-free run can skip GUI tests. Development lint: install `requirements-dev.txt` into a virtual environment, then run `ruff check .`.
 
 [Katkı Rehberi](CONTRIBUTING.md) · [Mimari](docs/ARCHITECTURE.md) ·
 [Tasarım](docs/UI_DESIGN.md) · [Uygulama Raporu](docs/ROADMAP_IMPLEMENTATION.md) ·

@@ -11,7 +11,7 @@ from gi.repository import Gtk  # pyright: ignore[reportMissingModuleSource]
 from sourcedock.i18n import t
 from sourcedock.preferences import AppPreferences
 from sourcedock.backend.mime_integration import is_default_package_handler, set_as_default_package_handler
-from sourcedock.ui.components.common import set_status
+from sourcedock.ui.components.common import prepare_dialog, set_status
 
 
 class SettingsViewMixin:
@@ -21,11 +21,13 @@ class SettingsViewMixin:
         dialog = Gtk.Dialog(
             title=t(self.preferences.language, "settings_title"),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL,
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
+        prepare_dialog(dialog, width=720, height=560)
         dialog.add_button(t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(t(self.preferences.language, "settings_save"), Gtk.ResponseType.OK)
+        save_button = dialog.add_button(t(self.preferences.language, "settings_save"), Gtk.ResponseType.OK)
+        save_button.get_style_context().add_class("suggested-action")
         dialog.set_default_response(Gtk.ResponseType.OK)
 
         content = dialog.get_content_area()
@@ -40,16 +42,20 @@ class SettingsViewMixin:
         subtitle.set_line_wrap(True)
         content.pack_start(subtitle, False, False, 0)
 
-        form = Gtk.Grid(column_spacing=12, row_spacing=12)
+        form = Gtk.Grid(column_spacing=24, row_spacing=12)
+        form.set_column_homogeneous(False)
         content.pack_start(form, False, False, 0)
 
         lang = self.preferences.language
         language_label = Gtk.Label(label=t(lang, "language"))
         language_label.set_xalign(0)
+        language_label.set_size_request(190, -1)
         theme_label = Gtk.Label(label=t(lang, "theme"))
         theme_label.set_xalign(0)
+        theme_label.set_size_request(190, -1)
         scale_label = Gtk.Label(label=t(lang, "ui_scale"))
         scale_label.set_xalign(0)
+        scale_label.set_size_request(190, -1)
 
         language_combo = Gtk.ComboBoxText()
         language_combo.set_tooltip_text(t(lang, "tooltip_settings_language"))
@@ -79,6 +85,7 @@ class SettingsViewMixin:
         form.attach(scale_label, 0, 2, 1, 1)
         form.attach(scale_combo, 1, 2, 1, 1)
         source_label = Gtk.Label(label=t(lang, "settings_preferred_source"), xalign=0)
+        source_label.set_size_request(190, -1)
         source_combo = Gtk.ComboBoxText()
         for source in ("all", self.store_registry.native_manager, "flatpak", "snap"):
             source_combo.append(source, t(lang, f"store_source_{source}"))
@@ -88,9 +95,20 @@ class SettingsViewMixin:
         updates_check = Gtk.CheckButton(label=t(lang, "settings_check_updates_start"))
         updates_check.set_active(self.preferences.check_updates_on_start)
         form.attach(updates_check, 0, 4, 2, 1)
+
+        notifications_check = Gtk.CheckButton(label=t(lang, "settings_notifications"))
+        notifications_check.set_tooltip_text(t(lang, "settings_notifications_desc"))
+        notifications_check.set_active(getattr(self.preferences, "notifications_enabled", True))
+        form.attach(notifications_check, 0, 5, 2, 1)
+
+        detailed_table_check = Gtk.CheckButton(label=t(lang, "settings_detailed_table"))
+        detailed_table_check.set_tooltip_text(t(lang, "settings_detailed_table_desc"))
+        detailed_table_check.set_active(getattr(self.preferences, "detailed_table_default", True))
+        form.attach(detailed_table_check, 0, 6, 2, 1)
+
         sources_button = Gtk.Button(label=t(lang, "settings_sources"))
         sources_button.connect("clicked", self.on_open_sources)
-        form.attach(sources_button, 0, 5, 2, 1)
+        form.attach(sources_button, 0, 7, 2, 1)
 
         # Sistem Entegrasyonu & Varsayılan Paket Yükleyici
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
@@ -122,9 +140,8 @@ class SettingsViewMixin:
         is_def = is_default_package_handler()
         btn_label = t(lang, "settings_already_default_btn") if is_def else t(lang, "settings_set_default_btn")
         set_default_btn = Gtk.Button(label=btn_label)
+        set_default_btn.get_style_context().add_class("secondary-action")
         set_default_btn.set_tooltip_text(t(lang, "tooltip_settings_set_default"))
-        if not is_def:
-            set_default_btn.get_style_context().add_class("suggested-action")
 
         def on_set_default_clicked(_btn):
             ok, msg = set_as_default_package_handler()
@@ -151,11 +168,18 @@ class SettingsViewMixin:
                 scale=new_scale,
                 preferred_source=source_combo.get_active_id() or "all",
                 check_updates_on_start=updates_check.get_active(),
+                notifications_enabled=notifications_check.get_active(),
+                detailed_table_default=detailed_table_check.get_active(),
             )
             self.preferences_store.save(self.preferences)
             self._apply_theme()
             self._refresh_texts()
+            if hasattr(self, "applications_table_toggle") and self.applications_table_toggle is not None:
+                self.applications_table_toggle.set_active(self.preferences.detailed_table_default)
+            if hasattr(self, "show_toast"):
+                self.show_toast(t(new_lang, "settings_saved"), level="success")
             button = self.store_filter_buttons.get(self.preferences.preferred_source)
             if button:
                 button.set_active(True)
         dialog.destroy()
+

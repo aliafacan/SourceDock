@@ -5,19 +5,25 @@ import threading
 
 import gi
 
+gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
-from gi.repository import GdkPixbuf, GLib, GObject, Gtk, Pango
+from gi.repository import Gdk, GdkPixbuf, GLib, GObject, Gtk, Pango
 
 from sourcedock.backend.updates import build_update_catalog
+from sourcedock.core.models import SOURCE_APT
 from sourcedock.core.errors import AuthRequiredError, BackendError
-from sourcedock.i18n import t
-from sourcedock.ui.components.common import ContentState, icon_button, set_status, style_tree_view
+from sourcedock.i18n import source_name, t, translate_provider_error, translate_provider_notice
+from sourcedock.ui.components.dialogs import show_firmware_confirmation
+from sourcedock.theme import PALETTES, resolve_theme
+from sourcedock.ui.components.common import ContentState, icon_button, style_tree_view
 
 
 class UpdatesViewMixin:
     def _build_updates_page(self, container):
         self.update_items = []
         self.updates_loading = False
+        self._updates_status_messages = []
+        self._updates_status_error = None
         intro = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.updates_page_title = Gtk.Label(xalign=0)
         self.updates_page_title.get_style_context().add_class("page-title")
@@ -75,7 +81,14 @@ class UpdatesViewMixin:
         )
         self.updates_tree = Gtk.TreeView(model=self.updates_model)
         style_tree_view(self.updates_tree)
+        self.updates_tree.set_has_tooltip(True)
+        self.updates_tree.connect("query-tooltip", self._on_updates_query_tooltip)
+        self.updates_tree.connect("key-press-event", self._on_updates_key_press)
+        self.updates_tree.connect("button-press-event", self._on_updates_button_press)
+        self.updates_tree.connect("popup-menu", self._on_updates_popup_menu)
         toggle = Gtk.CellRendererToggle()
+        toggle.set_property("radio", False)
+        self.updates_toggle_renderer = toggle
         toggle.connect("toggled", self._on_update_toggled)
         column = Gtk.TreeViewColumn("", toggle, active=0)
         column.set_cell_data_func(
@@ -114,6 +127,22 @@ class UpdatesViewMixin:
                 column = Gtk.TreeViewColumn(t(self.preferences.language, key), renderer, text=index)
             column.set_expand(index == 1)
             column.set_resizable(True)
+            if index == 2:
+                column.set_min_width(96)
+                column.set_fixed_width(112)
+            elif index == 3:
+                column.set_min_width(128)
+                column.set_fixed_width(145)
+            elif index == 4:
+                column.set_min_width(128)
+                column.set_fixed_width(145)
+            if index in (3, 4):
+                header_label = Gtk.Label(label=t(self.preferences.language, key), xalign=0)
+                header_label.set_ellipsize(Pango.EllipsizeMode.END)
+                header_label.set_max_width_chars(12)
+                header_label.set_tooltip_text(t(self.preferences.language, key))
+                column.set_widget(header_label)
+                header_label.show()
             self.updates_tree.append_column(column)
             self.updates_columns.append((column, key))
             if index == 1:
@@ -126,9 +155,32 @@ class UpdatesViewMixin:
         scroller.add(self.updates_tree)
         self.updates_state = ContentState(scroller)
         container.pack_start(self.updates_state, True, True, 0)
+        self.updates_status_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.updates_status_panel.get_style_context().add_class("updates-status-panel")
+        self.updates_status_panel.set_no_show_all(True)
+        self.updates_status_panel.hide()
+        status_row = Gtk.Box(spacing=8)
+        self.updates_status_row = status_row
+        self.updates_status_icon = Gtk.Image.new_from_icon_name(
+            "dialog-information-symbolic", Gtk.IconSize.BUTTON
+        )
+        status_row.pack_start(self.updates_status_icon, False, False, 0)
         self.updates_status = Gtk.Label(xalign=0)
-        self.updates_status.set_line_wrap(True)
-        container.pack_start(self.updates_status, False, False, 0)
+        self.updates_status.set_ellipsize(Pango.EllipsizeMode.END)
+        self.updates_status.set_max_width_chars(140)
+        status_row.pack_start(self.updates_status, True, True, 0)
+        self.updates_status_details_btn = Gtk.Button()
+        self.updates_status_details_btn.connect("clicked", self._on_updates_status_details_clicked)
+        status_row.pack_end(self.updates_status_details_btn, False, False, 0)
+        self.updates_status_panel.pack_start(status_row, False, False, 0)
+        self.updates_status_details = Gtk.Label(xalign=0)
+        self.updates_status_details.set_line_wrap(True)
+        self.updates_status_details.set_selectable(True)
+        self.updates_status_details.get_style_context().add_class("dim-label")
+        self.updates_status_details.set_margin_start(28)
+        self.updates_status_panel.pack_start(self.updates_status_details, False, False, 0)
+        self.updates_status_details.hide()
+        container.pack_start(self.updates_status_panel, False, False, 0)
         bar = Gtk.Box(spacing=8)
         self.updates_select_all_btn = Gtk.CheckButton()
         self.updates_select_all_btn.connect("toggled", self._on_updates_select_all)
@@ -151,21 +203,52 @@ class UpdatesViewMixin:
         icon_button(self.updates_refresh_btn, "view-refresh-symbolic", t(lang, "updates_check"))
         self.updates_select_all_btn.set_label(t(lang, "updates_select_all"))
         self.updates_apply_btn.set_label(t(lang, "updates_apply"))
+        self._set_updates_status_details_button()
         self.updates_summary.set_text(t(lang, "updates_count", count=len(self.update_items)))
         for title, _count, title_key in self.updates_stat_labels.values():
             title.set_text(t(lang, title_key))
         for column, key in self.updates_columns:
             column.set_title(t(lang, key))
+            if column.get_widget() is not None:
+                column.get_widget().set_text(t(lang, key))
+                column.get_widget().set_tooltip_text(t(lang, key))
         self._refresh_selection_summary()
+        if self._updates_status_messages or self._updates_status_error:
+            expanded = self.updates_status_details.get_visible()
+            self._render_updates_status(self._updates_status_messages, self._updates_status_error)
+            self.updates_status_details.set_visible(expanded)
+            self._set_updates_status_details_button()
 
     def _update_name_cell_data(self, _column, cell, model, iterator, _data):
         is_group = model.get_value(iterator, 5) is None
         cell.set_property("weight", 700 if is_group else 400)
-        cell.set_property("foreground-set", True)
-        cell.set_property("foreground", "#f3ce45" if is_group else "#f0f2f3")
+        if is_group:
+            palette = PALETTES[resolve_theme(self.preferences.theme)]
+            cell.set_property("foreground-set", True)
+            cell.set_property("foreground", palette["warning"])
+        else:
+            cell.set_property("foreground-set", False)
 
     def _update_detail_cell_data(self, _column, cell, model, iterator, _data):
         cell.set_property("visible", model.get_value(iterator, 5) is not None)
+        cell.set_property("foreground-set", False)
+
+    def _on_updates_query_tooltip(self, treeview, x, y, _keyboard_mode, tooltip):
+        hit = treeview.get_path_at_pos(int(x), int(y))
+        if not hit:
+            return False
+        path, column, _cell_x, _cell_y = hit
+        if not self.updates_columns or column is not self.updates_columns[-1][0]:
+            return False
+        iterator = self.updates_model.get_iter(path)
+        if iterator is None:
+            return False
+        item = self.updates_model.get_value(iterator, 5)
+        if item is None or not item.new_version:
+            tooltip.set_text(t(self.preferences.language, "updates_version_unavailable"))
+            treeview.set_tooltip_cell(tooltip, path, column, None)
+            return True
+        return False
 
     def _refresh_selection_summary(self):
         if not hasattr(self, "updates_selection_summary"):
@@ -174,6 +257,86 @@ class UpdatesViewMixin:
         self.updates_selection_summary.set_text(
             t(self.preferences.language, "updates_selected_count", count=selected)
         )
+        selectable = sum(item.application.update_supported for item in self.update_items)
+        self._syncing_updates_selection = True
+        try:
+            self.updates_select_all_btn.set_active(bool(selectable and selected == selectable))
+            self.updates_select_all_btn.set_inconsistent(0 < selected < selectable)
+            self.updates_select_all_btn.set_sensitive(bool(selectable))
+        finally:
+            self._syncing_updates_selection = False
+
+    def _set_updates_status_details_button(self):
+        if not hasattr(self, "updates_status_details_btn"):
+            return
+        expanded = self.updates_status_details.get_visible()
+        icon_button(
+            self.updates_status_details_btn,
+            "go-up-symbolic" if expanded else "view-more-symbolic",
+            t(
+                self.preferences.language,
+                "updates_status_details_hide" if expanded else "updates_status_details_show",
+            ),
+        )
+        self.updates_status_details_btn.set_visible(bool(self.updates_status_details.get_text()))
+
+    def _on_updates_status_details_clicked(self, _button):
+        self.updates_status_details.set_visible(not self.updates_status_details.get_visible())
+        self._set_updates_status_details_button()
+
+    def _format_updates_status(self, provider_errors, error=None):
+        """Keep the page compact while retaining full provider diagnostics."""
+        messages = ([error] if error else []) + list(provider_errors or [])
+        if not messages:
+            return "", "", False
+
+        summaries = []
+        details = []
+        provider_issue_count = 0
+        for message in dict.fromkeys(messages):
+            notice = translate_provider_notice(self.preferences.language, message, compact=True)
+            if notice != message:
+                summaries.append(notice)
+            else:
+                provider_issue_count += 1
+            details.append(translate_provider_error(
+                self.preferences.language, translate_provider_notice(self.preferences.language, message),
+            ))
+
+        if provider_issue_count:
+            summary = t(
+                self.preferences.language,
+                "updates_status_source_warning" if provider_issue_count == 1 else "updates_status_source_warnings",
+                count=provider_issue_count,
+            )
+            return summary, "\n".join(details), True
+
+        return " · ".join(summaries), "\n".join(details), False
+
+    def _render_updates_status(self, provider_errors, error=None):
+        self._updates_status_messages = list(provider_errors or [])
+        self._updates_status_error = error
+        summary, details, is_error = self._format_updates_status(provider_errors, error)
+        self.updates_status_details.set_text(details)
+        self.updates_status_details.hide()
+        self.updates_status_panel.get_style_context().remove_class("updates-status-error")
+        self.updates_status_panel.get_style_context().remove_class("updates-status-notice")
+        if not summary:
+            self.updates_status_panel.hide()
+            self._set_updates_status_details_button()
+            return
+        self.updates_status.set_text(summary)
+        self.updates_status_row.show_all()
+        self.updates_status_panel.get_style_context().add_class(
+            "updates-status-error" if is_error else "updates-status-notice"
+        )
+        self.updates_status_icon.set_from_icon_name(
+            "dialog-warning-symbolic" if is_error else "dialog-information-symbolic",
+            Gtk.IconSize.BUTTON,
+        )
+        self.updates_status_panel.show()
+        self.updates_status_details.hide()
+        self._set_updates_status_details_button()
 
     def _reload_updates_async(self):
         if self.updates_loading or self.applications_busy:
@@ -189,7 +352,10 @@ class UpdatesViewMixin:
                 items = build_update_catalog(
                     snapshot.applications, packages, self.application_registry.native_provider.source
                 )
-                GLib.idle_add(self._finish_updates_load, items, snapshot.provider_errors, None)
+                GLib.idle_add(
+                    self._finish_updates_load, items,
+                    snapshot.provider_errors + snapshot.provider_notices, None,
+                )
             except Exception as exc:
                 GLib.idle_add(self._finish_updates_load, [], [], str(exc))
 
@@ -218,14 +384,15 @@ class UpdatesViewMixin:
                     ],
                 )
             app = item.application
+            display_new_version = item.new_version or t(lang, "version_no_update")
             self.updates_model.append(
                 groups[item.group],
                 [
                     False,
                     app.name,
-                    app.source.upper(),
+                    source_name(lang, app.source),
                     app.version or "-",
-                    item.new_version or "-",
+                    display_new_version,
                     item,
                     self._get_update_pixbuf(app),
                 ],
@@ -236,18 +403,34 @@ class UpdatesViewMixin:
         for group, (_title, count_label, _title_key) in self.updates_stat_labels.items():
             count_label.set_text(str(sum(item.group == group for item in items)))
         if error:
-            self.updates_state.show_state(t(lang, "updates_error"), error, error=True)
+            self.updates_state.show_state(
+                t(lang, "updates_error"),
+                error,
+                error=True,
+                retry_callback=self._reload_updates_async,
+                retry_label=t(lang, "retry_action"),
+            )
         elif items:
             self.updates_state.show_content()
+            if getattr(self.preferences, "notifications_enabled", True):
+                try:
+                    from sourcedock.core.notifications import send_desktop_notification
+
+                    runner = getattr(self.application_registry, "runner", None)
+                    send_desktop_notification(
+                        t(lang, "updates_notification_title"),
+                        t(lang, "updates_notification_body", count=len(items)),
+                        runner=runner,
+                    )
+                except Exception:
+                    pass
         else:
+
             self.updates_state.show_state(t(lang, "updates_empty"), t(lang, "updates_empty_body"))
-        message = "\n".join(provider_errors)
         reboot_required = Path("/var/run/reboot-required").exists()
         self.updates_reboot_banner.set_text(t(lang, "updates_reboot_required") if reboot_required else "")
         self.updates_reboot_banner.set_visible(reboot_required)
-        if reboot_required:
-            message = t(lang, "updates_reboot_required") + ("\n" + message if message else "")
-        set_status(self.updates_status, message, bool(error or provider_errors))
+        self._render_updates_status(provider_errors, error)
         self._refresh_updates_texts()
         self._refresh_update_count()
         return False
@@ -269,6 +452,40 @@ class UpdatesViewMixin:
         self.updates_apply_btn.set_sensitive(bool(self._selected_updates()))
         self._refresh_selection_summary()
 
+    def _on_updates_key_press(self, tree, event):
+        if event.keyval not in (Gdk.KEY_space, Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            return Gdk.EVENT_PROPAGATE
+        _model, paths = tree.get_selection().get_selected_rows()
+        if not paths:
+            return Gdk.EVENT_PROPAGATE
+        self._on_update_toggled(None, paths[0].to_string())
+        return Gdk.EVENT_STOP
+
+    def _on_updates_button_press(self, tree, event):
+        if event.button != 3:
+            return False
+        hit = tree.get_path_at_pos(int(event.x), int(event.y))
+        if not hit:
+            return False
+        tree.get_selection().select_path(hit[0])
+        return self._on_updates_popup_menu(tree, event)
+
+    def _on_updates_popup_menu(self, tree, event=None):
+        model, iterator = tree.get_selection().get_selected()
+        item = model.get_value(iterator, 5) if iterator is not None else None
+        if item is None or item.application.source != SOURCE_APT:
+            return False
+        menu = Gtk.Menu()
+        changelog = Gtk.MenuItem(label=t(self.preferences.language, "changelog_menu"))
+        changelog.connect("activate", lambda _item: self._on_package_changelog(item.application.package_name))
+        menu.append(changelog)
+        menu.show_all()
+        if event is None:
+            menu.popup_at_widget(tree, Gdk.Gravity.CENTER, Gdk.Gravity.CENTER, None)
+        else:
+            menu.popup_at_pointer(event)
+        return True
+
     def _selected_updates(self):
         selected = []
         self.updates_model.foreach(
@@ -281,6 +498,8 @@ class UpdatesViewMixin:
         return selected
 
     def _on_updates_select_all(self, button):
+        if getattr(self, "_syncing_updates_selection", False):
+            return
         active = button.get_active()
 
         def select(model, _path, iterator, _data=None):
@@ -327,15 +546,4 @@ class UpdatesViewMixin:
         )
 
     def _confirm_firmware_update(self):
-        lang = self.preferences.language
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.OK_CANCEL,
-            text=t(lang, "firmware_confirm_title"),
-        )
-        dialog.format_secondary_text(t(lang, "firmware_confirm_body"))
-        response = dialog.run()
-        dialog.destroy()
-        return response == Gtk.ResponseType.OK
+        return show_firmware_confirmation(self, self.preferences.language)

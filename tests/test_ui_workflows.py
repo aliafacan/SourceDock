@@ -16,6 +16,7 @@ from sourcedock.core.models import (
     SOURCE_FIRMWARE,
     SOURCE_FLATPAK,
     SOURCE_SNAP,
+    ApplicationSnapshot,
     LocalPackageInfo,
     PackageInfo,
     StoreResult,
@@ -24,6 +25,7 @@ from sourcedock.core.models import (
 from sourcedock.i18n import TRANSLATIONS, t
 from sourcedock.preferences import AppPreferences, PreferencesStore
 from sourcedock.ui.components.dialogs import AppDetailDialog
+from sourcedock.ui.components.common import ScreenshotGallery
 from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
 from sourcedock.ui.window import MainWindow
 
@@ -63,10 +65,81 @@ class TestUiWorkflows(unittest.TestCase):
             self.assertEqual(self.window.pages.get_current_page(), page)
         self.registry.runner.run_privileged.assert_not_called()
 
+    def test_logo_toggles_sidebar_on_wide_window(self):
+        self.window.resize(1366, 707)
+        self.window._on_shell_size_allocate(self.window, self.window.get_allocation())
+        self.assertFalse(self.window._compact_sidebar)
+        self.window.sidebar_toggle.clicked()
+        self.assertTrue(self.window._compact_sidebar)
+        self.assertFalse(self.window.brand_label.get_visible())
+        self.window.sidebar_toggle.clicked()
+        self.assertFalse(self.window._compact_sidebar)
+        self.assertTrue(self.window.brand_label.get_visible())
+
     def test_global_search_filters_the_active_installed_view(self):
         self.window.header_search.set_text("example")
         self.window._on_global_search_changed(self.window.header_search)
         self.assertEqual(self.window.applications_search_entry.get_text(), "example")
+
+    def test_global_store_search_preserves_header_cursor(self):
+        self.window.pages.set_current_page(1)
+        self.window._refresh_shell_page(1)
+        self.window.header_search.set_text("fire")
+        self.window.header_search.set_position(2)
+        self.window._on_global_search_changed(self.window.header_search)
+        self.assertEqual(self.window.header_search.get_position(), 2)
+        self.assertEqual(self.window.store_search_entry.get_text(), "fire")
+
+    def test_discover_query_keeps_visible_header_in_sync(self):
+        self.window.pages.set_current_page(1)
+        self.window.store_search_entry.set_text("firefox")
+        self.window._on_store_search_changed(self.window.store_search_entry)
+        self.assertEqual(self.window.header_search.get_text(), "firefox")
+        self.window.store_search_entry.set_text("")
+        self.window._on_store_search_changed(self.window.store_search_entry)
+        self.assertEqual(self.window.header_search.get_text(), "")
+
+    def test_discover_typing_waits_for_enter_without_debounce(self):
+        self.window.pages.set_current_page(1)
+        self.window.store_search_entry.set_text("firefox")
+        self.assertEqual(self.window._store_search_timeout_id, 0)
+        self.store.search.assert_not_called()
+        with patch.object(self.window, "on_store_search") as submit:
+            self.window._on_global_search_activate(self.window.header_search)
+        submit.assert_called_once()
+
+    def test_page_search_state_is_scoped_and_restored(self):
+        self.window.pages.set_current_page(1)
+        self.window.store_search_entry.set_text("firefox")
+        self.window._on_store_search_changed(self.window.store_search_entry)
+        self.assertEqual(self.window.header_search.get_text(), "firefox")
+
+        self.window.pages.set_current_page(0)
+        self.assertEqual(self.window.header_search.get_text(), "")
+        self.assertEqual(self.window.applications_search_entry.get_text(), "")
+        self.assertTrue(self.window.header_search.get_sensitive())
+
+        self.window.pages.set_current_page(4)
+        self.assertEqual(self.window.header_search.get_text(), "")
+        self.assertFalse(self.window.header_search.get_sensitive())
+
+        self.window.pages.set_current_page(1)
+        self.assertEqual(self.window.header_search.get_text(), "firefox")
+        self.assertTrue(self.window.header_search.get_sensitive())
+
+    def test_installed_empty_search_explains_query_and_can_be_cleared(self):
+        self.window.applications = [
+            UnifiedApplication("apt:editor", "Editor", SOURCE_APT, package_name="editor")
+        ]
+        self.window.applications_loading = False
+        self.window.header_search.set_text("firefox")
+        self.window._on_global_search_changed(self.window.header_search)
+        self.assertIn('"firefox"', self.window.installed_state.title.get_text())
+        self.assertTrue(self.window.installed_state.retry_button.get_visible())
+        self.window.installed_state.retry_button.clicked()
+        self.assertEqual(self.window.applications_search_entry.get_text(), "")
+        self.assertEqual(self.window.header_search.get_text(), "")
+        self.assertEqual(self.window.applications_summary_label.get_text(), "1/1 uygulama gösteriliyor")
 
     def test_live_language_switch_updates_navigation_and_categories(self):
         self.window.preferences = AppPreferences("en", "light")
@@ -91,9 +164,51 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertEqual(groups[0][0].app_id, "editor")
         self.assertEqual({groups[0][0].source, groups[0][1][0].source}, {SOURCE_APT, SOURCE_SNAP})
 
+    def test_firefox_variants_group_but_kiosk_stays_separate(self):
+        apt = StoreResult("Firefox", "firefox", "Browser", SOURCE_APT, "1", "apt")
+        flatpak = StoreResult("Firefox", "org.mozilla.firefox", "Browser", SOURCE_FLATPAK, "2", "flathub")
+        kiosk = StoreResult("Firefox Kiosk", "firefox-kiosk", "Kiosk browser", SOURCE_SNAP, "3", "snap-store")
+        groups = self.window._group_store_results([apt, flatpak, kiosk])
+        self.assertEqual(len(groups), 2)
+        firefox = next(group for group in groups if group[0].name == "Firefox")
+        self.assertEqual({firefox[0].source, firefox[1][0].source}, {SOURCE_APT, SOURCE_FLATPAK})
+
+    def test_store_ranking_prioritizes_exact_prefix_then_metadata(self):
+        results = [
+            StoreResult("Graphics Editor", "graphics-editor", "", SOURCE_APT, "1", "apt", category="Graphics"),
+            StoreResult("Editor Suite", "editor-suite", "", SOURCE_APT, "1", "apt"),
+            StoreResult("Editor", "editor", "", SOURCE_APT, "1", "apt"),
+        ]
+        ranked = self.window._group_store_results(results, query="editor")
+        self.assertEqual([group[0].app_id for group in ranked], ["editor", "editor-suite", "graphics-editor"])
+
+    def test_store_ranking_uses_exact_match_from_grouped_variant(self):
+        primary = StoreResult(
+            "Mozilla Browser", "browser", "", SOURCE_APT, "1", "apt", identity="org.mozilla.firefox"
+        )
+        exact_variant = StoreResult(
+            "Firefox", "org.mozilla.firefox", "", SOURCE_FLATPAK, "2", "flathub", identity="org.mozilla.firefox"
+        )
+        unrelated = StoreResult("Firefox Tools", "firefox-tools", "", SOURCE_APT, "1", "apt")
+        groups = self.window._group_store_results([unrelated, primary, exact_variant], query="firefox")
+        self.assertEqual(groups[0][0].name, "Firefox")
+        self.assertEqual(groups[0][1][0].name, "Mozilla Browser")
+
+    def test_late_store_callback_from_old_query_is_ignored(self):
+        old = StoreResult("Old", "old", "", SOURCE_APT, "1", "apt")
+        current = StoreResult("Current", "current", "", SOURCE_APT, "1", "apt")
+        self.window.store_results = [old]
+        self.window._store_search_generation = 2
+        self.window._finish_store_search([current], None, generation=1, complete=True)
+        self.assertEqual(self.window.store_results, [old])
+
     def test_app_detail_dialog_chooses_between_provider_variants(self):
-        apt = StoreResult("Editor", "editor", "APT build", SOURCE_APT, "1", "ubuntu")
-        snap = StoreResult("Editor", "editor", "Snap build", SOURCE_SNAP, "2", "stable")
+        apt = StoreResult(
+            "Editor", "editor", "APT build", SOURCE_APT, "1", "ubuntu", publisher="APT Team"
+        )
+        snap = StoreResult(
+            "Editor", "editor", "Snap build", SOURCE_SNAP, "2", "stable", publisher="Snap Team"
+        )
         chosen = []
         dialog = AppDetailDialog(
             primary_result=apt,
@@ -106,10 +221,45 @@ class TestUiWorkflows(unittest.TestCase):
         self.addCleanup(dialog.destroy)
         self.assertIsNotNone(dialog._source_combo)
         self.assertEqual(dialog._source_combo.get_model().iter_n_children(None), 2)
+        self.assertTrue(dialog._source_fields["publisher"][0].get_visible())
+        self.assertFalse(dialog._source_fields["license"][0].get_visible())
         dialog._source_combo.set_active(1)
         self.assertIs(dialog._selected_result, snap)
+        self.assertEqual(dialog._description_label.get_text(), "Snap build")
+        self.assertEqual(dialog._meta_label.get_text(), "Snap  ·  stable  ·  v2")
+        self.assertEqual(dialog._source_fields["publisher"][1].get_text(), "Snap Team")
+        self.assertTrue(dialog._source_fields["publisher"][0].get_visible())
         dialog._on_install_clicked(None)
         self.assertEqual(chosen, [snap])
+
+    def test_app_detail_dialog_keeps_flatpak_variant_with_apt_and_snap(self):
+        apt = StoreResult("Firefox", "firefox", "APT build", SOURCE_APT, "1", "ubuntu")
+        snap = StoreResult("Firefox", "firefox", "Snap build", SOURCE_SNAP, "2", "snap-store")
+        flatpak = StoreResult(
+            "Firefox", "org.mozilla.firefox", "Flatpak build", SOURCE_FLATPAK, "3", "flathub"
+        )
+        with patch.object(AppDetailDialog, "_load_screenshots_async"):
+            dialog = AppDetailDialog(
+                primary_result=snap,
+                all_results=[apt, snap, flatpak],
+                installed_package_ids=set(),
+                install_callback=lambda _result: None,
+                language="tr",
+                parent=self.window,
+            )
+        self.addCleanup(dialog.destroy)
+        self.assertIsNotNone(dialog._source_combo)
+        self.assertEqual(dialog._source_combo.get_model().iter_n_children(None), 3)
+        dialog._source_combo.set_active(2)
+        self.assertEqual(dialog._selected_result.source, SOURCE_FLATPAK)
+
+    def test_screenshot_gallery_ends_hidden_without_spinner_or_late_callback_crash(self):
+        gallery = ScreenshotGallery(["https://example.test/missing.png"], "tr")
+        self.addCleanup(gallery.destroy)
+        gallery._finish([])
+        self.assertFalse(gallery.get_visible())
+        gallery._on_destroy(gallery)
+        self.assertFalse(gallery._finish([GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 1, 1)]))
 
     def test_installed_status_is_scoped_to_the_source(self):
         self.window.installed_package_ids = {"apt:editor"}
@@ -127,6 +277,21 @@ class TestUiWorkflows(unittest.TestCase):
         self.window._finish_store_search([], "Provider offline")
         self.assertEqual(self.window.store_state.get_visible_child_name(), "state")
         self.assertEqual(self.window.store_state.body.get_text(), "Provider offline")
+
+    def test_store_provider_errors_are_shown_once(self):
+        result = StoreResult("Firefox", "firefox", "Browser", SOURCE_APT, "1", "apt")
+        self.window.store_registry.provider_errors = [
+            "APT: timeout",
+            "APT: timeout",
+            "FLATPAK: timeout",
+        ]
+        self.window.store_registry.last_search_source_states = {
+            SOURCE_APT: "unavailable",
+            SOURCE_FLATPAK: "unavailable",
+        }
+        self.window._finish_store_search([result], None)
+        status = self.window.store_status.get_text()
+        self.assertEqual(status.count("yanıt vermiyor"), 2)
 
     def test_discovery_card_click_opens_details(self):
         result = StoreResult("Editor", "editor", "Description", SOURCE_APT, "1", "native")
@@ -187,7 +352,22 @@ class TestUiWorkflows(unittest.TestCase):
             self.window._finish_updates_load(items, [], None)
         iterator = self.window.updates_model.get_iter("0:0")
         self.assertIs(self.window.updates_model.get_value(iterator, 6), pixbuf)
-        self.assertEqual(self.window.updates_tree.get_grid_lines(), Gtk.TreeViewGridLines.HORIZONTAL)
+        self.assertEqual(self.window.updates_tree.get_grid_lines(), Gtk.TreeViewGridLines.NONE)
+        self.assertFalse(self.window.updates_toggle_renderer.get_property("radio"))
+
+    def test_bulk_remove_is_enabled_only_for_removable_selection(self):
+        app = UnifiedApplication("apt:editor", "Editor", SOURCE_APT, package_name="editor")
+        self.window.applications = [app]
+        self.window.applications_loading = False
+        self.window._render_applications_list()
+        self.window.applications_tree.get_selection().select_path("0")
+        self.assertTrue(self.window.applications_bulk_remove_btn.get_sensitive())
+
+        firmware = UnifiedApplication("firmware:device", "Device", SOURCE_FIRMWARE, package_name="device")
+        self.window.applications = [firmware]
+        self.window._render_applications_list()
+        self.window.applications_tree.get_selection().select_path("0")
+        self.assertFalse(self.window.applications_bulk_remove_btn.get_sensitive())
 
     def test_firmware_requires_confirmation(self):
         self.window._finish_updates_load(self._updates(), [], None)
@@ -200,6 +380,87 @@ class TestUiWorkflows(unittest.TestCase):
             self.window._on_apply_updates(None)
         task.assert_not_called()
         self.registry.update.assert_not_called()
+
+    def test_update_provider_notice_is_compact_with_hidden_details(self):
+        self.window._finish_updates_load(
+            self._updates(),
+            ["apt (sistem): 42 arayüzsüz paket güncellenebilir → apache2, curl"],
+            None,
+        )
+
+        self.assertTrue(self.window.updates_status_panel.get_visible())
+        self.assertEqual(self.window.updates_status.get_text(), "APT: 42 sistem paketi güncellenebilir")
+        self.assertNotIn("apache2", self.window.updates_status.get_text())
+        self.assertFalse(self.window.updates_status_details.get_visible())
+        self.window.updates_status_details_btn.clicked()
+        self.assertTrue(self.window.updates_status_details.get_visible())
+        self.assertIn("apache2", self.window.updates_status_details.get_text())
+
+    def test_system_package_notice_does_not_claim_a_provider_failed(self):
+        notice = "apt (sistem): 42 arayüzsüz paket güncellenebilir → apache2, curl"
+        application = UnifiedApplication("apt:editor", "Editor", SOURCE_APT, package_name="editor")
+        self.window._finish_applications_load(ApplicationSnapshot([application], provider_notices=[notice]))
+        self.assertEqual(self.window.application_provider_errors, [])
+        self.assertNotIn("okunamadı", self.window.applications_status.get_text())
+        self.window.preferences.language = "en"
+        self.window._refresh_texts()
+        self.assertEqual(self.window.applications_diagnostics_label.get_text(), "1 diagnostic record:")
+        diagnostic = self.window.applications_diagnostics_list.get_children()[0].get_child()
+        self.assertIn("42 system packages", diagnostic.get_children()[1].get_text())
+
+    def test_select_all_reflects_partial_and_individual_selection(self):
+        items = self._updates()
+        self.window._finish_updates_load(items, [], None)
+        self.window._on_update_toggled(None, "0:0")
+        self.assertTrue(self.window.updates_select_all_btn.get_inconsistent())
+        self.assertFalse(self.window.updates_select_all_btn.get_active())
+        self.window.updates_select_all_btn.set_active(True)
+        self.assertEqual(len(self.window._selected_updates()), len(items))
+        self.assertFalse(self.window.updates_select_all_btn.get_inconsistent())
+        self.window._on_update_toggled(None, "0:0")
+        self.assertEqual(len(self.window._selected_updates()), len(items) - 1)
+        self.assertTrue(self.window.updates_select_all_btn.get_inconsistent())
+
+    def test_partial_update_retry_does_not_repeat_completed_targets(self):
+        from sourcedock.core.errors import BackendError
+
+        self.window._finish_updates_load(self._updates(), [], None)
+        self.window.updates_select_all_btn.set_active(True)
+        with patch.object(self.window, "_confirm_firmware_update", return_value=True), patch.object(self.window, "_run_application_task") as start:
+            self.window._on_apply_updates(None)
+        worker = start.call_args.args[1]
+
+        def update(app):
+            if app.package_name == "org.example.Platform":
+                raise BackendError("runtime update failed")
+
+        self.registry.update.side_effect = update
+        with patch("sourcedock.ui.views.updates_view.GLib.idle_add"), self.assertRaises(BackendError) as error:
+            worker()
+        self.assertIn("Runtime", str(error.exception))
+        self.assertEqual(self.registry.update.call_count, 4)
+        self.registry.update.reset_mock(side_effect=True)
+        with patch("sourcedock.ui.views.updates_view.GLib.idle_add"):
+            worker()
+        self.registry.update.assert_called_once()
+        self.assertEqual(self.registry.update.call_args.args[0].package_name, "org.example.Platform")
+
+    def test_cleanup_cancel_never_starts_an_operation(self):
+        from sourcedock.backend.flatpak_cleanup import CleanupRef
+
+        with patch("sourcedock.ui.views.installed_view.Gtk.Dialog.run", return_value=Gtk.ResponseType.CANCEL), patch.object(self.window, "_run_application_task") as run:
+            self.window._show_flatpak_cleanup_plan(
+                (CleanupRef("user", "runtime/org.example.Runtime/x86_64/stable"),), None,
+            )
+        run.assert_not_called()
+        self.registry.runner.run_privileged.assert_not_called()
+
+    def test_installed_details_are_shown_without_reentering_modal_run(self):
+        application = UnifiedApplication("apt:editor", "Editor", SOURCE_APT, package_name="editor")
+        with patch("sourcedock.ui.views.installed_view.InstalledAppDetailsDialog") as details:
+            self.window.on_show_application_details(None, application)
+        details.return_value.run.assert_not_called()
+        details.return_value.show_all.assert_called_once()
 
     def test_external_processes_cannot_be_paused_or_cancelled(self):
         self.window._external_operations = [("123", "apt-get upgrade")]
@@ -245,6 +506,47 @@ class TestUiWorkflows(unittest.TestCase):
 
     def test_translation_keys_have_parity(self):
         self.assertEqual(set(TRANSLATIONS["tr"]), set(TRANSLATIONS["en"]))
+
+    def test_installed_grid_layout_toggle(self):
+        app = UnifiedApplication(
+            id="test.editor",
+            name="Test Editor",
+            source="flatpak",
+            version="2.0",
+            package_name="test.editor",
+            desktop_file="/usr/share/applications/test.editor.desktop",
+        )
+
+        self.window.applications = [app]
+        self.window.applications_loading = False
+        self.window._render_applications_list()
+
+        # By default, layout is table
+        self.assertEqual(self.window.applications_view_stack.get_visible_child_name(), "table")
+        self.assertTrue(self.window.applications_table_toggle.get_sensitive())
+
+        # Toggle to grid layout
+        self.window.applications_layout_toggle.set_active(True)
+        self.assertEqual(self.window.applications_view_stack.get_visible_child_name(), "cards")
+        self.assertFalse(self.window.applications_table_toggle.get_sensitive())
+
+        # Verify cards were created
+        cards = self.window.applications_cards.get_children()
+        self.assertEqual(len(cards), 1)
+        card = cards[0].get_child()
+        self.assertIn("Test Editor", card.get_accessible().get_name())
+
+
+        # Clicking card invokes details
+        with patch.object(self.window, "on_show_application_details") as details_mock:
+            card.clicked()
+            details_mock.assert_called_once_with(None, app)
+
+        # Toggle back to table
+        self.window.applications_layout_toggle.set_active(False)
+        self.assertEqual(self.window.applications_view_stack.get_visible_child_name(), "table")
+        self.assertTrue(self.window.applications_table_toggle.get_sensitive())
+
 
 
 if __name__ == "__main__":

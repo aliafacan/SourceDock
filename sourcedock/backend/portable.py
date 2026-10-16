@@ -225,9 +225,9 @@ class PortableProvider:
         ):
             raise BackendError("Unsafe portable desktop shortcut path.")
         try:
-            shutil.rmtree(path)
             if desktop and desktop.exists():
                 desktop.unlink()
+            shutil.rmtree(path)
         except OSError as exc:
             raise BackendError(f"Portable removal failed: {exc}") from exc
         unregister_portable_app(application.id)

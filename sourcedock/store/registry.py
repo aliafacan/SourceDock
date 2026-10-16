@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import os
-import platform
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import replace
 import re
@@ -27,6 +27,7 @@ from sourcedock.core.models import (
     StoreResult,
     is_native_source,
 )
+from sourcedock.core.icons import find_flatpak_icon_path
 from sourcedock.backend.distro import DistroInfo, detect_distro
 from sourcedock.core.runner import CommandRunner
 from sourcedock.backend.dnf import DnfProvider
@@ -57,7 +58,7 @@ _TECHNICAL_PACKAGE_SUFFIXES = (
 )
 
 
-def _looks_like_desktop_package(result: StoreResult) -> bool:
+def _looks_like_desktop_package(result: StoreResult, allow_transitional: bool = False) -> bool:
     """Keep implementation packages out of the application store.
 
     The complete package inventory remains available in the Packages page. Store
@@ -66,7 +67,7 @@ def _looks_like_desktop_package(result: StoreResult) -> bool:
     """
     name = result.app_id.casefold()
     description = result.description.casefold()
-    if "transitional package" in description or "dummy package" in description:
+    if ("transitional package" in description and not allow_transitional) or "dummy package" in description:
         return False
     if any(name.startswith(prefix) for prefix in _TECHNICAL_PACKAGE_PREFIXES):
         return False
@@ -82,6 +83,9 @@ def _looks_like_desktop_package(result: StoreResult) -> bool:
 
 
 class StoreRegistry:
+    PROVIDER_TIMEOUT_SECONDS = 5.0
+    PARTIAL_CACHE_TTL_SECONDS = 15.0
+
     """Mağazalardan (Flatpak, Snap, APT, DNF, Pacman, Zypper) arama ve kurulum işlemlerini yürüten sınıf."""
 
     def __init__(self, distro_info: DistroInfo | None = None):
@@ -90,12 +94,19 @@ class StoreRegistry:
         self.host_bridge_available = self._detect_host_bridge()
         self._current_process: subprocess.Popen | None = None
         self._stream_runner = CommandRunner()
+        self._search_context = threading.local()
         self.distro = distro_info or detect_distro()
         self.native_manager = self.distro.native_manager
         self.provider_errors = []
         self.missing_sources = []
         self._metadata = None
         self._search_cache: dict[tuple[str, tuple[str, ...]], list[StoreResult]] = {}
+        self._partial_search_cache: dict[
+            tuple[str, tuple[str, ...]],
+            tuple[float, list[StoreResult], list[str], dict[str, object], dict[str, str]],
+        ] = {}
+        self.last_search_metrics: dict[str, object] = {}
+        self.last_search_source_states: dict[str, str] = {}
 
     def cancel_current(self) -> bool:
         return self._stream_runner.cancel_current()
@@ -107,10 +118,20 @@ class StoreRegistry:
         self._sudo_password = None
         self._stream_runner.clear_sudo_password()
 
+    def _record_provider_error(self, message: str) -> None:
+        if message not in self.provider_errors:
+            self.provider_errors.append(message)
+
     def set_output_callback(self, callback: Callable[[str], None] | None) -> None:
         self._output_callback = callback
 
-    def search(self, query: str, sources: set[str] | None = None) -> list[StoreResult]:
+    def search(
+        self,
+        query: str,
+        sources: set[str] | None = None,
+        on_partial: Callable[[list[StoreResult], bool], None] | None = None,
+        provider_timeout_seconds: float | None = None,
+    ) -> list[StoreResult]:
         normalized_query = query.strip()
         if not normalized_query:
             return []
@@ -120,9 +141,53 @@ class StoreRegistry:
         cache_key = (normalized_query.casefold(), source_order)
         cached = self._search_cache.get(cache_key)
         if cached is not None:
+            source_states = getattr(self, "_search_cache_source_states", {}).get(cache_key)
+            if source_states is None:
+                source_states = {result.source: "cached" for result in cached}
+            else:
+                source_states = {source: "cached" for source in source_states}
+            self.last_search_source_states = dict(source_states)
+            self.last_search_metrics = {
+                "cache_hit": True,
+                "total_ms": 0.0,
+                "sources": {},
+                "source_states": dict(source_states),
+            }
             self.provider_errors = []
             self.missing_sources = []
-            return list(cached)
+            cached_results = list(cached)
+            if on_partial:
+                on_partial(cached_results, True)
+            return cached_results
+
+        partial_cached = self._partial_search_cache.get(cache_key)
+        if partial_cached is not None:
+            if len(partial_cached) == 4:
+                expires_at, partial_results, partial_errors, partial_metrics = partial_cached
+                partial_source_states = {
+                    result.source: "cached" for result in partial_results
+                }
+            else:
+                expires_at, partial_results, partial_errors, partial_metrics, partial_source_states = partial_cached
+            if expires_at > time.monotonic():
+                partial_source_states = {
+                    source: "unavailable" if state == "unavailable" else "cached"
+                    for source, state in partial_source_states.items()
+                }
+                self.provider_errors = list(partial_errors)
+                self.missing_sources = []
+                self.last_search_source_states = dict(partial_source_states)
+                self.last_search_metrics = {
+                    **partial_metrics,
+                    "cache_hit": True,
+                    "partial_cache": True,
+                    "total_ms": 0.0,
+                    "source_states": dict(partial_source_states),
+                }
+                if on_partial:
+                    on_partial(list(partial_results), True)
+                return list(partial_results)
+            self._partial_search_cache.pop(cache_key, None)
 
         self.provider_errors = []
         self.missing_sources = []
@@ -135,39 +200,150 @@ class StoreRegistry:
             SOURCE_ZYPPER: "zypper",
         }
         results: list[StoreResult] = []
+        started_at = time.perf_counter()
+        source_timings: dict[str, float] = {}
+        timed_out_sources: list[str] = []
+        source_started_at: dict[str, float] = {}
+        source_states: dict[str, str] = {}
+        if not hasattr(self, "_search_context"):
+            self._search_context = threading.local()
+        search_controls = {
+            source: (threading.Event(), CommandRunner()) for source in source_order
+        }
 
         def search_source(source: str):
+            source_started_at = time.perf_counter()
             command = commands.get(source, source)
-            if not self._command_exists(command):
-                return source, [], None, True
+            cancel_event, search_runner = search_controls[source]
+            context = getattr(self, "_search_context", None)
+            if context is None:
+                context = threading.local()
+                self._search_context = context
+            context.runner = search_runner
+            context.cancel_event = cancel_event
             try:
+                if not self._command_exists(command):
+                    return source, [], None, True, (time.perf_counter() - source_started_at) * 1000
                 if source == SOURCE_FLATPAK:
                     found = self._search_flatpak(normalized_query)
                 elif source == SOURCE_SNAP:
                     found = self._search_snap(normalized_query)
                 else:
                     found = self._search_native(source, normalized_query)
-                return source, found, None, False
+                return source, found, None, False, (time.perf_counter() - source_started_at) * 1000
             except BackendError as exc:
-                return source, [], str(exc), False
+                return source, [], str(exc), False, (time.perf_counter() - source_started_at) * 1000
             except Exception as exc:
-                return source, [], str(exc), False
+                return source, [], str(exc), False, (time.perf_counter() - source_started_at) * 1000
+            finally:
+                for attribute in ("runner", "cancel_event"):
+                    try:
+                        delattr(context, attribute)
+                    except AttributeError:
+                        pass
 
         # Flatpak, Snap and the native package manager are independent remote
-        # lookups. Running them together makes live search feel immediate.
-        with ThreadPoolExecutor(max_workers=max(1, min(4, len(source_order)))) as pool:
-            futures = [pool.submit(search_source, source) for source in source_order]
-            for future in futures:
-                source, found, error, missing = future.result()
-                if missing:
-                    self.missing_sources.append(source)
-                elif error:
-                    self.provider_errors.append(f"{source.upper()}: {error}")
-                else:
-                    results.extend(found)
+        # lookups. Publish completed sources, then stop waiting at the
+        # read-only provider deadline so a stalled optional source cannot block
+        # results that are already available.
+        timeout = self.PROVIDER_TIMEOUT_SECONDS if provider_timeout_seconds is None else provider_timeout_seconds
+        executor = ThreadPoolExecutor(
+            max_workers=max(1, min(4, len(source_order))),
+            thread_name_prefix="sourcedock-store-search",
+        )
+        future_to_source = {}
+        for source in source_order:
+            source_started_at[source] = time.perf_counter()
+            future_to_source[executor.submit(search_source, source)] = source
+        pending = set(future_to_source)
+        deadline = None if timeout is None else time.perf_counter() + max(0.0, timeout)
+        try:
+            while pending:
+                remaining = None if deadline is None else max(0.0, deadline - time.perf_counter())
+                done, pending = wait(pending, timeout=remaining, return_when=FIRST_COMPLETED)
+                if not done:
+                    break
+                for future in done:
+                    source, found, error, missing, duration_ms = future.result()
+                    source_timings[source] = round(duration_ms, 1)
+                    if missing:
+                        self.missing_sources.append(source)
+                        source_states[source] = "unavailable"
+                    elif error:
+                        self._record_provider_error(f"{source.upper()}: {error}")
+                        source_states[source] = "unavailable"
+                    else:
+                        results.extend(found)
+                        source_states[source] = "live"
+                    # Partial callbacks must describe this search, not the
+                    # previous query's provider state. This keeps a fast
+                    # APT/Flatpak result from being labelled unavailable while
+                    # another provider is still running.
+                    self.last_search_source_states = dict(source_states)
+                    if on_partial:
+                        on_partial(self._enrich_results(results, normalized_query), False)
+            if pending:
+                for future in pending:
+                    source = future_to_source[future]
+                    timed_out_sources.append(source)
+                    source_timings[source] = round(
+                        (time.perf_counter() - source_started_at[source]) * 1000, 1
+                    )
+                    source_states[source] = "unavailable"
+                    self._record_provider_error(
+                        f"{source.upper()}: timeout after {timeout:g}s"
+                        if timeout is not None
+                        else f"{source.upper()}: timeout"
+                    )
+                    search_controls[source][0].set()
+                    search_controls[source][1].cancel_current()
+                    future.cancel()
+        finally:
+            # Running workers are read-only and are not reused after this search.
+            executor.shutdown(wait=False, cancel_futures=True)
 
+        enrich_started = time.perf_counter()
+        enriched = self._enrich_results(results, normalized_query)
+        enrich_ms = round((time.perf_counter() - enrich_started) * 1000, 1)
+        self.last_search_metrics = {
+            "cache_hit": False,
+            "total_ms": round((time.perf_counter() - started_at) * 1000, 1),
+            "sources": source_timings,
+            "metadata_enrich_ms": enrich_ms,
+            "timeout_seconds": timeout,
+            "timed_out": bool(timed_out_sources),
+            "timed_out_sources": timed_out_sources,
+            "provider_errors": list(self.provider_errors),
+            "source_states": dict(source_states),
+        }
+        self.last_search_source_states = dict(source_states)
         if not results and self.provider_errors:
             raise BackendError("\n".join(self.provider_errors))
+        # Displaying partial results is useful, but an errored provider response
+        # must not be stored as a successful cache hit.
+        if not self.provider_errors:
+            if len(self._search_cache) >= 12:
+                self._search_cache.pop(next(iter(self._search_cache)))
+            self._search_cache[cache_key] = list(enriched)
+            if not hasattr(self, "_search_cache_source_states"):
+                self._search_cache_source_states = {}
+            self._search_cache_source_states[cache_key] = {
+                source: "live" for source in source_states
+            }
+            self._partial_search_cache.pop(cache_key, None)
+        elif enriched:
+            self._partial_search_cache[cache_key] = (
+                time.monotonic() + self.PARTIAL_CACHE_TTL_SECONDS,
+                list(enriched),
+                list(self.provider_errors),
+                dict(self.last_search_metrics),
+                dict(source_states),
+            )
+        if on_partial:
+            on_partial(list(enriched), True)
+        return enriched
+
+    def _enrich_results(self, results: list[StoreResult], exact_query: str = "") -> list[StoreResult]:
         if self._metadata is None:
             self._metadata = load_metadata()
         enriched = []
@@ -189,11 +365,16 @@ class StoreRegistry:
             elif result.source == SOURCE_FLATPAK:
                 result = replace(result, identity=result.app_id)
             if is_native_source(result.source):
-                result = replace(result, is_application=_looks_like_desktop_package(result))
+                result = replace(
+                    result,
+                    is_application=_looks_like_desktop_package(
+                        result,
+                        allow_transitional=bool(
+                            exact_query and result.app_id.casefold() == exact_query.casefold()
+                        ),
+                    ),
+                )
             enriched.append(result)
-        if len(self._search_cache) >= 12:
-            self._search_cache.pop(next(iter(self._search_cache)))
-        self._search_cache[cache_key] = list(enriched)
         return enriched
 
     def _search_native(self, native_src: str, query: str) -> list[StoreResult]:
@@ -265,24 +446,15 @@ class StoreRegistry:
             raise BackendError(f"Flatpak arama hatası: {exc}") from exc
 
     def _flatpak_icon_path(self, app_id: str, remote: str) -> str:
-        arch = platform.machine() or "x86_64"
-        search_dirs = [
-            f"/var/lib/flatpak/appstream/{remote}/{arch}/active/icons",
-            os.path.expanduser(f"~/.local/share/flatpak/appstream/{remote}/{arch}/active/icons"),
-        ]
-        for size_dir in ("128x128", "64x64"):
-            for icons_dir in search_dirs:
-                for ext in ("png", "svg"):
-                    path = os.path.join(icons_dir, size_dir, f"{app_id}.{ext}")
-                    if os.path.exists(path):
-                        return path
-        return ""
+        return find_flatpak_icon_path(app_id, remote)
 
     def _search_snap(self, query: str) -> list[StoreResult]:
         if not self._command_exists("snap"):
             return []
         try:
-            result = self._run(["snap", "find", query], timeout=30)
+            # Snap Store is optional; a slow remote search must not block the
+            # local/Flatpak results already published to the UI.
+            result = self._run(["snap", "find", query], timeout=5)
             if result.returncode != 0:
                 raise BackendError(result.stderr or result.stdout or "Snap search failed.")
             items: list[StoreResult] = []
@@ -362,16 +534,26 @@ class StoreRegistry:
             pkg_names = [name for name, _description in raw_results]
             versions = self._apt_candidate_versions(pkg_names)
             for pkg_name, description in raw_results:
-                items.append(
-                    StoreResult(
-                        name=pkg_name,
-                        app_id=pkg_name,
-                        description=description,
-                        source=SOURCE_APT,
-                        version=versions.get(pkg_name, ""),
-                        remote="apt",
-                    )
+                item = StoreResult(
+                    name=pkg_name,
+                    app_id=pkg_name,
+                    description=description,
+                    source=SOURCE_APT,
+                    version=versions.get(pkg_name, ""),
+                    remote="apt",
                 )
+                # Ubuntu/Zorin expose Firefox through an APT transitional
+                # package which hands off to Snap. Keep that exact package
+                # visible as a source variant so the user can compare it in
+                # the details dialog; implementation packages remain hidden.
+                if pkg_name.casefold() == query.casefold():
+                    item = replace(
+                        item,
+                        is_application=_looks_like_desktop_package(item, allow_transitional=True),
+                    )
+                else:
+                    item = replace(item, is_application=_looks_like_desktop_package(item))
+                items.append(item)
             return items
         except BackendError:
             raise
@@ -437,16 +619,17 @@ class StoreRegistry:
         return shutil.which(command) is not None
 
     def _run(self, command: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
-        wrapped = self._wrap_host(command)
+        context = getattr(self, "_search_context", None)
+        runner = getattr(context, "runner", None) if context is not None else None
+        cancel_event = getattr(context, "cancel_event", None) if context is not None else None
+        if cancel_event is not None and cancel_event.is_set():
+            raise BackendError("Store provider search cancelled after timeout.")
+        runner = runner or getattr(self, "_stream_runner", None) or CommandRunner()
         try:
-            return subprocess.run(
-                wrapped,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            return runner.run_read_only(command, timeout=timeout)
+        except BackendError:
+            raise
+        except OSError as exc:
             raise BackendError(f"Komut çalıştırılamadı: {' '.join(command)}\n{exc}") from exc
 
     def _run_streaming(

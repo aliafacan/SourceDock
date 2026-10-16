@@ -48,8 +48,24 @@ find "$DEB_ROOT/usr/lib/$PACKAGE" -type f -name "*.pyc" -delete 2>/dev/null || t
 if [ -d "$PROJECT_DIR/assets" ]; then
     cp -r "$PROJECT_DIR/assets" "$DEB_ROOT/usr/lib/$PACKAGE/"
 fi
-cp "$PROJECT_DIR/LICENSE" "$DEB_ROOT/usr/share/doc/$PACKAGE/copyright"
-cp "$SCRIPT_DIR/dev.aliafacan.SourceDock.metainfo.xml" "$DEB_ROOT/usr/share/metainfo/"
+DOC_DIR="$DEB_ROOT/usr/share/doc/$PACKAGE"
+cat > "$DOC_DIR/copyright" <<'COPYRIGHT'
+SourceDock
+Copyright (C) 2026 Ali Afacan <aliafacan.dev@gmail.com>
+Source: https://github.com/aliafacan/SourceDock
+
+Project license: GPL-3.0-only.
+AppStream metadata declares CC0-1.0 for the metadata document.
+See THIRD_PARTY_NOTICES.md for third-party components and artwork notices.
+
+The following is the complete, unmodified GNU General Public License version 3.
+Its Free Software Foundation copyright applies to the license document itself.
+
+COPYRIGHT
+cat "$PROJECT_DIR/LICENSE" >> "$DOC_DIR/copyright"
+cp "$PROJECT_DIR/LICENSE" "$DOC_DIR/LICENSE"
+cp "$PROJECT_DIR/THIRD_PARTY_NOTICES.md" "$DOC_DIR/THIRD_PARTY_NOTICES.md"
+cp "$SCRIPT_DIR/dev.aliafacan.sourcedock.metainfo.xml" "$DEB_ROOT/usr/share/metainfo/"
 
 if [ -d "$PROJECT_DIR/sourcedock/desktop/extension" ]; then
     cp -r "$PROJECT_DIR/sourcedock/desktop/extension/." "$DEB_ROOT/usr/share/gnome-shell/extensions/$EXTENSION_UUID/"
@@ -112,7 +128,7 @@ Priority: optional
 Architecture: all
 Installed-Size: $INSTALLED_SIZE
 Depends: python3 (>= 3.10), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-gdkpixbuf-2.0
-Suggests: flatpak, snapd, gnome-shell, fwupd
+Suggests: flatpak, gir1.2-flatpak-1.0, snapd, gnome-shell, fwupd
 Maintainer: Ali Afacan <aliafacan.dev@gmail.com>
 Homepage: https://github.com/aliafacan/SourceDock
 Description: Linux application and package manager
@@ -164,7 +180,7 @@ if command -v desktop-file-validate >/dev/null 2>&1; then
     desktop-file-validate "$DEB_ROOT/usr/share/applications/sourcedock.desktop"
 fi
 if command -v appstreamcli >/dev/null 2>&1; then
-    appstreamcli validate --no-net "$DEB_ROOT/usr/share/metainfo/dev.aliafacan.SourceDock.metainfo.xml"
+    appstreamcli validate --no-net "$DEB_ROOT/usr/share/metainfo/dev.aliafacan.sourcedock.metainfo.xml"
 fi
 echo "==> dpkg-deb çalıştırılıyor..."
 dpkg-deb --build --root-owner-group "$DEB_ROOT" "$DEB_OUT"

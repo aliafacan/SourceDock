@@ -44,7 +44,8 @@ class TestStage4FormatDetection(unittest.TestCase):
 
 class TestDebInspection(unittest.TestCase):
     def test_inspect_real_deb(self):
-        deb_candidates = sorted(glob.glob("packaging/sourcedock_*_all.deb"))
+        explicit = os.environ.get("SOURCEDOCK_TEST_DEB")
+        deb_candidates = [explicit] if explicit else sorted(glob.glob("packaging/sourcedock_*_all.deb"))
         if not deb_candidates:
             self.skipTest("Deb dosyası bulunamadı.")
         deb_path = deb_candidates[-1]

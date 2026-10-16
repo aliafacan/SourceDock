@@ -154,7 +154,9 @@ class SnapProvider:
         return size_kib, installed_date, last_updated
 
     def _snap_metadata(self) -> dict[str, str]:
-        result = self.runner.run(["snap", "list"], timeout=30)
+        # Listing is read-only and must not hold the progressive application
+        # scan open for the default command timeout.
+        result = self.runner.run(["snap", "list"], timeout=5)
         if result.returncode != 0:
             return {}
         snaps: dict[str, str] = {}
@@ -167,7 +169,7 @@ class SnapProvider:
         return snaps
 
     def _update_names(self) -> set[str]:
-        result = self.runner.run(["snap", "refresh", "--list"], timeout=30)
+        result = self.runner.run(["snap", "refresh", "--list"], timeout=5)
         if result.returncode != 0:
             return set()
         names: set[str] = set()

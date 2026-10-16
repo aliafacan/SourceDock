@@ -13,20 +13,23 @@ from gi.repository import Gdk, GLib, Gtk  # pyright: ignore[reportMissingModuleS
 
 from sourcedock.backend.mime_integration import get_icon_path
 from sourcedock.i18n import t
+from sourcedock.ui.components.common import prepare_dialog
 
 
 class HelpDialog(Gtk.Dialog):
     """SourceDock sistem geneli yardım ve kullanım kılavuzu penceresi."""
 
-    def __init__(self, parent: Gtk.Window | None = None, language: str = "tr"):
+    def __init__(self, parent: Gtk.Window | None = None, language: str = "tr", context: str = ""):
         super().__init__(
             title=t(language, "help_title"),
             transient_for=parent,
-            flags=Gtk.DialogFlags.MODAL if parent else 0,
+            modal=bool(parent),
+            destroy_with_parent=bool(parent),
         )
         self.language = language
+        self.context = context
 
-        self.set_default_size(720, 560)
+        prepare_dialog(self, width=720, height=560, independent=True)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_resizable(True)
         self.get_style_context().add_class("icon-settings-window")
@@ -41,6 +44,8 @@ class HelpDialog(Gtk.Dialog):
 
         self.connect("key-press-event", self._on_key_press)
         self._build_ui()
+        if context:
+            self.stack.set_visible_child_name("features")
 
     def _on_key_press(self, _widget: Gtk.Widget, event: Gdk.EventKey) -> bool:
         key = Gdk.keyval_name(event.keyval) or ""
@@ -104,7 +109,7 @@ class HelpDialog(Gtk.Dialog):
 
         # Alt Buton
         close_btn = self.add_button(t(self.language, "dialog_close"), Gtk.ResponseType.CLOSE)
-        close_btn.get_style_context().add_class("suggested-action")
+        close_btn.get_style_context().add_class("secondary-action")
         self.set_default_response(Gtk.ResponseType.CLOSE)
 
         self.show_all()
@@ -122,7 +127,7 @@ class HelpDialog(Gtk.Dialog):
 
     def _create_card(self, title: str, content_markup: str) -> Gtk.Box:
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        card.get_style_context().add_class("card")
+        card.get_style_context().add_class("help-card")
 
         t_lbl = Gtk.Label()
         t_lbl.set_markup(f'<span weight="bold" size="medium">{GLib.markup_escape_text(title)}</span>')
@@ -153,7 +158,7 @@ class HelpDialog(Gtk.Dialog):
 
         # Formatlar kartı
         formats_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        formats_box.get_style_context().add_class("card")
+        formats_box.get_style_context().add_class("help-card")
 
         f_title = Gtk.Label()
         f_title.set_markup(
@@ -201,7 +206,9 @@ class HelpDialog(Gtk.Dialog):
             ("help_features_store_title", "help_features_store_desc"),
             ("help_features_packages_title", "help_features_packages_desc"),
             ("help_features_operations_title", "help_features_operations_desc"),
+            ("help_features_updates_title", "help_features_updates_desc"),
         ]
+        features.sort(key=lambda pair: pair[0] != f"help_features_{self.context}_title")
         for title_key, desc_key in features:
             box.pack_start(
                 self._create_card(t(self.language, title_key), t(self.language, desc_key)),
@@ -235,7 +242,7 @@ class HelpDialog(Gtk.Dialog):
 
         # Kısayollar Tablosu Kartı
         shortcuts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        shortcuts_box.get_style_context().add_class("card")
+        shortcuts_box.get_style_context().add_class("help-card")
 
         s_title = Gtk.Label()
         s_title.set_markup(
@@ -273,7 +280,7 @@ class HelpDialog(Gtk.Dialog):
 
         # İpuçları Kartı
         tips_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        tips_box.get_style_context().add_class("card")
+        tips_box.get_style_context().add_class("help-card")
 
         t_title = Gtk.Label()
         t_title.set_markup(
@@ -300,6 +307,11 @@ class HelpViewMixin:
     """Yardım ve kullanım kılavuzu diyaloğunu yöneten mixin."""
 
     def on_open_help(self, _button: Gtk.Button | None = None) -> None:
-        dialog = HelpDialog(parent=self, language=self.preferences.language)
-        dialog.run()
-        dialog.destroy()
+        context = {0: "installed", 1: "store", 2: "packages", 3: "operations", 4: "updates"}
+        dialog = HelpDialog(
+            parent=self, language=self.preferences.language,
+            context=context.get(self.pages.get_current_page(), ""),
+        )
+        dialog.connect("response", lambda widget, _response: widget.destroy())
+        dialog.show_all()
+        dialog.present()

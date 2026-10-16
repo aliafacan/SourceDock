@@ -33,6 +33,8 @@ jobs:
             gir1.2-gtk-3.0 \
             gir1.2-gdkpixbuf-2.0 \
             xvfb \
+            openbox \
+            x11-utils \
             dpkg-dev \
             desktop-file-utils \
             appstream
@@ -52,14 +54,17 @@ jobs:
         run: |
           /usr/bin/python3 -m compileall -q main.py sourcedock tests tools
 
-      - name: Birim Testleri Çalıştır (Unittest via Xvfb)
-        run: |
-          xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -v
-
       - name: Debian (.deb) Paketini Derle ve Doğrula
         run: |
           bash packaging/build_deb.sh dist
           dpkg-deb --info dist/sourcedock_*.deb
+
+      - name: Birim Testleri Çalıştır (Unittest via Xvfb)
+        run: |
+          version=$(/usr/bin/python3 -c 'from sourcedock.constants import APP_VERSION; print(APP_VERSION)')
+          SOURCEDOCK_TEST_DEB="$GITHUB_WORKSPACE/dist/sourcedock_${version}_all.deb" \
+            xvfb-run -a bash -c 'openbox >/tmp/sourcedock-test-wm.log 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
+
       - name: Upload Package
         uses: actions/upload-artifact@v4
         with:

@@ -7,6 +7,7 @@ from collections.abc import Callable
 import os
 from pathlib import Path
 import threading
+import time
 
 import gi
 
@@ -16,6 +17,8 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, GObject, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
+from sourcedock.core.icons import find_flatpak_icon_path
+from sourcedock.backend.flatpak_cleanup import apply_cleanup, plan_cleanup
 from sourcedock.core.models import (
     NATIVE_SOURCES,
     SOURCE_APPIMAGE,
@@ -32,11 +35,20 @@ from sourcedock.core.models import (
     UnifiedApplication,
     is_native_source,
 )
-from sourcedock.i18n import t, translate_backend_message
+from sourcedock.i18n import source_name, t, translate_backend_message, translate_provider_error, translate_provider_notice
 from sourcedock.ui.components.progress import OperationProgressWindow
 from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
 from sourcedock.ui.components.app_details_dialog import InstalledAppDetailsDialog
-from sourcedock.ui.components.common import ContentState, icon_button, set_status, style_tree_view
+from sourcedock.ui.components.removal import add_sensitive_removal_confirmation
+from sourcedock.ui.components.common import (
+    ContentState,
+    icon_button,
+    load_dialog_data,
+    make_window_movable,
+    prepare_dialog,
+    set_status,
+    style_tree_view,
+)
 
 _AC_ICON = 0
 _AC_NAME = 1
@@ -50,7 +62,88 @@ _AC_LOCATION = 8
 _AC_APP = 9
 
 
+class InstalledAppCard(Gtk.Button):
+    """Card widget for an installed application in grid mode."""
+
+    def __init__(self, application: UnifiedApplication, pixbuf, on_details, language: str) -> None:
+        super().__init__()
+        self.get_style_context().add_class("app-card")
+        self.set_size_request(240, 160)
+        self.set_hexpand(True)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        header = Gtk.Box(spacing=10)
+        image = (
+            Gtk.Image.new_from_pixbuf(pixbuf)
+            if pixbuf
+            else Gtk.Image.new_from_icon_name("package-x-generic", Gtk.IconSize.DIALOG)
+        )
+        image.set_pixel_size(48)
+        header.pack_start(image, False, False, 0)
+
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        name = Gtk.Label(label=application.name, xalign=0)
+        name.set_line_wrap(True)
+        name.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        name.set_max_width_chars(24)
+        name.set_ellipsize(Pango.EllipsizeMode.END)
+        name.set_lines(2)
+        name.get_style_context().add_class("app-name")
+        title_box.pack_start(name, False, False, 0)
+
+        sub_label = application.version or application.package_name or ""
+        if sub_label:
+            ver = Gtk.Label(label=sub_label, xalign=0)
+            ver.set_ellipsize(Pango.EllipsizeMode.END)
+            ver.set_max_width_chars(24)
+            ver.get_style_context().add_class("dim-label")
+            title_box.pack_start(ver, False, False, 0)
+        header.pack_start(title_box, True, True, 0)
+        box.pack_start(header, False, False, 0)
+
+        meta_row = Gtk.Box(spacing=6)
+        src_lbl = source_name(language, application.source)
+        source = Gtk.Label(label=src_lbl, xalign=0)
+        source.get_style_context().add_class("source-badge")
+        meta_row.pack_start(source, False, False, 0)
+
+        size_kib = application.installed_size_kib
+        if size_kib:
+            size_str = (
+                f"{size_kib / (1024 * 1024):.1f} GB"
+                if size_kib >= 1024 * 1024
+                else f"{size_kib / 1024:.1f} MB"
+                if size_kib >= 1024
+                else f"{size_kib} KB"
+            )
+            size_label = Gtk.Label(label=size_str, xalign=0)
+            size_label.get_style_context().add_class("dim-label")
+            meta_row.pack_start(size_label, False, False, 0)
+        box.pack_start(meta_row, False, False, 0)
+
+        box.pack_start(Gtk.Box(), True, True, 0)
+
+        footer = Gtk.Box(spacing=8)
+        footer.pack_start(Gtk.Box(), True, True, 0)
+        action_label = Gtk.Label(label=t(language, "applications_details"))
+        action_label.get_style_context().add_class("card-action")
+        footer.pack_end(action_label, False, False, 0)
+        footer.pack_end(
+            Gtk.Image.new_from_icon_name("go-next-symbolic", Gtk.IconSize.BUTTON),
+            False,
+            False,
+            0,
+        )
+        box.pack_end(footer, False, False, 0)
+
+        self.add(box)
+        self.set_tooltip_text(f"{application.name} ({src_lbl}) — {t(language, 'applications_details')}")
+        self.get_accessible().set_name(f"{application.name}, {src_lbl}")
+        self.connect("clicked", lambda _btn: on_details(application))
+
+
 class InstalledViewMixin:
+
     """Yüklü uygulamalar sayfası arayüz kurulumu ve işlem metotları."""
 
     def _build_installed_page(self, container: Gtk.Box) -> None:
@@ -73,6 +166,8 @@ class InstalledViewMixin:
         self.applications_search_entry = Gtk.SearchEntry()
         self.applications_search_entry.set_hexpand(True)
         self.applications_search_entry.connect("search-changed", self.on_applications_search_changed)
+        self.applications_search_entry.set_no_show_all(True)
+        self.applications_search_entry.hide()
         search_row.pack_start(self.applications_search_entry, True, True, 0)
 
         self.applications_refresh_btn = Gtk.Button()
@@ -121,12 +216,8 @@ class InstalledViewMixin:
             native_key,
             SOURCE_FLATPAK,
             SOURCE_SNAP,
-            SOURCE_APPIMAGE,
-            SOURCE_PORTABLE,
+            "other",
         ]
-        runner = getattr(self.application_registry, "runner", None)
-        if runner and runner.command_exists("fwupdmgr"):
-            source_filters.append(SOURCE_FIRMWARE)
         for source in source_filters:
             button = Gtk.ToggleButton()
             button.get_style_context().add_class("filter-chip")
@@ -264,9 +355,11 @@ class InstalledViewMixin:
         location_col.set_expand(True)
         location_col.set_min_width(120)
         self.applications_tree.append_column(location_col)
+        detailed_default = getattr(self.preferences, "detailed_table_default", True)
         for column in (inst_date_col, last_upd_col, location_col):
-            column.set_visible(False)
+            column.set_visible(detailed_default)
         self.applications_table_toggle = Gtk.ToggleButton()
+        self.applications_table_toggle.set_active(detailed_default)
         icon_button(
             self.applications_table_toggle,
             "view-list-symbolic",
@@ -281,11 +374,46 @@ class InstalledViewMixin:
         )
         search_row.pack_end(self.applications_table_toggle, False, False, 0)
 
+        self.applications_layout_toggle = Gtk.ToggleButton()
+        icon_button(
+            self.applications_layout_toggle,
+            "view-grid-symbolic",
+            t(self.preferences.language, "view_grid"),
+        )
+        self.applications_layout_toggle.set_tooltip_text(
+            t(self.preferences.language, "tooltip_installed_layout")
+        )
+        self.applications_layout_toggle.get_accessible().set_name(
+            t(self.preferences.language, "tooltip_installed_layout")
+        )
+        self.applications_layout_toggle.connect("toggled", self._on_applications_layout_toggled)
+        search_row.pack_end(self.applications_layout_toggle, False, False, 0)
+
         apps_scroller = Gtk.ScrolledWindow()
         apps_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         apps_scroller.add(self.applications_tree)
-        self.installed_state = ContentState(apps_scroller)
+        self.apps_scroller = apps_scroller
+
+        self.applications_cards = Gtk.FlowBox()
+        self.applications_cards.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.applications_cards.set_homogeneous(True)
+        self.applications_cards.set_min_children_per_line(1)
+        self.applications_cards.set_max_children_per_line(3)
+        self.applications_cards.set_column_spacing(12)
+        self.applications_cards.set_row_spacing(12)
+        self.applications_cards.set_valign(Gtk.Align.START)
+        cards_scroll = Gtk.ScrolledWindow()
+        cards_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        cards_scroll.add(self.applications_cards)
+        self.cards_scroll = cards_scroll
+
+        self.applications_view_stack = Gtk.Stack()
+        self.applications_view_stack.add_named(apps_scroller, "table")
+        self.applications_view_stack.add_named(cards_scroll, "cards")
+
+        self.installed_state = ContentState(self.applications_view_stack)
         container.pack_start(self.installed_state, True, True, 0)
+
 
         action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         action_bar.get_style_context().add_class("action-bar")
@@ -313,25 +441,21 @@ class InstalledViewMixin:
         self.applications_action_location_btn.connect(
             "clicked", lambda _b: self._on_selected_app_action(self.on_open_application_location)
         )
-        action_bar.pack_start(self.applications_action_location_btn, False, False, 0)
 
         self.applications_permissions_btn = Gtk.Button()
         self.applications_permissions_btn.connect(
             "clicked", lambda _b: self._on_selected_app_action(self.on_flatpak_permissions)
         )
-        action_bar.pack_start(self.applications_permissions_btn, False, False, 0)
 
         self.applications_rollback_btn = Gtk.Button()
         self.applications_rollback_btn.connect(
             "clicked", lambda _b: self._on_selected_app_action(self.on_flatpak_rollback)
         )
-        action_bar.pack_start(self.applications_rollback_btn, False, False, 0)
 
         self.applications_changelog_btn = Gtk.Button()
         self.applications_changelog_btn.connect(
             "clicked", lambda _b: self._on_selected_app_action(self.on_show_changelog)
         )
-        action_bar.pack_start(self.applications_changelog_btn, False, False, 0)
 
         self.applications_action_remove_btn = Gtk.Button()
         self.applications_action_remove_btn.get_style_context().add_class("outline-danger")
@@ -348,7 +472,28 @@ class InstalledViewMixin:
         self.applications_export_selected_btn = Gtk.Button()
         self.applications_export_selected_btn.connect("clicked", self._on_export_selected_applications)
         self.applications_export_selected_btn.set_sensitive(False)
-        action_bar.pack_start(self.applications_export_selected_btn, False, False, 0)
+
+        self.applications_more_btn = Gtk.MenuButton(label=t(self.preferences.language, "applications_more"))
+        self.applications_more_btn.set_tooltip_text(t(self.preferences.language, "applications_more"))
+        more_menu = Gtk.Menu()
+        self._advanced_action_menu_items = {}
+        for attribute, key in (
+            ("applications_action_location_btn", "applications_open_location"),
+            ("applications_permissions_btn", "flatpak_permissions_btn"),
+            ("applications_rollback_btn", "flatpak_rollback_menu"),
+            ("applications_changelog_btn", "changelog_menu"),
+            ("applications_export_selected_btn", "export_selected"),
+            ("applications_export_btn", "applications_export"),
+            ("applications_import_btn", "restore_title"),
+            ("applications_add_appimage_btn", "appimage_register_btn"),
+        ):
+            item = Gtk.MenuItem(label=t(self.preferences.language, key))
+            item.connect("activate", lambda _item, name=attribute: getattr(self, name).clicked())
+            more_menu.append(item)
+            self._advanced_action_menu_items[attribute] = item
+        more_menu.show_all()
+        self.applications_more_btn.set_popup(more_menu)
+        action_bar.pack_start(self.applications_more_btn, False, False, 0)
 
         for btn in (
             self.applications_launch_btn,
@@ -373,6 +518,7 @@ class InstalledViewMixin:
         self.applications_diagnostics_label.get_style_context().add_class("dim-label")
         diagnostics_box.pack_start(self.applications_diagnostics_label, False, False, 0)
         self.applications_diagnostics_list = Gtk.ListBox()
+        self.applications_diagnostics_list.get_style_context().add_class("diagnostics-list")
         self.applications_diagnostics_list.set_selection_mode(Gtk.SelectionMode.NONE)
         diagnostics_box.pack_start(self.applications_diagnostics_list, False, False, 0)
 
@@ -394,6 +540,18 @@ class InstalledViewMixin:
         self.application_filter_buttons["all"].set_active(True)
         self.applications_category_combo.set_active(0)
 
+    def _on_applications_layout_toggled(self, button: Gtk.ToggleButton) -> None:
+        is_grid = button.get_active()
+        self.applications_view_stack.set_visible_child_name("cards" if is_grid else "table")
+        self.applications_table_toggle.set_sensitive(not is_grid)
+        icon_button(
+            button,
+            "view-list-symbolic" if is_grid else "view-grid-symbolic",
+            t(self.preferences.language, "view_list" if is_grid else "view_grid"),
+        )
+        button.set_tooltip_text(t(self.preferences.language, "tooltip_installed_layout"))
+        button.get_accessible().set_name(t(self.preferences.language, "tooltip_installed_layout"))
+
     def on_applications_search_changed(self, entry: Gtk.SearchEntry) -> None:
         self.application_search_text = entry.get_text().strip()
         self._render_applications_list()
@@ -413,13 +571,66 @@ class InstalledViewMixin:
         self.reload_applications_async()
 
     def on_flatpak_cleanup(self, *_args) -> None:
+        if self.applications_busy or self.store_busy or getattr(self, "_cleanup_plan_loading", False):
+            return
+        self._cleanup_plan_loading = True
+        self.applications_flatpak_cleanup_btn.set_sensitive(False)
+
+        def worker():
+            try:
+                plan = plan_cleanup(self.application_registry.runner)
+                GLib.idle_add(self._show_flatpak_cleanup_plan, plan, None)
+            except BackendError as exc:
+                GLib.idle_add(self._show_flatpak_cleanup_plan, (), str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_flatpak_cleanup_plan(self, plan, error):
+        self._cleanup_plan_loading = False
+        self.applications_flatpak_cleanup_btn.set_sensitive(True)
+        if error:
+            self._show_error_dialog(error)
+            return False
+        lang = self.preferences.language
+        dialog = Gtk.Dialog(
+            title=t(lang, "applications_flatpak_cleanup"), transient_for=self,
+            modal=True, destroy_with_parent=True,
+        )
+        prepare_dialog(dialog, width=600, height=340)
+        dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
+        apply = dialog.add_button(t(lang, "cleanup_apply"), Gtk.ResponseType.OK)
+        apply.get_style_context().add_class("destructive-action")
+        apply.set_sensitive(bool(plan))
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        label = Gtk.Label(label=t(lang, "cleanup_preview" if plan else "cleanup_empty"), xalign=0)
+        label.set_line_wrap(True)
+        box = dialog.get_content_area()
+        box.set_border_width(16)
+        box.set_spacing(12)
+        box.pack_start(label, False, False, 0)
+        view = Gtk.TextView()
+        view.set_editable(False)
+        view.set_cursor_visible(False)
+        view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        view.get_buffer().set_text("\n".join(
+            f"{t(lang, 'cleanup_scope_' + item.scope)}: {item.ref}" for item in plan
+        ))
+        scroller = Gtk.ScrolledWindow()
+        scroller.add(view)
+        box.pack_start(scroller, True, True, 0)
+        dialog.show_all()
+        response = dialog.run()
+        dialog.destroy()
+        if response != Gtk.ResponseType.OK or not plan:
+            return False
         self._run_application_task(
             action_name="flatpak_cleanup",
-            worker_callable=self.application_registry.flatpak_cleanup,
+            worker_callable=lambda: apply_cleanup(self.application_registry.runner, plan),
             success_message_key="applications_flatpak_cleanup_done",
             progress_title_key="applications_flatpak_cleanup",
             refresh_after=False,
         )
+        return False
 
     def on_check_for_updates(self, *_args) -> None:
         self._run_application_task(
@@ -574,6 +785,11 @@ class InstalledViewMixin:
                 self.applications_export_selected_btn,
             ):
                 btn.set_sensitive(False)
+            self.applications_bulk_remove_btn.set_sensitive(False)
+            for item in self._advanced_action_menu_items.values():
+                item.set_sensitive(False)
+            if not self.applications_busy and not self.applications_loading:
+                self._set_applications_status(t(self.preferences.language, "applications_select_hint"), "#666666")
             return
 
         self.applications_export_selected_btn.set_sensitive(True)
@@ -603,6 +819,14 @@ class InstalledViewMixin:
             self.applications_action_remove_btn.set_sensitive(
                 any(a.source != SOURCE_FIRMWARE for a in selected_apps)
             )
+        self.applications_bulk_remove_btn.set_sensitive(
+            any(
+                model.get_value(model.get_iter(path), _AC_APP).source != SOURCE_FIRMWARE
+                for path in paths
+            )
+        )
+        for attribute, item in self._advanced_action_menu_items.items():
+            item.set_sensitive(getattr(self, attribute).get_sensitive())
 
     def _on_selected_app_action(self, callback: Callable) -> None:
         sel = self.applications_tree.get_selection()
@@ -686,8 +910,9 @@ class InstalledViewMixin:
             parent=parent_win,
             on_action_callback=_handle_detail_action,
         )
-        dialog.run()
-        dialog.destroy()
+        dialog.connect("response", lambda widget, _response: widget.destroy())
+        dialog.show_all()
+        dialog.present()
 
     def on_launch_application(self, _button, application: UnifiedApplication) -> None:
         try:
@@ -714,48 +939,39 @@ class InstalledViewMixin:
             self._set_applications_status(self._application_error_message(str(exc)), "red")
 
     def on_remove_application(self, _button, application: UnifiedApplication) -> None:
-        dialog = Gtk.MessageDialog(
+        dialog = Gtk.Dialog(
+            title=t(self.preferences.language, "applications_remove_confirm_title"),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.NONE,
-            text=t(self.preferences.language, "applications_remove_confirm_title"),
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
-        dialog.format_secondary_text(
-            t(self.preferences.language, "applications_remove_confirm_body", name=application.name)
+        prepare_dialog(dialog, width=520, height=320)
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_start(18)
+        content.set_margin_end(18)
+        content.set_margin_top(16)
+        content.set_margin_bottom(8)
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        header.pack_start(
+            Gtk.Image.new_from_icon_name("user-trash-symbolic", Gtk.IconSize.DIALOG), False, False, 0
         )
+        title_label = Gtk.Label()
+        title_label.set_markup(f"<b>{t(self.preferences.language, 'applications_remove_confirm_title')}</b>")
+        title_label.set_xalign(0)
+        header.pack_start(title_label, True, True, 0)
+        content.pack_start(header, False, False, 0)
+        body = Gtk.Label(
+            label=t(self.preferences.language, "applications_remove_confirm_body", name=application.name)
+        )
+        body.set_xalign(0)
+        body.set_line_wrap(True)
+        content.pack_start(body, False, False, 0)
         dialog.add_button(t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL)
         del_btn = dialog.add_button(t(self.preferences.language, "applications_remove"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
 
-        content = dialog.get_content_area()
-        sensitive = is_native_source(application.source) and (
-            application.package_name
-            in {
-                "libc6",
-                "systemd",
-                "udev",
-                "gdm3",
-                "python3",
-                "python3-gi",
-                "ubuntu-desktop",
-                "zorin-os-desktop",
-            }
-            or application.package_name.startswith(("linux-image", "linux-headers"))
-        )
-        if sensitive:
-            warning = Gtk.Label(label=t(self.preferences.language, "remove_sensitive_warning"))
-            warning.set_line_wrap(True)
-            content.pack_start(warning, False, False, 8)
-            confirmation = Gtk.Entry()
-            confirmation.set_placeholder_text(application.package_name)
-            confirmation.set_tooltip_text(t(self.preferences.language, "remove_sensitive_confirm"))
-            confirmation.connect(
-                "changed", lambda entry: del_btn.set_sensitive(entry.get_text() == application.package_name)
-            )
-            del_btn.set_sensitive(False)
-            content.pack_start(confirmation, False, False, 8)
+        add_sensitive_removal_confirmation(content, del_btn, [application], self.preferences.language)
         purge_check = Gtk.CheckButton(label=t(self.preferences.language, "applications_purge_confirm"))
         purge_check.set_margin_start(16)
         purge_check.set_margin_bottom(8)
@@ -781,35 +997,68 @@ class InstalledViewMixin:
         if self.applications_loading:
             return
         self.applications_loading = True
+        self._application_load_started_at = time.perf_counter()
+        self.application_load_metrics = {
+            "first_snapshot_ms": None,
+            "first_meaningful_ms": None,
+            "complete_ms": None,
+        }
         self.installed_state.show_state(t(self.preferences.language, "applications_loading"), loading=True)
         self._set_application_controls_sensitive(False)
         self._set_applications_status(t(self.preferences.language, "applications_loading"), "#666666")
         threading.Thread(target=self._load_applications_worker, daemon=True).start()
 
     def _load_applications_worker(self) -> None:
-        snapshot = self.application_registry.load()
-        GLib.idle_add(self._finish_applications_load, snapshot)
+        def publish(snapshot, complete):
+            GLib.idle_add(self._finish_applications_load, snapshot, complete)
 
-    def _finish_applications_load(self, snapshot: ApplicationSnapshot) -> bool:
+        progressive_loader = getattr(self.application_registry, "load_progressive", None)
+        try:
+            if callable(progressive_loader):
+                progressive_loader(publish)
+            else:
+                GLib.idle_add(self._finish_applications_load, self.application_registry.load(), True)
+        except Exception as exc:
+            failed = ApplicationSnapshot([], provider_errors=[str(exc)])
+            GLib.idle_add(self._finish_applications_load, failed, True)
+
+    def _finish_applications_load(self, snapshot: ApplicationSnapshot, complete: bool = True) -> bool:
+        if not hasattr(self, "_application_load_started_at"):
+            self._application_load_started_at = time.perf_counter()
+        if self.application_load_metrics.get("first_snapshot_ms") is None:
+            self.application_load_metrics["first_snapshot_ms"] = round(
+                (time.perf_counter() - self._application_load_started_at) * 1000, 1
+            )
+        if snapshot.applications and self.application_load_metrics.get("first_meaningful_ms") is None:
+            self.application_load_metrics["first_meaningful_ms"] = round(
+                (time.perf_counter() - self._application_load_started_at) * 1000, 1
+            )
+        if complete:
+            self.application_load_metrics["complete_ms"] = round(
+                (time.perf_counter() - self._application_load_started_at) * 1000, 1
+            )
         self.applications = snapshot.applications
         self.application_issues = snapshot.issues
         self.application_provider_errors = snapshot.provider_errors
+        self.application_provider_notices = snapshot.provider_notices
         self.installed_package_ids = {
             f"{app.source}:{app.package_name}" for app in self.applications if app.package_name
         }
 
-        self.applications_loading = False
+        self.applications_loading = not complete
         self._set_application_controls_sensitive(True)
         self._update_category_combo()
         self._render_applications_list()
         self._render_application_diagnostics()
         if self.applications:
             self.installed_state.show_content()
-        else:
+        elif complete:
             self.installed_state.show_state(
                 t(self.preferences.language, "installed_empty"),
                 t(self.preferences.language, "installed_empty_body"),
                 error=bool(self.application_provider_errors),
+                retry_callback=self.reload_applications_async if self.application_provider_errors else None,
+                retry_label=t(self.preferences.language, "retry_action"),
             )
         if hasattr(self, "updates_model"):
             from sourcedock.backend.updates import build_update_catalog
@@ -822,8 +1071,14 @@ class InstalledViewMixin:
         update_count = sum(1 for item in self.applications if item.update_available)
         self.applications_update_all_btn.set_sensitive(update_count > 0)
         status_msg = t(self.preferences.language, "applications_loaded")
+        if not complete:
+            status_msg = t(self.preferences.language, "applications_load_partial")
         if self.application_provider_errors:
             status_msg = t(self.preferences.language, "applications_load_partial")
+        elif complete:
+            _model, selected_paths = self.applications_tree.get_selection().get_selected_rows()
+            if not selected_paths:
+                status_msg = t(self.preferences.language, "applications_select_hint")
         self._set_applications_status(status_msg, "#666666")
         return False
 
@@ -843,6 +1098,9 @@ class InstalledViewMixin:
         self._set_application_controls_sensitive(False)
         self._set_applications_status(t(self.preferences.language, "store_action_running"), "#666666")
 
+        if not retry and getattr(self, "_cached_sudo_password", None):
+            self.application_registry.set_sudo_password(self._cached_sudo_password)
+
         lang = self.preferences.language
         self._active_op_seq += 1
         op_key = f"app_{self._active_op_seq}"
@@ -860,6 +1118,7 @@ class InstalledViewMixin:
             parent=self,
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
             language=lang,
+            cancel_fn=self.application_registry.runner.cancel_current,
         )
         self.application_registry.runner.set_output_callback(
             lambda line: GLib.idle_add(progress_dialog.append_log, line)
@@ -888,13 +1147,13 @@ class InstalledViewMixin:
                 GLib.idle_add(self._unregister_active_op, op_key, False, str(exc))
                 msg = self._application_error_message(str(exc))
                 GLib.idle_add(progress_dialog.finish, False, msg)
-                GLib.idle_add(self._finish_application_task, False, msg, False)
+                GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
             except Exception as exc:
                 self.application_registry.runner.set_output_callback(None)
                 GLib.idle_add(self._unregister_active_op, op_key, False, str(exc))
                 msg = str(exc)
                 GLib.idle_add(progress_dialog.finish, False, msg)
-                GLib.idle_add(self._finish_application_task, False, msg, False)
+                GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
             else:
                 self.application_registry.runner.set_output_callback(None)
                 GLib.idle_add(self._unregister_active_op, op_key, True, t(lang, success_message_key))
@@ -915,10 +1174,13 @@ class InstalledViewMixin:
         progress_message: str,
         retry: bool,
     ) -> bool:
+        if retry or exc.password_failed:
+            self._cached_sudo_password = None
         password = self._ask_sudo_password(retry=retry or exc.password_failed)
         if password is None:
             self._finish_application_task(False, t(self.preferences.language, "status_cancelled"), False)
             return False
+        self._cached_sudo_password = password
         self.application_registry.set_sudo_password(password)
         self.applications_busy = False
         self._run_application_task(
@@ -936,7 +1198,7 @@ class InstalledViewMixin:
         self.applications_busy = False
         self._set_application_controls_sensitive(True)
         self._set_applications_status(message, "#1f7a1f" if success else "red")
-        if refresh_after and success:
+        if refresh_after:
             self.reload_applications_async()
             if self.pages.get_current_page() == 2:
                 self.reload_packages_async()
@@ -980,6 +1242,33 @@ class InstalledViewMixin:
     def _render_applications_list(self) -> None:
         if not hasattr(self, "applications_store") or self.applications_store is None:
             return
+
+        # Capture current scroll positions and selected item before clearing
+        saved_table_scroll = 0.0
+        if hasattr(self, "apps_scroller") and self.apps_scroller is not None:
+            vadj = self.apps_scroller.get_vadjustment()
+            if vadj:
+                saved_table_scroll = vadj.get_value()
+        saved_cards_scroll = 0.0
+        if hasattr(self, "cards_scroll") and self.cards_scroll is not None:
+            vadj = self.cards_scroll.get_vadjustment()
+            if vadj:
+                saved_cards_scroll = vadj.get_value()
+
+        selected_app_id = None
+        if hasattr(self, "applications_tree") and self.applications_tree is not None:
+            selection = self.applications_tree.get_selection()
+            if selection:
+                model, paths = selection.get_selected_rows()
+                if paths:
+                    try:
+                        it = model.get_iter(paths[0])
+                        app = model.get_value(it, 9)
+                        if app:
+                            selected_app_id = getattr(app, "id", None)
+                    except Exception:
+                        pass
+
         self.applications_store.clear()
         filtered = self._filtered_application_items()
         self.filtered_applications = filtered
@@ -1001,16 +1290,82 @@ class InstalledViewMixin:
                     app,
                 ]
             )
+        if hasattr(self, "applications_cards") and self.applications_cards is not None:
+            for child in self.applications_cards.get_children():
+                self.applications_cards.remove(child)
+            for app in filtered:
+                pixbuf = self._get_app_pixbuf(app, 48)
+                card = InstalledAppCard(
+                    app,
+                    pixbuf,
+                    on_details=lambda a: self.on_show_application_details(None, a),
+                    language=self.preferences.language,
+                )
+                self.applications_cards.add(card)
+            self.applications_cards.show_all()
+
+        def _restore_scroll_and_selection():
+            if hasattr(self, "apps_scroller") and self.apps_scroller is not None:
+                vadj = self.apps_scroller.get_vadjustment()
+                if vadj:
+                    max_scroll = max(0.0, vadj.get_upper() - vadj.get_page_size())
+                    vadj.set_value(min(saved_table_scroll, max_scroll))
+            if hasattr(self, "cards_scroll") and self.cards_scroll is not None:
+                vadj = self.cards_scroll.get_vadjustment()
+                if vadj:
+                    max_scroll = max(0.0, vadj.get_upper() - vadj.get_page_size())
+                    vadj.set_value(min(saved_cards_scroll, max_scroll))
+            if selected_app_id and hasattr(self, "applications_tree") and self.applications_store:
+                for row in self.applications_store:
+                    app = row[9]
+                    if app and getattr(app, "id", None) == selected_app_id:
+                        self.applications_tree.get_selection().select_iter(row.iter)
+                        break
+            return False
+
+        GLib.idle_add(_restore_scroll_and_selection)
+
         total = len(self.applications)
+
         shown = len(filtered)
+        hidden = (
+            max(total - shown, 0)
+            if self.application_filter_source == "all"
+            and self.application_filter_category == "__all__"
+            and not self.application_search_text
+            else 0
+        )
+        summary_key = "applications_count_summary_hidden" if hidden else "applications_count_summary"
         self.applications_summary_label.set_text(
-            t(self.preferences.language, "applications_count_summary", count=shown, total=total)
+            t(self.preferences.language, summary_key, count=shown, total=total, hidden=hidden)
         )
         if not self.applications_loading:
             if filtered:
                 self.installed_state.show_content()
             else:
-                self.installed_state.show_state(t(self.preferences.language, "installed_empty"))
+                if self.application_search_text:
+                    self.installed_state.show_state(
+                        t(
+                            self.preferences.language,
+                            "installed_search_empty",
+                            query=self.application_search_text,
+                        ),
+                        t(self.preferences.language, "installed_search_empty_body"),
+                        retry_callback=self._clear_application_search,
+                        retry_label=t(self.preferences.language, "clear_search"),
+                    )
+                else:
+                    self.installed_state.show_state(t(self.preferences.language, "installed_empty"))
+
+    def _clear_application_search(self) -> None:
+        self._suppress_global_search_changed = True
+        try:
+            self.applications_search_entry.set_text("")
+            self.header_search.set_text("")
+        finally:
+            self._suppress_global_search_changed = False
+        self.application_search_text = ""
+        self._render_applications_list()
 
     def _scale_pixbuf_safe(self, pb: GdkPixbuf.Pixbuf | None, size: int = 24) -> GdkPixbuf.Pixbuf | None:
         if pb is None:
@@ -1040,8 +1395,27 @@ class InstalledViewMixin:
             except Exception:
                 pass
 
+        if application.source == SOURCE_FLATPAK:
+            flatpak_path = find_flatpak_icon_path(application.package_name or application.id)
+            if flatpak_path:
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(flatpak_path, size, size, True)
+                    self._icon_pixbuf_cache[cache_key] = pb
+                    return pb
+                except Exception:
+                    pass
+
         theme = Gtk.IconTheme.get_default()
-        for name in (icon_name, application.package_name, "application-x-executable"):
+        fallback_by_source = {
+            SOURCE_FIRMWARE: "computer-symbolic",
+            SOURCE_FLATPAK: "package-x-generic",
+            SOURCE_SNAP: "application-x-executable",
+        }
+        generic_names = {"application-x-executable", "application-x-executable-symbolic"}
+        fallback_name = fallback_by_source.get(application.source, "package-x-generic")
+        candidates = [name for name in (icon_name, application.package_name) if name and name not in generic_names]
+        candidates.append(fallback_name)
+        for name in candidates:
             if name and theme.has_icon(name):
                 try:
                     pb = theme.load_icon(name, size, Gtk.IconLookupFlags.FORCE_SIZE)
@@ -1058,20 +1432,43 @@ class InstalledViewMixin:
         for child in self.applications_diagnostics_list.get_children():
             self.applications_diagnostics_list.remove(child)
 
-        all_notes = [f"⚠️ {err}" for err in self.application_provider_errors]
+        lang = self.preferences.language
+        all_notes = [
+            ("dialog-warning-symbolic", translate_provider_error(lang, err))
+            for err in self.application_provider_errors
+        ]
+        all_notes.extend(
+            ("dialog-information-symbolic", translate_provider_notice(lang, notice))
+            for notice in self.application_provider_notices
+        )
+        detail_keys = {
+            "No icon is set.": "diagnostics_missing_icon",
+            "Desktop launcher has no command.": "diagnostics_missing_command",
+            "Linked AppImage file is missing.": "diagnostics_missing_appimage",
+        }
         for issue in self.application_issues:
-            all_notes.append(f"• {issue.title}: {issue.detail}")
+            detail = t(lang, detail_keys[issue.detail]) if issue.detail in detail_keys else issue.detail
+            all_notes.append(("dialog-information-symbolic", f"{issue.title}: {detail}"))
 
         if not all_notes:
-            self.applications_diagnostics_label.set_text("Sorun tespit edilmedi.")
+            self.applications_diagnostics_label.set_text(t(lang, "diagnostics_empty"))
             return
 
-        self.applications_diagnostics_label.set_text(f"{len(all_notes)} tanılama kaydı:")
-        for note in all_notes[:10]:
+        self.applications_diagnostics_label.set_text(t(
+            lang, "diagnostics_record" if len(all_notes) == 1 else "diagnostics_records", count=len(all_notes),
+        ))
+        for icon, note in all_notes[:10]:
+            row = Gtk.Box(spacing=8)
+            image = Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.BUTTON)
+            image.set_valign(Gtk.Align.START)
+            row.pack_start(image, False, False, 0)
             lbl = Gtk.Label(label=note)
             lbl.set_xalign(0)
             lbl.set_line_wrap(True)
-            self.applications_diagnostics_list.add(lbl)
+            lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            lbl.set_selectable(True)
+            row.pack_start(lbl, True, True, 0)
+            self.applications_diagnostics_list.add(row)
         self.applications_diagnostics_list.show_all()
 
     def _filtered_application_items(self) -> list[UnifiedApplication]:
@@ -1092,6 +1489,9 @@ class InstalledViewMixin:
             if source not in ("all", "updates"):
                 if source in NATIVE_SOURCES:
                     if app.source not in NATIVE_SOURCES:
+                        continue
+                elif source == "other":
+                    if app.source in NATIVE_SOURCES or app.source in (SOURCE_FLATPAK, SOURCE_SNAP):
                         continue
                 elif app.source != source:
                     continue
@@ -1118,17 +1518,14 @@ class InstalledViewMixin:
             return t(lang, "applications_source_all")
         if source == "updates":
             return t(lang, "applications_source_updates")
-        return {
-            SOURCE_APT: "APT",
-            SOURCE_DNF: "DNF",
-            SOURCE_PACMAN: "Pacman",
-            SOURCE_ZYPPER: "Zypper",
-            SOURCE_FLATPAK: "Flatpak",
-            SOURCE_SNAP: "Snap",
+        if source == "other":
+            return t(lang, "applications_source_other")
+        labels = {
             SOURCE_APPIMAGE: "AppImage",
             SOURCE_PORTABLE: t(lang, "source_portable"),
             SOURCE_FIRMWARE: t(lang, "source_firmware"),
-        }.get(source, source.upper())
+        }
+        return labels.get(source, source_name(lang, source))
 
     def _category_display_name(self, category: str, lang: str) -> str:
         cat_lower = category.lower().strip()
@@ -1286,6 +1683,7 @@ class InstalledViewMixin:
         loading = Gtk.Dialog(
             title=t(lang, "package_inspecting"), transient_for=self, modal=True, destroy_with_parent=True
         )
+        make_window_movable(loading)
         loading.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         loading._closed = False
         loading.connect("destroy", lambda widget: setattr(widget, "_closed", True))
@@ -1343,16 +1741,20 @@ class InstalledViewMixin:
             return
         dialog = Gtk.MessageDialog(
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            modal=True,
+            destroy_with_parent=True,
             type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.NONE,
             text=t(lang, "bulk_remove_title").format(count=len(selected_apps)),
         )
+        make_window_movable(dialog)
         dialog.get_style_context().add_class("icon-settings-window")
         dialog.format_secondary_text("\n".join(f"{app.name} ({app.source.upper()})" for app in selected_apps))
         dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
-        del_btn = dialog.add_button(t(lang, "bulk_remove_btn"), Gtk.ResponseType.OK)
+        del_btn = dialog.add_button(t(lang, "applications_remove_selected"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
+        add_sensitive_removal_confirmation(dialog.get_content_area(), del_btn, selected_apps, lang)
+        dialog.show_all()
         if dialog.run() == Gtk.ResponseType.OK:
             dialog.destroy()
             completed = set()
@@ -1385,15 +1787,21 @@ class InstalledViewMixin:
             dialog.destroy()
 
     def on_flatpak_permissions(self, _button, application: UnifiedApplication) -> None:
+        load_dialog_data(
+            self, t(self.preferences.language, "permissions_title", name=application.name),
+            lambda: self.application_registry.flatpak_permissions(application.package_name),
+            lambda permissions: self._show_flatpak_permissions(application, permissions),
+        )
+
+    def _show_flatpak_permissions(self, application, perms):
         lang = self.preferences.language
-        perms = self.application_registry.flatpak_permissions(application.package_name)
         dialog = Gtk.Dialog(
             title=t(lang, "permissions_title").format(name=application.name),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
-        dialog.set_default_size(500, 350)
+        prepare_dialog(dialog, width=500, height=350)
         dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
         box = dialog.get_content_area()
@@ -1412,18 +1820,24 @@ class InstalledViewMixin:
         dialog.destroy()
 
     def on_flatpak_rollback(self, _button, application: UnifiedApplication) -> None:
+        load_dialog_data(
+            self, t(self.preferences.language, "rollback_title", name=application.name),
+            lambda: self.application_registry.flatpak_history(application.package_name),
+            lambda history: self._show_flatpak_rollback(application, history),
+        )
+
+    def _show_flatpak_rollback(self, application, history):
         lang = self.preferences.language
-        history = self.application_registry.flatpak_history(application.package_name)
         if not history:
             self._show_error_dialog(t(lang, "rollback_no_history"))
             return
         dialog = Gtk.Dialog(
             title=t(lang, "rollback_title").format(name=application.name),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
-        dialog.set_default_size(480, 320)
+        prepare_dialog(dialog, width=480, height=320)
         dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         rb_btn = dialog.add_button(t(lang, "rollback_btn"), Gtk.ResponseType.OK)
         rb_btn.get_style_context().add_class("suggested-action")

@@ -23,7 +23,9 @@ if [ -f /usr/lib/voltapp/.voltapp-manual-install ]; then
     gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor 2>/dev/null || true
     update-mime-database -q /usr/share/mime 2>/dev/null || true
     echo "✓ Legacy VoltApp manual installation removed."
-    exit 0
+    if [ ! -f /usr/lib/sourcedock/.sourcedock-manual-install ]; then
+        exit 0
+    fi
 fi
 if [ -L /usr/lib/sourcedock ] || [ ! -f /usr/lib/sourcedock/.sourcedock-manual-install ]; then
     echo "No verified manual installation was found. Use APT for a .deb installation."

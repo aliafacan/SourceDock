@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from sourcedock.backend.mime_integration import (
     PACKAGE_MIME_TYPES,
@@ -36,7 +37,9 @@ class TestMimeIntegration(unittest.TestCase):
     def test_install_desktop_file(self):
         """Desktop dosyasının doğru içerikle ve çalıştırılabilir formatta oluşturulduğunu doğrular."""
         dest_desktop = self.temp_path / "applications" / "sourcedock.desktop"
-        written_path = install_desktop_file(custom_dest=dest_desktop)
+        with patch("sourcedock.backend.mime_integration._install_system_icons") as install_icons:
+            written_path = install_desktop_file(custom_dest=dest_desktop)
+        install_icons.assert_not_called()
 
         self.assertTrue(written_path.exists())
         content = written_path.read_text(encoding="utf-8")

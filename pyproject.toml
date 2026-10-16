@@ -4,7 +4,29 @@ line-length = 110
 exclude = ["packaging", "docs", ".git"]
 
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82", "B006", "B008", "B018", "B904"]
+# Progresif kural seti: mevcut kod tabaninda dogrulanmis correctness ve
+# security (flake8-bandit/S) kurallari. Formatter bu turda uygulanmaz.
+select = [
+    "E9",              # syntax/runtime errors
+    "F63", "F7", "F82",  # pyflakes correctness (comparisons, syntax, undefined names)
+    "B006", "B008", "B018", "B023", "B904", "B905",  # bugbear
+    "S",               # flake8-bandit security
+]
+# Gerekceli istisnalar: testlerin assert kullanimi, tuzak olmayan /tmp
+# metinleri, incelenmis argv tabanli subprocess cagrilari ve en-iyi-caba
+# hata yutma. Bunlar guvenlik acigi degil; her biri elle dogrulandi.
+ignore = [
+    "S101",
+    "S103",
+    "S105", "S106", "S107",
+    "S108",
+    "S110", "S112",
+    "S310", "S314", "S603", "S606", "S607",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B023"]
+"tools/**" = ["B023"]
 
 [tool.ruff.format]
 quote-style = "double"

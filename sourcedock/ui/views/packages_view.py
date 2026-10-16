@@ -15,8 +15,9 @@ from gi.repository import Gdk, GLib, GObject, Gtk, Pango  # pyright: ignore[repo
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.core.models import PackageInfo, UnifiedApplication
 from sourcedock.i18n import t
+from sourcedock.theme import PALETTES, resolve_theme
 from sourcedock.ui.components.progress import OperationProgressWindow
-from sourcedock.ui.components.common import style_tree_view
+from sourcedock.ui.components.common import load_dialog_data, prepare_dialog, set_status, style_tree_view
 
 _PC_NAME = 0
 _PC_VERSION = 1
@@ -48,6 +49,8 @@ class PackagesViewMixin:
         self.packages_search_entry = Gtk.SearchEntry()
         self.packages_search_entry.set_hexpand(True)
         self.packages_search_entry.connect("search-changed", self._on_packages_search_changed)
+        self.packages_search_entry.set_no_show_all(True)
+        self.packages_search_entry.hide()
         search_row.pack_start(self.packages_search_entry, True, True, 0)
 
         self.packages_filter_all_btn = Gtk.ToggleButton()
@@ -79,9 +82,11 @@ class PackagesViewMixin:
         self.packages_tree.set_headers_visible(True)
         self.packages_tree.set_activate_on_single_click(False)
         self.packages_tree.set_rubber_banding(True)
+        self.packages_tree.set_has_tooltip(True)
         self.packages_tree.connect("row-activated", self._on_packages_tree_activated)
         self.packages_tree.connect("button-press-event", self.on_packages_tree_button_press)
         self.packages_tree.connect("key-press-event", self._on_packages_tree_key_press)
+        self.packages_tree.connect("query-tooltip", self._on_packages_query_tooltip)
 
         pkg_sel = self.packages_tree.get_selection()
         pkg_sel.set_mode(Gtk.SelectionMode.MULTIPLE)
@@ -107,8 +112,18 @@ class PackagesViewMixin:
 
         up_rend = Gtk.CellRendererText()
         up_rend.set_property("ellipsize", Pango.EllipsizeMode.END)
-        up_rend.set_property("foreground", "#59d38c")
         self.packages_tree_col_new_version = Gtk.TreeViewColumn("Yeni Sürüm", up_rend, text=_PC_NEW_VERSION)
+        self.packages_tree_col_new_version.set_cell_data_func(
+            up_rend,
+            lambda _column, cell, model, iterator, _data: (
+                cell.set_property("foreground", PALETTES[resolve_theme(self.preferences.theme)]["success"]),
+                cell.set_property(
+                    "foreground-set",
+                    bool(model.get_value(iterator, _PC_UPGRADABLE))
+                    and bool(model.get_value(iterator, _PC_NEW_VERSION)),
+                ),
+            ),
+        )
         self.packages_tree_col_new_version.set_sort_column_id(_PC_NEW_VERSION)
         self.packages_tree_col_new_version.set_resizable(True)
         self.packages_tree_col_new_version.set_min_width(130)
@@ -174,7 +189,7 @@ class PackagesViewMixin:
             return
         self.packages_loading = True
         self.packages_refresh_btn.set_sensitive(False)
-        self._set_packages_status("Paketler taranıyor...", "#666666")
+        self._set_packages_status(t(self.preferences.language, "packages_loading"), "#666666")
         threading.Thread(target=self._load_packages_worker, daemon=True).start()
 
     def _load_packages_worker(self) -> None:
@@ -193,9 +208,9 @@ class PackagesViewMixin:
         self.packages = packages
         self._render_packages_list()
         upgradable_count = sum(1 for p in packages if p.update_available)
-        msg = f"{len(packages)} paket yüklü"
+        msg = t(self.preferences.language, "packages_count_summary", count=len(packages))
         if upgradable_count:
-            msg += f" · {upgradable_count} güncellenebilir"
+            msg += f" · {t(self.preferences.language, 'packages_upgradable_count', count=upgradable_count)}"
         self._set_packages_status(msg, "#666666")
         self.packages_update_all_btn.set_sensitive(upgradable_count > 0)
         return False
@@ -217,7 +232,13 @@ class PackagesViewMixin:
                 [
                     pkg.name,
                     pkg.version,
-                    pkg.new_version,
+                    (
+                        pkg.new_version
+                        if pkg.new_version
+                        else t(self.preferences.language, "version_unknown")
+                    )
+                    if pkg.update_available
+                    else t(self.preferences.language, "version_no_update"),
                     pkg.installed_size_kib or 0,
                     size_str,
                     pkg.description,
@@ -304,6 +325,27 @@ class PackagesViewMixin:
             selection.select_path(path)
         return True
 
+    def _on_packages_query_tooltip(self, treeview, x, y, _keyboard_mode, tooltip) -> bool:
+        hit = treeview.get_path_at_pos(int(x), int(y))
+        if not hit:
+            return False
+        path, column, _cell_x, _cell_y = hit
+        iterator = self.packages_store.get_iter(path)
+        if iterator is None:
+            return False
+        values = {
+            self.packages_tree_col_name: self.packages_store.get_value(iterator, _PC_NAME),
+            self.packages_tree_col_version: self.packages_store.get_value(iterator, _PC_VERSION),
+            self.packages_tree_col_new_version: self.packages_store.get_value(iterator, _PC_NEW_VERSION),
+            self.packages_tree_col_description: self.packages_store.get_value(iterator, _PC_DESCRIPTION),
+        }
+        value = values.get(column)
+        if value:
+            tooltip.set_text(str(value))
+            treeview.set_tooltip_cell(tooltip, path, column, None)
+            return True
+        return False
+
     def _on_packages_details_clicked(self, *_args) -> None:
         package = self._selected_package()
         if package is not None and not self.packages_loading and not self.applications_busy:
@@ -386,15 +428,21 @@ class PackagesViewMixin:
             self._run_packages_task(names, "packages_update_all")
 
     def _on_package_changelog(self, package_name: str) -> None:
+        load_dialog_data(
+            self, t(self.preferences.language, "changelog_title", name=package_name),
+            lambda: self.application_registry.apt_changelog(package_name),
+            lambda text: self._show_package_changelog(package_name, text),
+        )
+
+    def _show_package_changelog(self, package_name, text):
         lang = self.preferences.language
-        text = self.application_registry.apt_changelog(package_name)
         dialog = Gtk.Dialog(
             title=t(lang, "changelog_title").format(name=package_name),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
-        dialog.set_default_size(600, 400)
+        prepare_dialog(dialog, width=600, height=400)
         dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
         scroller = Gtk.ScrolledWindow()
@@ -420,6 +468,4 @@ class PackagesViewMixin:
         )
 
     def _set_packages_status(self, message: str, color: str) -> None:
-        self.packages_status.set_markup(
-            f'<span foreground="{color}">{GLib.markup_escape_text(message)}</span>'
-        )
+        set_status(self.packages_status, message, color == "red")

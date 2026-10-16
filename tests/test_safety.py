@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import zipfile
 
 from sourcedock.backend.archive_safety import safe_extract_archive
+from sourcedock.backend.distro import DistroInfo
 from sourcedock.backend.local_packages import inspect_appimage, install_local_archive
 from sourcedock.backend.manager import ApplicationRegistry
 from sourcedock.backend.portable import (
@@ -26,6 +27,8 @@ from sourcedock.backend.portable import (
 )
 from sourcedock.core.errors import BackendError
 from sourcedock.core.models import (
+    APT_LOCK_NOWAIT,
+    APT_LOCK_NOWAIT_VALUE,
     ApplicationSnapshot,
     SOURCE_APT,
     SOURCE_FLATPAK,
@@ -88,6 +91,27 @@ class TestFileSafety(unittest.TestCase):
             with self.assertRaises(BackendError):
                 PortableProvider(self.runner).remove(app)
         self.assertIn(app.id, load_portable_registry())
+
+    def test_shortcut_failure_keeps_the_portable_installation_retryable(self):
+        app = self._registered_app()
+        item = load_portable_registry()[app.id]
+        desktop = self.root / "data" / "applications" / "sourcedock-portable-demo.desktop"
+        desktop.parent.mkdir(parents=True)
+        desktop.write_text("[Desktop Entry]\nName=Demo\n")
+        register_portable_app(
+            app.name, "1.0", app.install_path, app.executable, str(desktop),
+            managed_root=item["managed_root"],
+        )
+        provider = PortableProvider(self.runner)
+        with patch.object(Path, "unlink", side_effect=PermissionError("shortcut locked")):
+            with self.assertRaises(BackendError):
+                provider.remove(app)
+        self.assertTrue(Path(app.install_path).is_dir())
+        self.assertIn(app.id, load_portable_registry())
+        provider.remove(app)
+        self.assertFalse(Path(app.install_path).exists())
+        self.assertFalse(desktop.exists())
+        self.assertNotIn(app.id, load_portable_registry())
 
     def test_portable_removal_requires_manifest(self):
         app = self._registered_app()
@@ -224,9 +248,278 @@ class TestFileSafety(unittest.TestCase):
         self.assertIn(app.id, load_portable_registry())
 
 
+class TestRemovalSafety(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.home = self.root / "home"
+        self.home.mkdir()
+        environment = patch.dict(os.environ, {"HOME": str(self.home)})
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.runner = MagicMock()
+        self.runner.command_exists.return_value = True
+        self.registry = ApplicationRegistry(
+            distro_info=DistroInfo(id="ubuntu", native_manager=SOURCE_APT), runner=self.runner
+        )
+
+    def _flatpak_app(self, app_id="org.example.Demo", scope="user"):
+        install_root = (
+            Path.home() / ".local/share/flatpak/app" if scope == "user" else Path("/var/lib/flatpak/app")
+        )
+        return UnifiedApplication(
+            f"flatpak:{app_id}",
+            "Demo",
+            SOURCE_FLATPAK,
+            package_name=app_id,
+            install_path=str(install_root / app_id),
+        )
+
+    def test_flatpak_cleanup_without_reviewed_plan_never_calls_provider(self):
+        self.runner.reset_mock()
+        with self.assertRaisesRegex(BackendError, "Review a Flatpak cleanup plan"):
+            self.registry.flatpak_cleanup()
+        self.assertEqual(self.runner.mock_calls, [])
+
+    def test_flatpak_cleanup_delegates_only_the_supplied_plan(self):
+        from sourcedock.backend.flatpak_cleanup import CleanupRef
+
+        plan = (CleanupRef("user", "runtime/org.example.Platform/x86_64/stable"),)
+        self.runner.reset_mock()
+        with patch("sourcedock.backend.flatpak_cleanup.apply_cleanup") as apply:
+            self.registry.flatpak_cleanup(plan)
+        apply.assert_called_once_with(self.runner, plan)
+        self.assertEqual(self.runner.mock_calls, [])
+
+    def test_targeted_apt_purge_never_runs_autoremove_or_deletes_user_data(self):
+        config = self.home / ".config/demo/settings"
+        config.parent.mkdir(parents=True)
+        config.write_text("keep")
+        app = UnifiedApplication("apt:demo", "Demo", SOURCE_APT, package_name="demo")
+        for remove in (
+            lambda: self.registry.remove(app, purge=True),
+            lambda: self.registry.remove_native_package("demo", purge=True),
+        ):
+            with self.subTest(remove=remove):
+                self.runner.reset_mock()
+                remove()
+                self.runner.run_privileged.assert_called_once_with(
+                    ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "purge", "-y", "demo"],
+                    timeout=1800,
+                )
+                self.runner.run.assert_not_called()
+                self.assertEqual(config.read_text(), "keep")
+
+    def test_flatpak_purge_rejects_invalid_ids_before_provider_or_data_removal(self):
+        valuable = self.home / "important.txt"
+        valuable.write_text("keep")
+        for app_id in (
+            "",
+            "..",
+            "../..",
+            "../../Documents",
+            "/tmp/org.example.Demo",
+            "org.example.Demo/../other",
+            "org.example.Demo\\..",
+            "org..Demo",
+            "org.example.",
+            "org.Demo",
+            "org.ex-ample.Demo",
+            "1org.example.Demo",
+            "org.example.1Demo",
+            "org.example.Demo\n",
+            "org.example.Demo\x00",
+            "--delete-data",
+            "org.example.Demo/x86_64/stable",
+            "org.example." + "x" * 244,
+            None,
+            42,
+        ):
+            with self.subTest(app_id=app_id):
+                self.runner.reset_mock()
+                app = UnifiedApplication("flatpak:invalid", "Demo", SOURCE_FLATPAK, package_name=app_id)
+                with patch("sourcedock.backend.manager.shutil.rmtree") as remove_data:
+                    with self.assertRaisesRegex(BackendError, "Invalid Flatpak application ID"):
+                        self.registry.remove(app, purge=True)
+                remove_data.assert_not_called()
+                self.runner.run.assert_not_called()
+                self.runner.run_privileged.assert_not_called()
+                self.assertEqual(valuable.read_text(), "keep")
+
+    def test_flatpak_purge_rejects_symlink_ancestry_before_provider_actions(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        valuable = outside / "important.txt"
+        valuable.write_text("keep")
+        for index, relative in enumerate((".var", ".var/app", ".var/app/org.example.Demo")):
+            with self.subTest(path=relative):
+                self.runner.reset_mock()
+                home = self.root / f"home-{index}"
+                home.mkdir()
+                link = home / relative
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(outside, target_is_directory=True)
+                with patch.dict(os.environ, {"HOME": str(home)}):
+                    with self.assertRaisesRegex(BackendError, "symbolic link"):
+                        self.registry.remove(self._flatpak_app(), purge=True)
+                self.runner.run.assert_not_called()
+                self.runner.run_privileged.assert_not_called()
+                self.assertEqual(valuable.read_text(), "keep")
+
+    def test_flatpak_purge_rejects_dangling_symlink_before_provider_actions(self):
+        link = self.home / ".var"
+        link.symlink_to(self.root / "missing", target_is_directory=True)
+        with self.assertRaisesRegex(BackendError, "symbolic link"):
+            self.registry.remove(self._flatpak_app(), purge=True)
+        self.runner.run.assert_not_called()
+        self.assertTrue(link.is_symlink())
+
+    def test_flatpak_purge_rejects_non_directory_before_provider_actions(self):
+        (self.home / ".var").write_text("keep")
+        with self.assertRaisesRegex(BackendError, "not a directory"):
+            self.registry.remove(self._flatpak_app(), purge=True)
+        self.runner.run.assert_not_called()
+        self.assertEqual((self.home / ".var").read_text(), "keep")
+
+    def test_flatpak_purge_removes_only_confirmed_app_data_after_uninstall(self):
+        for scope in ("user", "system"):
+            with self.subTest(scope=scope):
+                self.runner.reset_mock()
+                app = self._flatpak_app("org.example.My-App", scope)
+                data = self.home / ".var/app" / app.package_name
+                data.mkdir(parents=True)
+                (data / "settings").write_text("remove")
+                sibling = data.with_name("org.example.Other")
+                sibling.mkdir(exist_ok=True)
+                (sibling / "settings").write_text("keep")
+
+                def uninstall(command, **_kwargs):
+                    self.assertTrue((data / "settings").exists())
+                    return subprocess.CompletedProcess(command, 0, "", "")
+
+                self.runner.run.side_effect = uninstall
+                self.registry.remove(app, purge=True)
+                self.runner.run.assert_called_once_with(
+                    ["flatpak", "uninstall", f"--{scope}", "-y", app.package_name],
+                    timeout=1800,
+                    check=True,
+                )
+                self.runner.run_privileged.assert_not_called()
+                self.assertFalse(data.exists())
+                self.assertEqual((sibling / "settings").read_text(), "keep")
+
+    def test_flatpak_purge_allows_missing_data_without_creating_directories(self):
+        app = self._flatpak_app()
+        with patch("sourcedock.backend.manager.shutil.rmtree") as remove_data:
+            self.registry.remove(app, purge=True)
+        self.runner.run.assert_called_once()
+        remove_data.assert_not_called()
+        self.assertFalse((self.home / ".var").exists())
+
+    def test_flatpak_uninstall_without_purge_preserves_symlinked_data(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        valuable = outside / "settings"
+        valuable.write_text("keep")
+        (self.home / ".var").symlink_to(outside, target_is_directory=True)
+        with patch("sourcedock.backend.manager.shutil.rmtree") as remove_data:
+            self.registry.remove(self._flatpak_app(), purge=False)
+        self.runner.run.assert_called_once()
+        remove_data.assert_not_called()
+        self.assertEqual(valuable.read_text(), "keep")
+
+    def test_failed_flatpak_uninstall_never_removes_data(self):
+        data = self.home / ".var/app/org.example.Demo"
+        data.mkdir(parents=True)
+        valuable = data / "settings"
+        valuable.write_text("keep")
+        self.runner.run.side_effect = BackendError("uninstall failed")
+        with patch("sourcedock.backend.manager.shutil.rmtree") as remove_data:
+            with self.assertRaisesRegex(BackendError, "uninstall failed"):
+                self.registry.remove(self._flatpak_app(), purge=True)
+        remove_data.assert_not_called()
+        self.assertEqual(valuable.read_text(), "keep")
+
+    def test_flatpak_data_removal_failure_is_reported_with_path_and_cause(self):
+        data = self.home / ".var/app/org.example.Demo"
+        data.mkdir(parents=True)
+        with patch("sourcedock.backend.manager.shutil.rmtree", side_effect=PermissionError("denied")):
+            with self.assertRaises(BackendError) as raised:
+                self.registry.remove(self._flatpak_app(), purge=True)
+        self.runner.run.assert_called_once()
+        self.assertIn("uninstalled", str(raised.exception))
+        self.assertIn(str(data), str(raised.exception))
+        self.assertIn("denied", str(raised.exception))
+        self.assertIsInstance(raised.exception.__cause__, PermissionError)
+        self.assertTrue(data.exists())
+
+    def test_flatpak_purge_rechecks_ancestry_after_provider_operation(self):
+        apps_dir = self.home / ".var/app"
+        data = apps_dir / "org.example.Demo"
+        data.mkdir(parents=True)
+        (data / "settings").write_text("keep original")
+        outside = self.root / "outside"
+        redirected = outside / "org.example.Demo"
+        redirected.mkdir(parents=True)
+        (redirected / "settings").write_text("keep outside")
+
+        def replace_ancestor(command, **_kwargs):
+            apps_dir.rename(apps_dir.with_name("saved"))
+            apps_dir.symlink_to(outside, target_is_directory=True)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        self.runner.run.side_effect = replace_ancestor
+        with self.assertRaisesRegex(BackendError, "symbolic link"):
+            self.registry.remove(self._flatpak_app(), purge=True)
+        self.runner.run.assert_called_once()
+        self.assertEqual((redirected / "settings").read_text(), "keep outside")
+        self.assertEqual(
+            (apps_dir.with_name("saved") / "org.example.Demo/settings").read_text(), "keep original"
+        )
+
+
 class TestProcessSafety(unittest.TestCase):
+    def test_read_only_provider_queries_do_not_take_the_transaction_lock(self):
+        for command in (
+            ["apt", "list", "--upgradable"], ["flatpak", "list", "--user"],
+            ["snap", "list"], ["snap", "find", "editor"],
+            ["flatpak-spawn", "--host", "flatpak", "remote-info", "flathub", "org.example.App"],
+            ["apt", "-o", "DPkg::Lock::Timeout=0", "list", "--upgradable"],
+            ["pacman", "-Qi", "example"],
+        ):
+            with self.subTest(command=command):
+                self.assertFalse(critical_command(command))
+        for command in (
+            ["apt", "install", "list"], ["snap", "remove", "list"],
+            ["flatpak", "uninstall", "--user", "org.example.App"],
+        ):
+            with self.subTest(command=command):
+                self.assertTrue(critical_command(command))
+
+    def test_streaming_failures_redact_password_in_arguments_and_os_errors(self):
+        runner = CommandRunner.__new__(CommandRunner)
+        runner._sudo_password = "private-test-value"
+        runner._output_callback = None
+        for failure in (
+            subprocess.CompletedProcess([], 1, "private-test-value", ""),
+            OSError("private-test-value"),
+        ):
+            context = (
+                patch("sourcedock.core.runner.stream_process", side_effect=failure)
+                if isinstance(failure, Exception)
+                else patch("sourcedock.core.runner.stream_process", return_value=failure)
+            )
+            with self.subTest(failure=type(failure).__name__), context:
+                with self.assertRaises(BackendError) as error:
+                    runner._run_streaming(["fake", "private-test-value"], 1, True)
+                self.assertNotIn("private-test-value", str(error.exception))
+
     def test_daemon_and_local_package_transactions_are_critical(self):
-        for command in (["snap", "install", "demo"], ["sudo", "-S", "rpm", "-U", "demo.rpm"]):
+        for command in (
+            ["snap", "install", "demo"], ["sudo", "-S", "rpm", "-U", "demo.rpm"],
+            ["flatpak", "install", "--user", "example"], ["AppImageUpdate", "/tmp/example.AppImage"],
+        ):
             with self.subTest(command=command):
                 self.assertTrue(critical_command(command))
         self.assertFalse(critical_command(["sleep", "1"]))
@@ -329,6 +622,47 @@ class TestProcessSafety(unittest.TestCase):
             "flatpak:editor", "Editor", SOURCE_FLATPAK, package_name="org.example.Editor"
         )
         self.assertEqual(len(registry._merge_applications([native, flatpak])), 2)
+
+    def test_hidden_updates_are_not_provider_failures_or_progressive_notices(self):
+        registry = ApplicationRegistry(distro_info=DistroInfo(native_manager=SOURCE_APT), runner=MagicMock())
+        registry.native_provider._hidden_upgradable = {"libdemo", "demo-data"}
+        errors = ["snap: timeout after 5s"]
+        snapshot = registry._build_snapshot([], errors)
+        self.assertEqual(snapshot.provider_errors, errors)
+        self.assertEqual(len(snapshot.provider_notices), 1)
+        self.assertIn("demo-data, libdemo", snapshot.provider_notices[0])
+        partial = registry._build_snapshot([], errors, include_hidden=False)
+        self.assertEqual(partial.provider_errors, errors)
+        self.assertEqual(partial.provider_notices, [])
+        self.assertEqual(errors, ["snap: timeout after 5s"])
+
+    def test_apt_lock_wait_can_be_cancelled_responsively(self):
+        runner = CommandRunner()
+        messages = []
+        runner.set_output_callback(messages.append)
+        with patch.object(runner, "_apt_lock_holders", return_value=[("9999", "apt-get upgrade")]):
+            ready = threading.Event()
+
+            def monitor(msg):
+                messages.append(msg)
+                ready.set()
+
+            runner.set_output_callback(monitor)
+            failures = []
+
+            def worker():
+                try:
+                    runner._wait_for_apt_locks(["apt", "install", "demo"], max_wait=30)
+                except BackendError as exc:
+                    failures.append(str(exc))
+
+            thread = threading.Thread(target=worker)
+            thread.start()
+            self.assertTrue(ready.wait(2))
+            self.assertTrue(runner.cancel_current())
+            thread.join(2)
+            self.assertFalse(thread.is_alive())
+            self.assertTrue(any("cancelled" in f.lower() for f in failures))
 
 
 if __name__ == "__main__":

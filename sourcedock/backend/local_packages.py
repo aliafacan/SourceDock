@@ -367,8 +367,8 @@ def compare_versions(v1: str, v2: str) -> int:
 
     t1 = tokenize(v1_clean)
     t2 = tokenize(v2_clean)
-    for p1, p2 in zip(t1, t2):
-        if type(p1) != type(p2):
+    for p1, p2 in zip(t1, t2, strict=False):
+        if type(p1) is not type(p2):
             p1, p2 = str(p1), str(p2)
         if p1 < p2:
             return -1

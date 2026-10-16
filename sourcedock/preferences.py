@@ -29,6 +29,8 @@ class AppPreferences:
     scale: str = "100"
     preferred_source: str = "all"
     check_updates_on_start: bool = False
+    notifications_enabled: bool = True
+    detailed_table_default: bool = True
 
 
 class PreferencesStore:
@@ -73,7 +75,10 @@ class PreferencesStore:
             scale=scale,
             preferred_source=preferred_source,
             check_updates_on_start=raw.get("check_updates_on_start") is True,
+            notifications_enabled=raw.get("notifications_enabled", True) is not False,
+            detailed_table_default=raw.get("detailed_table_default", True) is not False,
         )
+
 
     def save(self, preferences: AppPreferences) -> None:
         write_json(Path(CONFIG_PATH), asdict(preferences))

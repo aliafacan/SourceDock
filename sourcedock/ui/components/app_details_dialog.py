@@ -7,6 +7,7 @@ from collections.abc import Callable
 from configparser import ConfigParser
 import os
 from pathlib import Path
+import threading
 
 import gi
 
@@ -15,7 +16,9 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
-from sourcedock.core.errors import BackendError
+from sourcedock.core.errors import AuthRequiredError, BackendError
+from sourcedock.core.history import OperationHistory
+from sourcedock.core.icons import find_flatpak_icon_path, find_snap_icon_path
 from sourcedock.core.models import (
     SOURCE_APPIMAGE,
     SOURCE_APT,
@@ -29,8 +32,11 @@ from sourcedock.core.models import (
     UnifiedApplication,
     is_native_source,
 )
-from sourcedock.i18n import t
-from sourcedock.ui.components.common import ScreenshotGallery, icon_button
+from sourcedock.i18n import source_name, t
+from sourcedock.ui.components.common import ScreenshotGallery, icon_text_button, make_window_movable, prepare_dialog
+from sourcedock.ui.components.removal import add_sensitive_removal_confirmation
+from sourcedock.ui.components.dialogs import ask_sudo_password
+from sourcedock.ui.components.progress import OperationProgressWindow
 from sourcedock.store.metadata import load_metadata
 
 
@@ -53,8 +59,20 @@ def _read_desktop_comment(desktop_file: str, language: str) -> str:
         parser.read(desktop_file, encoding="utf-8")
         if "Desktop Entry" in parser:
             sec = parser["Desktop Entry"]
-            lang_key = f"Comment[{language}]"
-            return sec.get(lang_key) or sec.get("Comment") or sec.get("GenericName") or ""
+            language_base = language.split("_", 1)[0].split("-", 1)[0]
+            for key in (
+                f"Comment[{language}]",
+                f"Comment[{language_base}]",
+                "Comment[en]",
+                "Comment",
+                f"GenericName[{language}]",
+                f"GenericName[{language_base}]",
+                "GenericName[en]",
+                "GenericName",
+            ):
+                value = sec.get(key, "").strip()
+                if value:
+                    return value
     except Exception:
         pass
     return ""
@@ -71,14 +89,15 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         parent: Gtk.Window | None = None,
         on_action_callback: Callable[[str, UnifiedApplication], None] | None = None,
         standalone: bool = False,
+        removal_operation: Callable[[], None] | None = None,
     ) -> None:
-        flags = Gtk.DialogFlags.MODAL if parent else Gtk.DialogFlags(0)
         super().__init__(
             title=f"{application.name} — {t(language, 'details_title')}",
             transient_for=parent,
-            flags=flags,
+            modal=bool(parent),
+            destroy_with_parent=bool(parent),
         )
-        self.set_default_size(680, 560)
+        prepare_dialog(self, width=680, height=560, independent=True)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.get_style_context().add_class("icon-settings-window")
         self.get_style_context().add_class("package-installer-dialog")
@@ -94,14 +113,25 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         self.language = language
         self.on_action_callback = on_action_callback
         self.standalone = standalone
+        self._removal_operation = removal_operation
+        self._action_busy = False
+        self._destroyed = False
 
         self.connect("destroy", self._on_destroy)
+        self.connect("delete-event", self._on_delete_event)
 
         self._build_ui()
 
     def _on_destroy(self, _widget) -> None:
-        if self.standalone:
+        self._destroyed = True
+        if self.standalone and not self._action_busy:
             Gtk.main_quit()
+
+    def _on_delete_event(self, _widget, _event) -> bool:
+        if self._action_busy:
+            self.iconify()
+            return True
+        return False
 
     def _build_ui(self) -> None:
         content_area = self.get_content_area()
@@ -121,7 +151,7 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         if pixbuf:
             icon_img.set_from_pixbuf(pixbuf)
         else:
-            icon_img.set_from_icon_name("application-x-executable", Gtk.IconSize.DIALOG)
+            icon_img.set_from_icon_name("package-x-generic", Gtk.IconSize.DIALOG)
         header_box.pack_start(icon_img, False, False, 0)
 
         # İsim, Paket Adı ve Rozetler
@@ -137,9 +167,8 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
 
         sub_lbl = Gtk.Label()
         sub_text = self.application.package_name or self.application.id
-        sub_lbl.set_markup(
-            f'<span foreground="#888888" size="small">{GLib.markup_escape_text(sub_text)}</span>'
-        )
+        sub_lbl.set_text(sub_text)
+        sub_lbl.get_style_context().add_class("dim-label")
         sub_lbl.set_xalign(0)
         title_vbox.pack_start(sub_lbl, False, False, 0)
 
@@ -172,12 +201,18 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
 
         # 2. İşlem Butonları Çubuğu (Action Bar)
         actions_card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._action_bar = actions_card
         actions_card.get_style_context().add_class("action-bar")
         content_area.pack_start(actions_card, False, False, 0)
 
         # [Çalıştır / Launch]
         btn_launch = Gtk.Button()
-        icon_button(btn_launch, "media-playback-start-symbolic", t(self.language, "details_btn_launch"))
+        icon_text_button(
+            btn_launch,
+            "media-playback-start-symbolic",
+            t(self.language, "details_btn_launch"),
+            t(self.language, "details_btn_launch"),
+        )
         btn_launch.get_style_context().add_class("suggested-action")
         btn_launch.set_sensitive(bool(self.application.executable))
         btn_launch.connect("clicked", self._on_launch_clicked)
@@ -186,8 +221,11 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         # [Güncelle / Update]
         if self.application.update_available:
             btn_update = Gtk.Button()
-            icon_button(
-                btn_update, "software-update-available-symbolic", t(self.language, "details_btn_update")
+            icon_text_button(
+                btn_update,
+                "software-update-available-symbolic",
+                t(self.language, "details_btn_update"),
+                t(self.language, "details_btn_update"),
             )
             btn_update.get_style_context().add_class("accent-action")
             btn_update.connect("clicked", self._on_update_clicked)
@@ -195,7 +233,12 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
 
         # [Konum / Open Directory]
         btn_loc = Gtk.Button()
-        icon_button(btn_loc, "folder-open-symbolic", t(self.language, "details_btn_location"))
+        icon_text_button(
+            btn_loc,
+            "folder-open-symbolic",
+            t(self.language, "details_btn_location"),
+            t(self.language, "details_btn_location"),
+        )
         btn_loc.set_sensitive(bool(self.application.install_path or self.application.desktop_file))
         btn_loc.connect("clicked", self._on_location_clicked)
         actions_card.pack_start(btn_loc, False, False, 0)
@@ -203,19 +246,34 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         # [İzinler / Permissions] (Flatpak)
         if self.application.source == SOURCE_FLATPAK:
             btn_perm = Gtk.Button()
-            icon_button(btn_perm, "changes-prevent-symbolic", t(self.language, "details_btn_permissions"))
+            icon_text_button(
+                btn_perm,
+                "changes-prevent-symbolic",
+                t(self.language, "details_btn_permissions"),
+                t(self.language, "details_btn_permissions"),
+            )
             btn_perm.connect("clicked", self._on_permissions_clicked)
             actions_card.pack_start(btn_perm, False, False, 0)
 
             btn_rb = Gtk.Button()
-            icon_button(btn_rb, "edit-undo-symbolic", t(self.language, "applications_rollback"))
+            icon_text_button(
+                btn_rb,
+                "edit-undo-symbolic",
+                t(self.language, "applications_rollback"),
+                t(self.language, "applications_rollback"),
+            )
             btn_rb.connect("clicked", self._on_rollback_clicked)
             actions_card.pack_start(btn_rb, False, False, 0)
 
         # [Sürüm Notları / Changelog] (Native)
         if is_native_source(self.application.source):
             btn_cl = Gtk.Button()
-            icon_button(btn_cl, "document-open-recent-symbolic", t(self.language, "details_btn_changelog"))
+            icon_text_button(
+                btn_cl,
+                "document-open-recent-symbolic",
+                t(self.language, "details_btn_changelog"),
+                t(self.language, "details_btn_changelog"),
+            )
             btn_cl.connect("clicked", self._on_changelog_clicked)
             actions_card.pack_start(btn_cl, False, False, 0)
 
@@ -243,19 +301,41 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             details_vbox.pack_start(
                 ScreenshotGallery(self.metadata["screenshots"], self.language), False, False, 0
             )
-        trust = Gtk.Label(label=t(self.language, "security_unknown"))
+        publisher = self.metadata.get("publisher", "")
+        trust = Gtk.Label(label=(
+            t(self.language, "security_publisher_metadata", publisher=publisher)
+            if publisher else t(self.language, "security_publisher_unknown")
+        ))
         trust.set_xalign(0)
-        trust.get_style_context().add_class("warning-text")
+        trust.set_line_wrap(True)
+        trust.get_style_context().add_class("dim-label" if publisher else "warning-text")
         details_vbox.pack_start(trust, False, False, 0)
         sandbox = Gtk.Label(
             label=t(
                 self.language,
-                "security_flatpak" if self.application.source == SOURCE_FLATPAK else "security_native",
+                "security_flatpak"
+                if self.application.source == SOURCE_FLATPAK
+                else "security_snap"
+                if self.application.source == SOURCE_SNAP
+                else "security_native",
             )
         )
         sandbox.set_xalign(0)
         sandbox.set_line_wrap(True)
         details_vbox.pack_start(sandbox, False, False, 0)
+        signature_key = (
+            "security_signature_flatpak"
+            if self.application.source == SOURCE_FLATPAK
+            else "security_signature_snap"
+            if self.application.source == SOURCE_SNAP
+            else "security_signature_native"
+            if is_native_source(self.application.source)
+            else "security_signature_local"
+        )
+        signature = Gtk.Label(label=t(self.language, signature_key), xalign=0)
+        signature.set_line_wrap(True)
+        signature.get_style_context().add_class("dim-label")
+        details_vbox.pack_start(signature, False, False, 0)
 
         # Açıklama Kutusu
         comment = self.metadata.get("description") or _read_desktop_comment(
@@ -301,7 +381,7 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         metadata_items.extend(
             [
                 (t(self.language, "details_size"), _format_size(self.application.installed_size_kib)),
-                (t(self.language, "details_source"), self.application.source.upper()),
+                (t(self.language, "details_source"), source_name(self.language, self.application.source)),
                 (t(self.language, "details_install_date"), self.application.installed_date or "-"),
                 (t(self.language, "details_last_updated"), self.application.last_updated or "-"),
                 (t(self.language, "details_executable"), self.application.executable or "-"),
@@ -355,8 +435,25 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
                 return pb
             except Exception:
                 pass
+        if app.source == SOURCE_FLATPAK:
+            flatpak_path = find_flatpak_icon_path(app.package_name or app.id)
+            if flatpak_path:
+                try:
+                    return GdkPixbuf.Pixbuf.new_from_file_at_scale(flatpak_path, size, size, True)
+                except Exception:
+                    pass
+        if app.source == SOURCE_SNAP:
+            snap_path = find_snap_icon_path(app.package_name or app.id)
+            if snap_path:
+                try:
+                    return GdkPixbuf.Pixbuf.new_from_file_at_scale(snap_path, size, size, True)
+                except Exception:
+                    pass
         theme = Gtk.IconTheme.get_default()
-        for name in (icon_name, app.package_name, "application-x-executable"):
+        generic_names = {"application-x-executable", "application-x-executable-symbolic"}
+        candidates = [icon_name] if icon_name and icon_name not in generic_names else []
+        candidates.append("package-x-generic")
+        for name in candidates:
             if name and theme.has_icon(name):
                 try:
                     return theme.load_icon(name, size, Gtk.IconLookupFlags.FORCE_SIZE)
@@ -378,11 +475,92 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             self.on_action_callback("update", self.application)
             self.destroy()
         else:
+            self._run_standalone_action("update", lambda: self.registry.update(self.application))
+
+    def _run_standalone_action(self, action: str, operation: Callable[[], None]) -> None:
+        if self._action_busy or self._destroyed:
+            return
+        self._action_busy = True
+        self._action_bar.set_sensitive(False)
+        progress = OperationProgressWindow(
+            title=t(self.language, f"details_btn_{action}"),
+            message=self.application.name,
+            parent=self,
+            language=self.language,
+            cancel_fn=self.registry.runner.cancel_current,
+        )
+
+        parent_win = self.get_transient_for()
+        cached = getattr(self, "_cached_sudo_password", None) or getattr(parent_win, "_cached_sudo_password", None)
+        if cached:
+            self.registry.set_sudo_password(cached)
+
+        def finish(error):
+            if isinstance(error, AuthRequiredError) and not self._destroyed:
+                if error.password_failed:
+                    self._cached_sudo_password = None
+                    if hasattr(parent_win, "_cached_sudo_password"):
+                        parent_win._cached_sudo_password = None
+                cached_now = getattr(self, "_cached_sudo_password", None) or getattr(parent_win, "_cached_sudo_password", None)
+                if cached_now and not error.password_failed:
+                    self.registry.set_sudo_password(cached_now)
+                    start_worker()
+                    return False
+                password = ask_sudo_password(
+                    self, self.language, retry=error.password_failed,
+                    message_key="applications_password_message", retry_key="applications_password_retry",
+                )
+                if password is not None:
+                    self._cached_sudo_password = password
+                    if hasattr(parent_win, "_cached_sudo_password"):
+                        parent_win._cached_sudo_password = password
+                    self.registry.set_sudo_password(password)
+                    start_worker()
+                    return False
+                message = t(self.language, "status_cancelled")
+            elif error is not None:
+                message = str(error)
+            else:
+                message = t(self.language, f"applications_{action}_done")
+            self._action_busy = False
+            success = error is None
             try:
-                self.registry.update(self.application)
-                self.destroy()
+                OperationHistory().append(
+                    f"{action}: {self.application.package_name or self.application.id}",
+                    self.application.source, success, message,
+                )
+            except OSError as exc:
+                progress.append_log(str(exc))
+            progress.finish(success, message)
+            if self._destroyed:
+                if self.standalone:
+                    progress.connect("destroy", lambda _widget: Gtk.main_quit())
+            else:
+                self._action_bar.set_sensitive(True)
+                if success:
+                    self.destroy()
+            return False
+
+        def worker():
+            error = None
+            try:
+                operation()
             except Exception as exc:
-                self._show_error(str(exc))
+                error = exc
+            finally:
+                self.registry.runner.set_output_callback(None)
+                self.registry.runner.clear_sudo_password()
+            GLib.idle_add(finish, error)
+
+        def start_worker():
+            cached_now = getattr(self, "_cached_sudo_password", None) or getattr(parent_win, "_cached_sudo_password", None)
+            if cached_now and not getattr(self.registry.runner, "_sudo_password", None):
+                self.registry.set_sudo_password(cached_now)
+            self.registry.runner.set_output_callback(lambda line: GLib.idle_add(progress.append_log, line))
+            self._action_thread = threading.Thread(target=worker, name="sourcedock-detail-action", daemon=True)
+            self._action_thread.start()
+
+        start_worker()
 
     def _on_location_clicked(self, _btn) -> None:
         if self.on_action_callback:
@@ -406,25 +584,48 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             self.on_action_callback("changelog", self.application)
 
     def _on_remove_clicked(self, _btn) -> None:
+        if self._action_busy:
+            return
+        if self.on_action_callback:
+            self.on_action_callback("remove", self.application)
+            return
         # Doğrudan kaldırma onayı
-        dialog = Gtk.MessageDialog(
+        dialog = Gtk.Dialog(
+            title=t(self.language, "details_remove_confirm_title"),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL,
-            type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.NONE,
-            text=t(self.language, "details_remove_confirm_title"),
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.format_secondary_text(
-            t(self.language, "details_remove_confirm_text", name=self.application.name)
+        make_window_movable(dialog)
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_start(18)
+        content.set_margin_end(18)
+        content.set_margin_top(16)
+        content.set_margin_bottom(8)
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        header.pack_start(
+            Gtk.Image.new_from_icon_name("user-trash-symbolic", Gtk.IconSize.DIALOG), False, False, 0
         )
+        title_label = Gtk.Label()
+        title_label.set_markup(f"<b>{t(self.language, 'details_remove_confirm_title')}</b>")
+        title_label.set_xalign(0)
+        header.pack_start(title_label, True, True, 0)
+        content.pack_start(header, False, False, 0)
+        body = Gtk.Label(label=t(self.language, "details_remove_confirm_text", name=self.application.name))
+        body.set_xalign(0)
+        body.set_line_wrap(True)
+        content.pack_start(body, False, False, 0)
         dialog.add_button(t(self.language, "password_cancel"), Gtk.ResponseType.CANCEL)
         del_btn = dialog.add_button(t(self.language, "details_btn_remove"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
+        add_sensitive_removal_confirmation(content, del_btn, [self.application], self.language)
 
         purge_check = Gtk.CheckButton(label=t(self.language, "details_remove_purge_check"))
+        purge_check.set_no_show_all(self._removal_operation is not None)
         purge_check.set_margin_start(12)
         purge_check.set_margin_top(8)
-        dialog.get_content_area().pack_start(purge_check, False, False, 0)
+        content.pack_start(purge_check, False, False, 0)
         dialog.show_all()
 
         resp = dialog.run()
@@ -432,22 +633,16 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         dialog.destroy()
 
         if resp == Gtk.ResponseType.OK:
-            if self.on_action_callback:
-                self.on_action_callback("remove", self.application)
-                self.destroy()
-            else:
-                try:
-                    self.registry.remove(self.application, purge=is_purge)
-                    self.destroy()
-                except Exception as exc:
-                    self._show_error(str(exc))
+            operation = self._removal_operation or (lambda: self.registry.remove(self.application, purge=is_purge))
+            self._run_standalone_action("remove", operation)
 
     def _show_error(self, message: str) -> None:
         err = Gtk.MessageDialog(
             transient_for=self,
             type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.CLOSE,
+            buttons=Gtk.ButtonsType.NONE,
             text=message,
         )
+        err.add_button(t(self.language, "dialog_close"), Gtk.ResponseType.CLOSE)
         err.run()
         err.destroy()

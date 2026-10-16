@@ -21,6 +21,34 @@ from sourcedock.backend.scanner import (
     _normalize_path,
 )
 
+# Update-information schemes understood by AppImageUpdate. A value is only
+# treated as "update supported" when it declares one of these schemes with the
+# required fields, so the interface never implies a safe update path that the
+# metadata cannot actually drive.
+SUPPORTED_UPDATE_SCHEMES = {
+    "zsync": 2,
+    "bzsync": 2,
+    "bintray-zsync": 3,
+    "gh-releases-zsync": 4,
+}
+
+
+def is_valid_update_information(value: str) -> bool:
+    """Return True only for a well-formed, known AppImage update descriptor."""
+    if not value or not isinstance(value, str):
+        return False
+    parts = [part.strip() for part in value.split("|")]
+    scheme = parts[0].casefold()
+    required = SUPPORTED_UPDATE_SCHEMES.get(scheme)
+    if required is None or len(parts) < required:
+        return False
+    if any(not part for part in parts[:required]):
+        return False
+    if scheme in {"zsync", "bzsync"}:
+        return parts[1].startswith(("http://", "https://"))
+    return True
+
+
 
 class AppImageProvider:
     """Sistemdeki bağımsız .AppImage dosyalarını yöneten sağlayıcı."""
@@ -61,7 +89,7 @@ class AppImageProvider:
     ) -> UnifiedApplication:
         name = entry.name if entry else _name_from_appimage(path)
         update_info = entry.appimage_update_info if entry else ""
-        update_supported = bool(appimage_update_available and update_info)
+        update_supported = bool(appimage_update_available and is_valid_update_information(update_info))
         size = None
         try:
             size = max(1, os.path.getsize(path) // 1024)

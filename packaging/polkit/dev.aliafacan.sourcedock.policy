@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  SourceDock polkit proof-of-concept policy.
+
+  NOT installed by packaging/build_deb.sh. The active release still uses sudo.
+  This document exists so the authorization boundary can be reviewed before any
+  distribution ships it. It deliberately names one fixed helper and never grants
+  arbitrary command execution: there is no allow_any=yes and no shell program.
+-->
+<policyconfig>
+  <vendor>SourceDock</vendor>
+  <vendor_url>https://github.com/aliafacan/SourceDock</vendor_url>
+
+  <action id="dev.aliafacan.sourcedock.manage-local-packages">
+    <description>Install or remove a package with SourceDock</description>
+    <description xml:lang="tr">SourceDock ile paket kur veya kaldır</description>
+    <message>Authentication is required to change installed software.</message>
+    <message xml:lang="tr">Kurulu yazılımı değiştirmek için kimlik doğrulaması gerekir.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/sourcedock/sourcedock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>

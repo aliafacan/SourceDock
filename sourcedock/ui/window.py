@@ -23,8 +23,8 @@ from sourcedock.backend.manager import ApplicationRegistry
 from sourcedock.store.registry import StoreRegistry
 from sourcedock.i18n import t
 from sourcedock.preferences import PreferencesStore
-from sourcedock.theme import get_theme_css, resolve_theme
-from sourcedock.ui.components.common import icon_button
+from sourcedock.theme import get_theme_css, resolve_theme, system_reduced_motion
+from sourcedock.ui.components.common import icon_button, icon_text_button, prepare_dialog
 from sourcedock.ui.views.shell_view import ShellViewMixin
 from sourcedock.ui.views.updates_view import UpdatesViewMixin
 from sourcedock.ui.views.advanced_view import AdvancedViewMixin
@@ -63,13 +63,16 @@ class MainWindow(
         self.applications: list[UnifiedApplication] = []
         self.application_issues: list[ApplicationIssue] = []
         self.application_provider_errors: list[str] = []
+        self.application_provider_notices: list[str] = []
         self.application_filter_source = "all"
         self.application_filter_category = "__all__"
         self.application_search_text = ""
         self.applications_loading = False
         self.applications_busy = False
+        self._cached_sudo_password: str | None = None
         self.application_filter_buttons: dict[str, Gtk.ToggleButton] = {}
         self.filtered_applications: list[UnifiedApplication] = []
+        self._suppress_global_search_changed = False
 
         # Store state
         self.store_results: list[StoreResult] = []
@@ -77,6 +80,8 @@ class MainWindow(
         self.store_busy = False
         self._store_search_generation = 0
         self._store_search_timeout_id = 0
+        self.store_search_metrics: dict[str, object] = {}
+        self.application_load_metrics: dict[str, object] = {}
         self.store_filter_buttons: dict[str, Gtk.ToggleButton] = {}
         self.installed_package_ids: set[str] = set()
         self._icon_pixbuf_cache: dict[str, GdkPixbuf.Pixbuf | None] = {}
@@ -168,7 +173,9 @@ class MainWindow(
         self._refresh_shell_texts()
 
     def _on_notebook_switch_page(self, _notebook: Gtk.Notebook, _page, page_num: int) -> None:
-        GLib.idle_add(self._refresh_shell_page)
+        # GTK emits switch-page before updating get_current_page(). Use the
+        # signal's page number so the visible search scope changes atomically.
+        self._refresh_shell_page(page_num)
         if page_num == 2 and not self.packages and not self.packages_loading:
             self.reload_packages_async()
         elif page_num == 3:
@@ -196,7 +203,11 @@ class MainWindow(
             except Exception:
                 pass
 
-            self.css_provider.load_from_data(get_theme_css(self.preferences.theme, scale).encode("utf-8"))
+            self.css_provider.load_from_data(
+                get_theme_css(
+                    self.preferences.theme, scale, reduced_motion=system_reduced_motion()
+                ).encode("utf-8")
+            )
             Gtk.StyleContext.add_provider_for_screen(
                 screen,
                 self.css_provider,
@@ -250,7 +261,7 @@ class MainWindow(
         self.applications_action_location_btn.set_tooltip_text(t(lang, "tooltip_installed_open_location"))
         self.applications_action_remove_btn.set_label(t(lang, "applications_remove"))
         self.applications_action_remove_btn.set_tooltip_text(t(lang, "tooltip_installed_remove"))
-        self.applications_bulk_remove_btn.set_label(t(lang, "applications_remove") + " (×N)")
+        self.applications_bulk_remove_btn.set_label(t(lang, "applications_remove_selected"))
         self.applications_bulk_remove_btn.set_tooltip_text(t(lang, "tooltip_installed_bulk_remove"))
         self.applications_permissions_btn.set_label(t(lang, "flatpak_permissions_btn"))
         self.applications_permissions_btn.set_tooltip_text(t(lang, "tooltip_installed_permissions"))
@@ -267,10 +278,26 @@ class MainWindow(
         self.applications_add_appimage_btn.set_tooltip_text(t(lang, "tooltip_installed_add_appimage"))
         self.applications_export_selected_btn.set_label(t(lang, "export_selected"))
         self.applications_export_selected_btn.set_tooltip_text(t(lang, "tooltip_installed_export_selected"))
+        self.applications_more_btn.set_label(t(lang, "applications_more"))
+        self.applications_more_btn.set_tooltip_text(t(lang, "applications_more"))
+        for attribute, key in (
+            ("applications_action_location_btn", "applications_open_location"),
+            ("applications_permissions_btn", "flatpak_permissions_btn"),
+            ("applications_rollback_btn", "flatpak_rollback_menu"),
+            ("applications_changelog_btn", "changelog_menu"),
+            ("applications_export_selected_btn", "export_selected"),
+            ("applications_export_btn", "applications_export"),
+            ("applications_import_btn", "restore_title"),
+            ("applications_add_appimage_btn", "appimage_register_btn"),
+        ):
+            item = self._advanced_action_menu_items.get(attribute)
+            if item:
+                item.set_label(t(lang, key))
         self.applications_category_label.set_text(t(lang, "applications_category_filter") + ": ")
         if hasattr(self, "applications_category_combo"):
             self.applications_category_combo.set_tooltip_text(t(lang, "tooltip_installed_category"))
         self.applications_diagnostics_expander.set_label(t(lang, "applications_diagnostics"))
+        self._render_application_diagnostics()
         self.applications_flatpak_cleanup_btn.set_label(t(lang, "applications_flatpak_cleanup"))
         self.applications_flatpak_cleanup_btn.set_tooltip_text(t(lang, "tooltip_installed_flatpak_cleanup"))
 
@@ -282,14 +309,32 @@ class MainWindow(
             "appimage": "tooltip_installed_filter_appimage",
             "portable": "tooltip_installed_filter_portable",
             "firmware": "tooltip_installed_filter_firmware",
+            "other": "tooltip_installed_filter_other",
         }
         for source, button in self.application_filter_buttons.items():
             button.set_label(self._application_source_label(source))
             tt_key = filter_tooltip_map.get(source, "tooltip_installed_filter_native")
             button.set_tooltip_text(t(lang, tt_key))
         self._update_category_combo()
+        if hasattr(self, "applications_layout_toggle"):
+            is_grid = self.applications_layout_toggle.get_active()
+            icon_button(
+                self.applications_layout_toggle,
+                "view-list-symbolic" if is_grid else "view-grid-symbolic",
+                t(lang, "view_list" if is_grid else "view_grid"),
+            )
+            self.applications_layout_toggle.set_tooltip_text(t(lang, "tooltip_installed_layout"))
+            self.applications_layout_toggle.get_accessible().set_name(t(lang, "tooltip_installed_layout"))
+        if hasattr(self, "applications_table_toggle"):
+            icon_button(
+                self.applications_table_toggle,
+                "view-list-symbolic",
+                t(lang, "table_details"),
+            )
+            self.applications_table_toggle.set_tooltip_text(t(lang, "table_details"))
 
         # Store page
+
         self.store_title_label.set_markup(f'<span size="large" weight="bold">{t(lang, "store_title")}</span>')
         self.store_subtitle_label.set_text(t(lang, "store_subtitle"))
         self.store_search_entry.set_placeholder_text(t(lang, "store_search_placeholder"))
@@ -360,6 +405,7 @@ class MainWindow(
         self.operations_tree_col_process.set_title(t(lang, "operations_col_process"))
         self.operations_tree_col_pid.set_title(t(lang, "operations_col_pid"))
         self.operations_tree_col_target.set_title(t(lang, "operations_col_target"))
+        self._refresh_history()
         self._refresh_updates_texts()
         self._refresh_shell_texts()
         self._compact_action_buttons()
@@ -412,9 +458,27 @@ class MainWindow(
             ),
             (self.packages_refresh_btn, "view-refresh-symbolic", "tooltip_packages_refresh"),
         )
+        primary_actions = {
+            self.applications_launch_btn: "applications_launch",
+            self.applications_details_btn: "applications_details",
+            self.applications_action_update_btn: "applications_update",
+            self.applications_action_remove_btn: "applications_remove",
+            self.applications_bulk_remove_btn: "applications_remove_selected",
+        }
         for button, icon, key in actions:
-            icon_button(button, icon, t(lang, key))
+            if button in primary_actions:
+                label = t(lang, primary_actions[button])
+                icon_text_button(button, icon, label, t(lang, key))
+            else:
+                icon_button(button, icon, t(lang, key))
         for button in (self.applications_install_file_btn, self.applications_update_all_btn):
+            button.set_no_show_all(True)
+            button.hide()
+        for button in (
+            self.applications_export_btn,
+            self.applications_import_btn,
+            self.applications_add_appimage_btn,
+        ):
             button.set_no_show_all(True)
             button.hide()
 
@@ -482,13 +546,20 @@ class MainWindow(
         retry: bool = False,
         message_key: str = "applications_password_message",
         retry_key: str = "applications_password_retry",
+        operation: str = "",
     ) -> str | None:
+        if not retry and getattr(self, "_cached_sudo_password", None):
+            return self._cached_sudo_password
+        if retry:
+            self._cached_sudo_password = None
+
         dialog = Gtk.Dialog(
             title=t(self.preferences.language, "password_title"),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL,
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
+        prepare_dialog(dialog, width=480, height=220)
         dialog.add_button(t(self.preferences.language, "password_cancel"), Gtk.ResponseType.CANCEL)
         dialog.add_button(t(self.preferences.language, "password_continue"), Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.OK)
@@ -501,6 +572,8 @@ class MainWindow(
         content.set_margin_end(12)
 
         message = t(self.preferences.language, retry_key if retry else message_key)
+        if operation:
+            message = f"{message}\n\n{t(self.preferences.language, 'password_operation', operation=operation)}"
         label = Gtk.Label(label=message)
         label.set_line_wrap(True)
         label.set_xalign(0)
@@ -516,18 +589,26 @@ class MainWindow(
         response = dialog.run()
         password = entry.get_text()
         dialog.destroy()
-        return password if response == Gtk.ResponseType.OK else None
+        if response == Gtk.ResponseType.OK and password:
+            self._cached_sudo_password = password
+            return password
+        return None
 
     def _show_error_dialog(self, message: str) -> None:
-        dialog = Gtk.MessageDialog(
+        dialog = Gtk.Dialog(
+            title=t(self.preferences.language, "dialog_error"),
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.CLOSE,
-            text="Hata",
+            modal=True,
+            destroy_with_parent=True,
         )
-        dialog.get_style_context().add_class("icon-settings-window")
-        dialog.format_secondary_text(message)
+        prepare_dialog(dialog, width=520, height=220)
+        dialog.add_button(t(self.preferences.language, "dialog_close"), Gtk.ResponseType.CLOSE)
+        body = Gtk.Label(label=message, xalign=0)
+        body.set_line_wrap(True)
+        body.set_selectable(True)
+        body.get_style_context().add_class("error-text")
+        dialog.get_content_area().pack_start(body, True, True, 16)
+        dialog.show_all()
         dialog.run()
         dialog.destroy()
 

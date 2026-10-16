@@ -24,7 +24,10 @@ class OperationHistory:
             items = json.loads(self.path.read_text(encoding="utf-8"))
             return (
                 [
-                    item
+                    {
+                        **item,
+                        **{key: redact_text(item.get(key, "")) for key in ("action", "source", "message")},
+                    }
                     for item in items
                     if isinstance(item, dict)
                     and all(

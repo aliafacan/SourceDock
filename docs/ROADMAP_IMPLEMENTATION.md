@@ -1,6 +1,9 @@
 # Roadmap Implementation Report
 
-Date: 2026-10-14. Prepared version: 1.3.0. Existing user edits and older tracked
+Historical report date: 2026-10-14. For the 2026-10-16 source audit, checklist,
+new fixes and current validation, see [Roadmap Completion Report](ROADMAP_COMPLETION_REPORT.md).
+
+Prepared version: 1.3.0. Existing user edits and older tracked
 package artifacts were preserved. No host applications were installed, removed or
 updated during implementation. No GitHub release, topic, discussion or external
 announcement was published.

@@ -172,6 +172,13 @@ class TestMainWindowStartup(unittest.TestCase):
             self.window._finish_application_task(True, "Done", True)
         reload_packages.assert_called_once()
 
+    def test_failed_partial_package_action_also_refreshes_measured_state(self):
+        self.window.pages.set_current_page(2)
+        with patch.object(self.window, "reload_packages_async") as packages, patch.object(self.window, "reload_applications_async") as applications:
+            self.window._finish_application_task(False, "A package failed", True)
+        packages.assert_called_once()
+        applications.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

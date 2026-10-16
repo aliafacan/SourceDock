@@ -25,3 +25,22 @@ apt-get --simulate -o Debug::NoLocking=true install -- ./packaging/sourcedock_1.
 `backend/previews.py` implements that command and tests assert that it never calls
 sudo or run_privileged. A production Polkit policy/helper is deliberately not
 installed until its authorization boundary has separate review and distribution tests.
+
+### Proof-of-concept artifacts (not shipped)
+
+The review now includes a small, auditable PoC under `packaging/polkit/`:
+
+- `dev.aliafacan.sourcedock.policy` names exactly one action
+  (`dev.aliafacan.sourcedock.manage-local-packages`), binds it to the fixed helper
+  path and sets `allow_any`/`allow_inactive` to `no`.
+- `sourcedock-helper` exposes a fixed operation enum (`install-local`,
+  `remove-package`), validates package IDs and staged paths, refuses symlinks and
+  paths outside `/var/cache/sourcedock/`, and runs the native manager through an
+  argv list. It never uses a shell and never re-executes sudo.
+
+`packaging/build_deb.sh` intentionally does **not** install either file, so the
+active `1.3.0` behavior is unchanged. `tests/test_polkit_helper.py` pins the
+security properties. Enabling this path still requires an independent review, a
+D-Bus-activated variant for the custom action, and per-distribution acceptance;
+that part remains open.
+

@@ -4,17 +4,19 @@ import gi
 from pathlib import Path
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GdkPixbuf, Gtk, Pango
+from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
 from sourcedock.constants import APP_VERSION
 from sourcedock.i18n import t
 from sourcedock.ui.components.common import icon_button
+from sourcedock.ui.components.toast import ToastHost
 
 PAGE_KEYS = {0: "nav_installed", 1: "nav_discover", 2: "nav_packages", 3: "nav_operations", 4: "nav_updates"}
 
 
 class ShellViewMixin:
     def _build_window_shell(self):
+        self._syncing_global_search = False
         self.header = Gtk.HeaderBar()
         self.header.set_show_close_button(True)
         self.header.set_title("SourceDock")
@@ -33,11 +35,14 @@ class ShellViewMixin:
         self.set_titlebar(self.header)
 
         root = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.add(root)
+        self.root = root
+        self.toast_host = ToastHost(root, language=self.preferences.language)
+        self.add(self.toast_host)
         self.sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.sidebar.get_style_context().add_class("sidebar")
         self.sidebar.set_size_request(220, -1)
         root.pack_start(self.sidebar, False, False, 0)
+        self._sidebar_collapsed_override = None
         brand = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         brand.set_margin_top(16)
         brand.set_margin_bottom(24)
@@ -51,7 +56,12 @@ class ShellViewMixin:
         self.brand_label = Gtk.Label(label="SourceDock")
         self.brand_label.get_style_context().add_class("brand-title")
         brand.pack_start(self.brand_label, False, False, 0)
-        self.sidebar.pack_start(brand, False, False, 0)
+        self.sidebar_toggle = Gtk.Button()
+        self.sidebar_toggle.get_style_context().add_class("sidebar-brand-button")
+        self.sidebar_toggle.set_halign(Gtk.Align.START)
+        self.sidebar_toggle.add(brand)
+        self.sidebar_toggle.connect("clicked", self._on_sidebar_toggle)
+        self.sidebar.pack_start(self.sidebar_toggle, False, False, 0)
         self.nav_buttons = {}
         self.nav_labels = {}
         for index, icon in (
@@ -87,21 +97,29 @@ class ShellViewMixin:
         self.connect("size-allocate", self._on_shell_size_allocate)
         self._compact_sidebar = None
 
-    def _sidebar_button(self, icon):
-        button = Gtk.Button()
-        button.get_style_context().add_class("nav-button")
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.pack_start(Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.BUTTON), False, False, 0)
-        label = Gtk.Label()
-        label.set_xalign(0)
-        label.set_ellipsize(Pango.EllipsizeMode.END)
-        box.pack_start(label, True, True, 0)
-        button.add(box)
-        return button, label
+    def _on_sidebar_toggle(self, _button) -> None:
+        """Toggle the wide-screen sidebar without overriding narrow layout."""
+        if self.get_size()[0] < 1200:
+            self._refresh_sidebar_toggle_text()
+            return
+        self._sidebar_collapsed_override = not bool(self._compact_sidebar)
+        self._set_sidebar_compact(self._sidebar_collapsed_override)
 
-    def _on_shell_size_allocate(self, _window, allocation):
-        compact = self.get_size()[0] < 1100
+    def _refresh_sidebar_toggle_text(self) -> None:
+        if not hasattr(self, "sidebar_toggle"):
+            return
+        width = self.get_size()[0]
+        if width < 1200:
+            key = "sidebar_compact_locked"
+        else:
+            key = "sidebar_expand" if self._compact_sidebar else "sidebar_collapse"
+        label = t(self.preferences.language, key)
+        self.sidebar_toggle.set_tooltip_text(label)
+        self.sidebar_toggle.get_accessible().set_name(label)
+
+    def _set_sidebar_compact(self, compact: bool) -> None:
         if compact == self._compact_sidebar:
+            self._refresh_sidebar_toggle_text()
             return
         self._compact_sidebar = compact
         self.sidebar.set_size_request(64 if compact else 220, -1)
@@ -115,6 +133,45 @@ class ShellViewMixin:
         ):
             label.set_no_show_all(compact)
             label.set_visible(not compact)
+        self._refresh_sidebar_toggle_text()
+        # The size-request change can otherwise be applied one allocation
+        # later. Keep the next page capture and user interaction in sync.
+        self.sidebar.queue_resize()
+        parent = self.sidebar.get_parent()
+        if parent is not None:
+            parent.queue_resize()
+            parent.check_resize()
+        GLib.idle_add(self._queue_sidebar_reflow)
+
+    def _sidebar_button(self, icon):
+        button = Gtk.Button()
+        button.get_style_context().add_class("nav-button")
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.pack_start(Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.BUTTON), False, False, 0)
+        label = Gtk.Label()
+        label.set_xalign(0)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        box.pack_start(label, True, True, 0)
+        button.add(box)
+        return button, label
+
+    def _on_shell_size_allocate(self, _window, allocation):
+        # Keep the compact sidebar active through the 1024px class of usable
+        # client widths. A higher threshold prevents fractional text scaling
+        # from crossing the breakpoint and forcing the wide sidebar back in.
+        compact = self.get_size()[0] < 1200
+        if not compact and self._sidebar_collapsed_override is not None:
+            compact = self._sidebar_collapsed_override
+        self._set_sidebar_compact(compact)
+
+    def _queue_sidebar_reflow(self):
+        if self.sidebar.get_visible():
+            self.sidebar.queue_resize()
+            parent = self.sidebar.get_parent()
+            if parent is not None:
+                parent.queue_resize()
+                parent.check_resize()
+        return False
 
     def _refresh_shell_texts(self):
         lang = self.preferences.language
@@ -134,18 +191,46 @@ class ShellViewMixin:
             button.get_accessible().set_name(text)
         self.header_search.set_placeholder_text(t(lang, "global_search"))
         self.header_search.get_accessible().set_name(t(lang, "global_search"))
+        self._refresh_sidebar_toggle_text()
         self._refresh_shell_page()
         icon_button(self.header_operations_btn, "emblem-synchronizing-symbolic", t(lang, "nav_operations"))
         self._refresh_update_count()
+        if hasattr(self, "toast_host") and self.toast_host is not None:
+            self.toast_host.language = lang
 
-    def _refresh_shell_page(self):
-        index = self.pages.get_current_page()
-        self.header.set_subtitle(t(self.preferences.language, PAGE_KEYS.get(index, "nav_installed")))
+
+    def _refresh_shell_page(self, page: int | None = None):
+        index = self.pages.get_current_page() if page is None else page
+        self.header.set_title(t(self.preferences.language, PAGE_KEYS.get(index, "nav_installed")))
+        self.header.set_subtitle("")
+        self._sync_header_search_for_page(index)
         for page, button in self.nav_buttons.items():
             context = button.get_style_context()
             context.remove_class("nav-active")
             if page == index:
                 context.add_class("nav-active")
+
+    def _search_entry_for_page(self, page: int):
+        return {
+            0: self.applications_search_entry,
+            1: self.store_search_entry,
+            2: self.packages_search_entry,
+        }.get(page)
+
+    def _sync_header_search_for_page(self, page: int) -> None:
+        """Keep the visible search field scoped to the active searchable page."""
+        target = self._search_entry_for_page(page)
+        self._suppress_global_search_changed = True
+        try:
+            self.header_search.set_sensitive(target is not None)
+            self.header_search.set_text(target.get_text() if target is not None else "")
+            self.header_search.set_tooltip_text(
+                t(self.preferences.language, "global_search")
+                if target is not None
+                else t(self.preferences.language, "search_unavailable_page")
+            )
+        finally:
+            self._suppress_global_search_changed = False
 
     def _refresh_update_count(self):
         if not hasattr(self, "header_updates_btn"):
@@ -156,20 +241,37 @@ class ShellViewMixin:
             Gtk.Image.new_from_icon_name("software-update-available-symbolic", Gtk.IconSize.BUTTON)
         )
         self.header_updates_btn.set_always_show_image(True)
-        self.header_updates_btn.set_tooltip_text(t(self.preferences.language, "nav_updates"))
+        self.header_updates_btn.set_tooltip_text(
+            t(self.preferences.language, "updates_count", count=count)
+        )
         self.header_updates_btn.get_accessible().set_name(
             t(self.preferences.language, "updates_count", count=count)
         )
 
     def _on_global_search_changed(self, entry):
-        index = self.pages.get_current_page()
-        target = {
-            0: self.applications_search_entry,
-            1: self.store_search_entry,
-            2: self.packages_search_entry,
-        }.get(index)
+        if self._suppress_global_search_changed:
+            return
+        page = self.pages.get_current_page()
+        target = self._search_entry_for_page(page)
+        cursor_position = entry.get_position() if entry is self.header_search else None
         if target is not None and target.get_text() != entry.get_text():
-            target.set_text(entry.get_text())
+            self._syncing_global_search = True
+            try:
+                target.set_text(entry.get_text())
+            finally:
+                self._syncing_global_search = False
+            # Page-local entries are intentionally hidden; GTK does not emit
+            # their search-changed signal while hidden, so update their view
+            # explicitly and keep one search request per header change.
+            handler = {
+                0: self.on_applications_search_changed,
+                1: self._on_store_search_changed,
+                2: self._on_packages_search_changed,
+            }.get(page)
+            if handler is not None:
+                handler(target)
+        if cursor_position is not None:
+            entry.set_position(min(cursor_position, len(entry.get_text())))
 
     def _on_global_search_activate(self, _entry):
         if self.pages.get_current_page() not in (0, 1, 2):
@@ -177,3 +279,15 @@ class ShellViewMixin:
             self.store_search_entry.set_text(self.header_search.get_text())
         if self.pages.get_current_page() == 1:
             self.on_store_search()
+
+    def show_toast(self, message: str, level: str = "info", timeout: int = 4):
+        """Display a non-blocking transient toast notification."""
+        if hasattr(self, "toast_host") and self.toast_host is not None:
+            return self.toast_host.show_toast(message, level=level, timeout=timeout)
+        return None
+
+    def hide_toast(self) -> None:
+        """Dismiss active toast notification if any."""
+        if hasattr(self, "toast_host") and self.toast_host is not None:
+            self.toast_host.hide_toast()
+

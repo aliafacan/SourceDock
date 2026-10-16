@@ -102,6 +102,7 @@ class ApplicationSnapshot:
     applications: list[UnifiedApplication]
     issues: list[ApplicationIssue] = field(default_factory=list)
     provider_errors: list[str] = field(default_factory=list)
+    provider_notices: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

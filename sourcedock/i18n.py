@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import re
+
 
 TRANSLATIONS = {
     "tr": {
@@ -35,7 +37,7 @@ TRANSLATIONS = {
         "status_cancelled": "İşlem iptal edildi.",
         # Installed tab
         "tab_installed": "Yüklü Uygulamalar",
-        "applications_title": "Birleşik Uygulama Yöneticisi",
+        "applications_title": "Kurulu Uygulamalar",
         "applications_subtitle": "APT, Flatpak, Snap ve AppImage kaynaklarından yüklü uygulamaları yönet.",
         "applications_search_placeholder": "Uygulama ara",
         "applications_refresh": "Yenile",
@@ -57,6 +59,7 @@ TRANSLATIONS = {
         "applications_source_snap": "Snap",
         "applications_source_appimage": "AppImage",
         "applications_source_firmware": "Donanım Yazılımı",
+        "applications_source_other": "Diğer kaynaklar",
         "applications_source_updates": "Güncellemeler",
         "applications_col_app": "Uygulama",
         "applications_col_source": "Kaynak",
@@ -68,10 +71,13 @@ TRANSLATIONS = {
         "applications_col_location": "Konum",
         "applications_loading": "Uygulamalar taranıyor...",
         "applications_loaded": "Uygulamalar yüklendi.",
+        "applications_select_hint": "İşlem yapmak için listeden bir uygulama seç.",
         "applications_load_partial": "Bazı kaynaklar okunamadı. Ayrıntılar tanılama bölümünde.",
         "applications_empty": "Kullanıcıya görünen uygulama bulunamadı.",
         "applications_no_results": "Aramana uyan uygulama yok.",
         "applications_count_summary": "{count}/{total} uygulama gösteriliyor",
+        "applications_count_summary_hidden": "{count}/{total} uygulama gösteriliyor · {hidden} teknik kaynak öğesi gizli",
+        "applications_remove_selected": "Seçilenleri Kaldır",
         "applications_launch": "Başlat",
         "applications_details": "Ayrıntılar",
         "applications_update": "Güncelle",
@@ -120,13 +126,18 @@ TRANSLATIONS = {
         "store_flatpak_unavailable": "Flatpak bu sistemde mevcut değil.",
         "store_snap_unavailable": "Snap bu sistemde mevcut değil.",
         "store_detail_source": "Kaynak:",
+        "store_detail_publisher": "Yayıncı",
+        "store_detail_license": "Lisans",
+        "store_detail_homepage": "Ana sayfa",
+        "store_results_for_query": "{query} · {count} sonuç",
+        "store_recommended": "Önerilen uygulamalar · {count} sonuç",
         "store_screenshots_loading": "Ekran görüntüleri yükleniyor...",
         "store_screenshots_none": "Ekran görüntüsü bulunamadı.",
         "store_hint_doubleclick": "Detaylar için çift tıkla",
         "store_open_external": "Çevrimiçi Aç",
         "store_snap_classic_title": "Classic Confinement İzni Gerekli",
-        "store_snap_classic_message": "'{name}' uygulaması sistem güvenlik kum havuzunun (sandbox) dışına çıkabilmek için 'Classic Confinement' (--classic) gerektiriyor.\n\nAntigravity gibi geliştirici IDE'leri ve sistem araçları dosya sistemine doğrudan erişmek için bu izne ihtiyaç duyar.\n\nBu izni onaylayıp kuruluma --classic bayrağıyla devam etmek istiyor musunuz?",
-        "store_snap_classic_confirm": "--classic ile Kur",
+        "store_snap_classic_message": "'{name}' uygulaması standart Snap sandbox sınırlarının dışına çıkabilmek için Classic (--classic) izni istiyor.\n\nBu izin dosya sistemi ve sistem kaynaklarına daha geniş erişim sağlayabilir. Yalnızca güvendiğin uygulamalar için devam et.",
+        "store_snap_classic_confirm": "Devam Et",
         "store_snap_classic_cancel": "İptal",
         "applications_purge_confirm": "Yapılandırma ve önbellek dosyalarını da sil",
         "applications_purge_done": "Uygulama tamamen kaldırıldı.",
@@ -172,7 +183,7 @@ TRANSLATIONS = {
         "flatpak_rollback_done": "Sürüm geri alındı.",
         "flatpak_rollback_no_history": "Sürüm geçmişi alınamadı.",
         # Changelog
-        "changelog_title": "Değişiklik Günlüğü",
+        "changelog_title": "Değişiklik Günlüğü: {name}",
         "changelog_menu": "Değişiklik Günlüğü",
         "changelog_none": "Değişiklik günlüğü bulunamadı.",
         # AppImage register
@@ -277,8 +288,6 @@ TRANSLATIONS = {
         "rollback_btn": "Seçilene Geri Al",
         "permissions_title": "İzinler: {name}",
         "permissions_none": "Özel izin geçersiz kılınmamış.",
-        "changelog_title": "Değişiklik Günlüğü: {name}",
-        "changelog_none": "Changelog bulunamadı.",
         "add_appimage_title": "AppImage Ekle",
         "add_appimage_btn": "Ekle",
         "appimage_files": "AppImage Dosyaları (*.AppImage)",
@@ -297,6 +306,7 @@ TRANSLATIONS = {
         "package_installer_arch": "Mimari",
         "package_installer_maintainer": "Geliştirici / Paketçi",
         "package_installer_file": "Dosya",
+        "package_installer_file_path": "Dosya Yolu",
         "package_installer_deps": "Bağımlılıklar",
         "package_installer_create_shortcut": "Masaüstü ve uygulama menüsü kısayolu oluştur",
         "package_installer_copy_apps": "~/Applications dizinine taşı (Önerilen, İndirilenler temizlenir)",
@@ -357,7 +367,7 @@ TRANSLATIONS = {
         "help_features_packages_title": "3. Sistem Paketleri",
         "help_features_packages_desc": "• <b>Derinlemesine Paket Kontrolü:</b> Arayüzü olmayan sistem kütüphaneleri ve CLI araçları dahil tüm dağıtım paketlerini inceleme.\n• <b>Sürüm Karşılaştırması:</b> Kurulu sürüm ile depodaki yeni sürümü yan yana görme.\n• <b>Toplu Güncelleme:</b> Seçilen paketleri veya tüm sistemi tek tıkla güncelleme.",
         "help_features_operations_title": "4. İşlemler ve Tanılama",
-        "help_features_operations_desc": "• <b>Aktif Süreç Takibi:</b> Arka planda çalışan paket yöneticisi süreçlerini ve kilitli PID'leri izleme.\n• <b>Durdurma & İptal:</b> Kilitlenen işlemleri geçici olarak duraklatma (SIGSTOP) veya güvenle iptal etme (SIGTERM).\n• <b>Bozuk Paket Onarımı:</b> Yarım kalan DPKG yapılandırmalarını ve kilitlenme durumlarını otomatik algılama ve rehberlik.",
+        "help_features_operations_desc": "• <b>Aktif Süreç Takibi:</b> Arka planda çalışan paket yöneticisi süreçlerini ve kilitli PID'leri izleme.\n• <b>Durdurma &amp; İptal:</b> Kilitlenen işlemleri geçici olarak duraklatma (SIGSTOP) veya güvenle iptal etme (SIGTERM).\n• <b>Bozuk Paket Onarımı:</b> Yarım kalan DPKG yapılandırmalarını ve kilitlenme durumlarını otomatik algılama ve rehberlik.",
         # Help Content - Installer
         "help_installer_mini_title": "Bağımsız Mini Kurucu",
         "help_installer_mini_desc": "Dosya yöneticisinden bir <b>.deb</b>, <b>.AppImage</b>, <b>.flatpak</b> veya <b>.rpm</b> dosyasına çift tıkladığınızda ana pencere yerine hızlı ve kompakt bir mini kurulum penceresi açılır. Bu pencere yalnızca kurulum için gerekli araçları içerir.",
@@ -375,7 +385,7 @@ TRANSLATIONS = {
         "help_shortcuts_delete": "Seçili uygulamayı kaldırma diyaloğunu aç",
         "help_shortcuts_escape": "Açık pencereleri ve diyalogları kapat",
         "help_tips_title": "Pratik İpuçları",
-        "help_tips_dnd": "<b>Sürükle & Bırak:</b> Masaüstünden veya dosya yöneticisinden herhangi bir paketi SourceDock penceresine sürükleyip bırakarak kurulumu anında başlatabilirsiniz.",
+        "help_tips_dnd": "<b>Sürükle &amp; Bırak:</b> Masaüstünden veya dosya yöneticisinden herhangi bir paketi SourceDock penceresine sürükleyip bırakarak kurulumu anında başlatabilirsiniz.",
         "help_tips_default": "<b>Varsayılan Yükleyici:</b> Ayarlar bölümünden SourceDock'i varsayılan paket yükleyici yaparak sistem genelindeki tüm paketlerin çift tıklama ile SourceDock ile açılmasını sağlayabilirsiniz.",
         "help_tips_appimage": "<b>AppImage Entegrasyonu:</b> İndirdiğiniz AppImage dosyalarını 'AppImage Ekle' butonuyla sisteme kaydedebilir, masaüstü menünüzde yer almasını sağlayabilirsiniz.",
         # Details Dialog (TR)
@@ -494,7 +504,7 @@ TRANSLATIONS = {
         "status_cancelled": "Operation cancelled.",
         # Installed tab
         "tab_installed": "Installed Apps",
-        "applications_title": "Unified Application Manager",
+        "applications_title": "Installed Applications",
         "applications_subtitle": "Manage installed apps from APT, Flatpak, Snap and AppImage in one list.",
         "applications_search_placeholder": "Search applications",
         "applications_refresh": "Refresh",
@@ -516,6 +526,7 @@ TRANSLATIONS = {
         "applications_source_snap": "Snap",
         "applications_source_appimage": "AppImage",
         "applications_source_firmware": "Firmware",
+        "applications_source_other": "Other sources",
         "applications_source_updates": "Updates",
         "applications_col_app": "Application",
         "applications_col_source": "Source",
@@ -527,6 +538,7 @@ TRANSLATIONS = {
         "applications_col_location": "Location",
         "applications_loading": "Scanning applications...",
         "applications_loaded": "Applications loaded.",
+        "applications_select_hint": "Select an application from the list to perform an action.",
         "applications_load_partial": "Some sources could not be read. Details are in diagnostics.",
         "applications_empty": "No user-facing applications were found.",
         "applications_no_results": "No applications match your search.",
@@ -579,13 +591,18 @@ TRANSLATIONS = {
         "store_flatpak_unavailable": "Flatpak is not available on this system.",
         "store_snap_unavailable": "Snap is not available on this system.",
         "store_detail_source": "Source:",
+        "store_detail_publisher": "Publisher",
+        "store_detail_license": "License",
+        "store_detail_homepage": "Homepage",
+        "store_results_for_query": "{query} · {count} results",
+        "store_recommended": "Recommended apps · {count} results",
         "store_screenshots_loading": "Loading screenshots...",
         "store_screenshots_none": "No screenshots available.",
         "store_hint_doubleclick": "Double-click for details",
         "store_open_external": "Open Online",
         "store_snap_classic_title": "Classic Confinement Permission Required",
-        "store_snap_classic_message": "The application '{name}' requires 'Classic Confinement' (--classic) to operate outside the security sandbox.\n\nDeveloper tools and IDEs (e.g. Antigravity) require full system access to function properly.\n\nDo you want to grant this permission and proceed with --classic?",
-        "store_snap_classic_confirm": "Install with --classic",
+        "store_snap_classic_message": "The application '{name}' requests Classic (--classic) permission to operate outside the standard Snap sandbox.\n\nThis can grant broader access to the file system and system resources. Continue only if you trust the application.",
+        "store_snap_classic_confirm": "Continue",
         "store_snap_classic_cancel": "Cancel",
         "applications_purge_confirm": "Also delete configuration and cache files",
         "applications_purge_done": "Application completely removed.",
@@ -631,7 +648,7 @@ TRANSLATIONS = {
         "flatpak_rollback_done": "Version rolled back.",
         "flatpak_rollback_no_history": "Could not fetch version history.",
         # Changelog
-        "changelog_title": "Changelog",
+        "changelog_title": "Changelog: {name}",
         "changelog_menu": "Changelog",
         "changelog_none": "No changelog available.",
         # AppImage register
@@ -731,13 +748,13 @@ TRANSLATIONS = {
         "dialog_confirm": "Confirm",
         "bulk_remove_title": "Do you want to remove {count} applications?",
         "bulk_remove_btn": "Remove All",
+        "applications_remove_selected": "Remove Selected",
+        "applications_count_summary_hidden": "{count}/{total} applications shown · {hidden} technical source items hidden",
         "rollback_no_history": "No history records found.",
         "rollback_title": "Rollback Version: {name}",
         "rollback_btn": "Rollback to Selected",
         "permissions_title": "Permissions: {name}",
         "permissions_none": "No custom overrides configured.",
-        "changelog_title": "Changelog: {name}",
-        "changelog_none": "No changelog available.",
         "add_appimage_title": "Add AppImage",
         "add_appimage_btn": "Add",
         "appimage_files": "AppImage Files (*.AppImage)",
@@ -756,6 +773,7 @@ TRANSLATIONS = {
         "package_installer_arch": "Architecture",
         "package_installer_maintainer": "Maintainer",
         "package_installer_file": "File",
+        "package_installer_file_path": "File Path",
         "package_installer_deps": "Dependencies",
         "package_installer_create_shortcut": "Create desktop and menu shortcut",
         "package_installer_copy_apps": "Move to ~/Applications directory (Recommended, cleans up Downloads)",
@@ -810,18 +828,18 @@ TRANSLATIONS = {
         "help_overview_security_desc": "Actions requiring system-level modifications safely prompt for administrator password. Passwords are held securely in memory and never written to disk. Flatpak sandbox permissions can be managed with ease.",
         # Help Content - Features
         "help_features_installed_title": "1. Installed Applications",
-        "help_features_installed_desc": "• <b>Search & Filtering:</b> Instant filtering by name (Ctrl+F), source (APT, Flatpak, Snap, AppImage), or category.\n• <b>Multi-Selection:</b> Select multiple items with Ctrl or Shift for batch removal (×N) or list export.\n• <b>Advanced Operations:</b> Open installation folder, view version history, or purge with configuration and cache removal.\n• <b>Flatpak Control:</b> Reset or customize sandbox permissions and roll back to previous commits.",
+        "help_features_installed_desc": "• <b>Search &amp; Filtering:</b> Instant filtering by name (Ctrl+F), source (APT, Flatpak, Snap, AppImage), or category.\n• <b>Multi-Selection:</b> Select multiple items with Ctrl or Shift for batch removal (×N) or list export.\n• <b>Advanced Operations:</b> Open installation folder, view version history, or purge with configuration and cache removal.\n• <b>Flatpak Control:</b> Reset or customize sandbox permissions and roll back to previous commits.",
         "help_features_store_title": "2. Application Store",
         "help_features_store_desc": "• <b>Unified Search:</b> Search simultaneously across Flathub, Snap Store, and native distribution repositories.\n• <b>Source Comparison:</b> Compare version numbers, sources, and sizes before installing.\n• <b>Background Installation:</b> Track installation progress with real-time logs and progress bar.",
         "help_features_packages_title": "3. System Packages",
         "help_features_packages_desc": "• <b>Low-Level Package Management:</b> Inspect all distribution packages, including headless system libraries and CLI tools.\n• <b>Version Comparison:</b> Compare installed versions directly against newly available updates.\n• <b>Batch Updates:</b> Update selected packages or perform a complete system update with one click.",
         "help_features_operations_title": "4. Operations & Diagnostics",
-        "help_features_operations_desc": "• <b>Active Process Monitoring:</b> Monitor background package management tasks and lock PIDs.\n• <b>Pause & Terminate:</b> Temporarily suspend locked processes (SIGSTOP) or safely cancel them (SIGTERM).\n• <b>Broken Package Recovery:</b> Automatic diagnosis and guidance for interrupted DPKG or locked APT processes.",
+        "help_features_operations_desc": "• <b>Active Process Monitoring:</b> Monitor background package management tasks and lock PIDs.\n• <b>Pause &amp; Terminate:</b> Temporarily suspend locked processes (SIGSTOP) or safely cancel them (SIGTERM).\n• <b>Broken Package Recovery:</b> Automatic diagnosis and guidance for interrupted DPKG or locked APT processes.",
         # Help Content - Installer
         "help_installer_mini_title": "Standalone Mini Installer",
         "help_installer_mini_desc": "When double-clicking a <b>.deb</b>, <b>.AppImage</b>, <b>.flatpak</b>, or <b>.rpm</b> file from your file manager, a lightweight mini installer window opens instead of the full application. It provides only the essential tools needed for installation.",
         "help_installer_smart_title": "Smart Version Detection",
-        "help_installer_smart_desc": "SourceDock automatically inspects the package against your currently installed applications:\n• <b>✓ Installed (Same Version):</b> Shows that the application is already installed and offers a clean 'Reinstall' option.\n• <b>⬆ Update (Newer Version):</b> Shows installed vs package versions and offers a one-click 'Update'.\n• <b>⬇ Newer Version Installed (Older Package):</b> Alerts you that a newer version is already present and offers a 'Downgrade' option.\n• <b>New Installation:</b> Offers 'Install & Integrate' to install the package cleanly.",
+        "help_installer_smart_desc": "SourceDock automatically inspects the package against your currently installed applications:\n• <b>✓ Installed (Same Version):</b> Shows that the application is already installed and offers a clean 'Reinstall' option.\n• <b>⬆ Update (Newer Version):</b> Shows installed vs package versions and offers a one-click 'Update'.\n• <b>⬇ Newer Version Installed (Older Package):</b> Alerts you that a newer version is already present and offers a 'Downgrade' option.\n• <b>New Installation:</b> Offers 'Install &amp; Integrate' to install the package cleanly.",
         "help_installer_flow_title": "Post-Installation & Error Handling",
         "help_installer_flow_desc": "• <b>Launch Application:</b> Once installation finishes, start the app immediately with a single click.\n• <b>File Cleanup:</b> Check 'Delete package file after successful installation' to remove the source package automatically.\n• <b>Error Retention:</b> If an error occurs, the window remains open with full terminal logs and a 'Retry' button.",
         # Help Content - Shortcuts
@@ -834,7 +852,7 @@ TRANSLATIONS = {
         "help_shortcuts_delete": "Open uninstall dialog for selected application",
         "help_shortcuts_escape": "Close open dialogs and windows",
         "help_tips_title": "Pro Tips",
-        "help_tips_dnd": "<b>Drag & Drop:</b> Drag any package file from your desktop or file manager into SourceDock to begin installation immediately.",
+        "help_tips_dnd": "<b>Drag &amp; Drop:</b> Drag any package file from your desktop or file manager into SourceDock to begin installation immediately.",
         "help_tips_default": "<b>Default Installer:</b> Set SourceDock as your default package installer in Settings so that double-clicking package files opens SourceDock directly.",
         "help_tips_appimage": "<b>AppImage Integration:</b> Register standalone AppImage files via 'Add AppImage' to integrate them into your system application menu.",
         # Details Dialog (EN)
@@ -937,7 +955,50 @@ _UI_STRINGS = {
     "settings_preferred_source": ("Tercih edilen kaynak", "Preferred source"),
     "settings_check_updates_start": ("Açılışta güncellemeleri kontrol et", "Check for updates on startup"),
     "table_details": ("Ayrıntılı tablo", "Detailed table"),
+    "view_grid": ("Kart görünümü", "Grid view"),
+    "view_list": ("Liste görünümü", "List view"),
+    "tooltip_installed_layout": ("Liste ve kart görünümü arasında geçiş yap", "Switch between list and grid views"),
+    "operation_history_cleared": ("İşlem geçmişi temizlendi", "Operation history cleared"),
+    "sources_add_remote": ("Depo Ekle", "Add Repository"),
+    "sources_add_remote_title": ("Flatpak Deposu Ekle", "Add Flatpak Remote"),
+    "sources_remote_name": ("Depo Adı", "Remote Name"),
+    "sources_remote_url": ("Depo URL Adresi", "Remote URL"),
+    "sources_remote_added": ("Flatpak deposu başarıyla eklendi", "Flatpak remote added successfully"),
+    "sources_remove_remote": ("Depoyu Kaldır", "Remove Remote"),
+    "sources_remove_confirm": ("'{name}' deposunu kaldırmak istediğinize emin misiniz?", "Are you sure you want to remove remote '{name}'?"),
+    "sources_remote_removed": ("Flatpak deposu kaldırıldı", "Flatpak remote removed"),
+    "sources_invalid_input": ("Geçersiz depo adı veya URL adresi", "Invalid remote name or URL"),
+    "settings_notifications": ("Masaüstü bildirimleri", "Desktop notifications"),
+    "settings_notifications_desc": ("Yeni güncellemeler bulunduğunda masaüstü bildirimi gönder", "Show desktop notification when new updates are found"),
+    "settings_detailed_table": ("Ayrıntılı tablo görünümü (varsayılan)", "Detailed table view (default)"),
+    "settings_detailed_table_desc": ("Uygulama listesinde kurulum tarihi, son güncelleme ve konum sütunlarını varsayılan olarak göster", "Show installation date, last updated and location columns by default in application list"),
+    "settings_saved": ("Ayarlar kaydedildi.", "Settings saved."),
+    "btn_cancel": ("İptal", "Cancel"),
+    "progress_cancelling": ("İptal ediliyor...", "Cancelling..."),
+    "updates_notification_title": ("Sistem Güncellemeleri", "System Updates"),
+    "updates_notification_body": ("{count} adet güncelleme mevcut.", "{count} updates available."),
+    "store_open_separately": ("Bağımsız aç", "Open separately"),
+
     "installed_empty": ("Kurulu uygulama bulunamadı", "No installed applications found"),
+    "installed_search_empty": (
+        '"{query}" ile eşleşen kurulu uygulama yok',
+        'No installed applications match "{query}"',
+    ),
+    "installed_search_empty_body": (
+        "Aramayı temizleyerek tüm kurulu uygulamaları yeniden göster.",
+        "Clear the search to show all installed applications again.",
+    ),
+    "clear_search": ("Aramayı temizle", "Clear search"),
+    "search_unavailable_page": (
+        "Bu sayfada arama kullanılamaz",
+        "Search is not available on this page",
+    ),
+    "sidebar_expand": ("Sol menüyü genişlet", "Expand sidebar"),
+    "sidebar_collapse": ("Sol menüyü daralt", "Collapse sidebar"),
+    "sidebar_compact_locked": (
+        "Dar ekranlarda sol menü otomatik daraltılır",
+        "The sidebar stays compact on narrow screens",
+    ),
     "installed_empty_body": (
         "Kaynakları kontrol edip listeyi yenileyebilirsin.",
         "Check your software sources and refresh the list.",
@@ -968,6 +1029,36 @@ _UI_STRINGS = {
     "updates_group_firmware": ("Bellenim", "Firmware"),
     "updates_group_runtimes": ("Çalışma Ortamları", "Runtimes"),
     "updates_reboot_required": ("Sistem yeniden başlatma gerektiriyor.", "The system requires a restart."),
+    "updates_status_system_packages": (
+        "{source}: {count} sistem paketi güncellenebilir",
+        "{source}: {count} system packages can be updated",
+    ),
+    "updates_status_source_warnings": (
+        "{count} kaynak uyarısı",
+        "{count} source warnings",
+    ),
+    "updates_status_source_warning": ("1 kaynak uyarısı", "1 source warning"),
+    "updates_status_details_show": ("Kaynak ayrıntılarını göster", "Show source details"),
+    "updates_status_details_hide": ("Kaynak ayrıntılarını gizle", "Hide source details"),
+    "diagnostics_empty": ("Sorun tespit edilmedi.", "No issues detected."),
+    "diagnostics_record": ("1 tanılama kaydı:", "1 diagnostic record:"),
+    "diagnostics_records": ("{count} tanılama kaydı:", "{count} diagnostic records:"),
+    "cleanup_preview": (
+        "Yalnızca aşağıdaki kullanılmayan Flatpak bileşenleri kaldırılacak. Kişisel uygulama verileri korunur.",
+        "Only the unused Flatpak components listed below will be removed. Personal application data is preserved.",
+    ),
+    "cleanup_empty": ("Kaldırılacak kullanılmayan Flatpak bileşeni yok.", "No unused Flatpak components to remove."),
+    "cleanup_apply": ("Listelenenleri kaldır", "Remove Listed Items"),
+    "cleanup_scope_user": ("Kullanıcı", "User"),
+    "cleanup_scope_system": ("Sistem", "System"),
+    "help_features_updates_title": ("Güncellemeler", "Updates"),
+    "help_features_updates_desc": (
+        "Kaynaklarıyla gruplanmış güncellemeleri inceleyip seç. APT öğesinin değişiklik günlüğü sağ tık menüsünde bulunur. Bellenim güncellemeleri ayrıca onay ister; paket işlemleri güvenle durdurulamıyorsa iptal sunulmaz.",
+        "Review and select updates grouped by their source. APT changelogs are available in the context menu. Firmware updates require separate confirmation; cancellation is unavailable when package operations cannot be safely interrupted.",
+    ),
+    "diagnostics_missing_icon": ("Simge bulunamadı.", "No icon is set."),
+    "diagnostics_missing_command": ("Masaüstü başlatıcısında komut yok.", "Desktop launcher has no command."),
+    "diagnostics_missing_appimage": ("Bağlı AppImage dosyası bulunamadı.", "Linked AppImage file is missing."),
     "firmware_confirm_title": ("Bellenim güncellemesini onayla", "Confirm firmware update"),
     "firmware_confirm_body": (
         "Cihazı güç kaynağına bağla. Güncelleme sırasında kapatma veya bağlantıyı kesme. Bazı güncellemeler yeniden başlatma gerektirir.",
@@ -976,7 +1067,16 @@ _UI_STRINGS = {
     "store_start": ("Uygulama bul", "Find applications"),
     "store_start_body": ("Kurulu kaynaklarda arama yap.", "Search your configured software sources."),
     "store_results_count": ("{count} sonuç", "{count} results"),
+    "store_results_partial": ("Sonuçlar geliyor...", "Results arriving..."),
     "store_sources_count": ("{count} kaynak", "{count} sources"),
+    "store_sources_live": ("Güncel kaynaklar: {sources}", "Live sources: {sources}"),
+    "store_sources_cached": (
+        "Önbellekten; güncelliği doğrulanmadı: {sources}",
+        "Cached; freshness not verified: {sources}",
+    ),
+    "store_sources_unavailable": ("Yanıt alınamadı: {sources}", "Unavailable: {sources}"),
+    "store_source_cached_short": ("önbellek", "cache"),
+    "store_source_unavailable_short": ("doğrulanamadı", "unverified"),
     "store_open_details": ("Ayrıntıları aç", "View details"),
     "store_applications_only": (
         "Bu arama yalnızca teknik paketler döndürdü. Bunları Sistem Paketleri sayfasından inceleyebilirsin.",
@@ -1030,12 +1130,20 @@ _UI_STRINGS = {
     ),
     "remove_sensitive_confirm": ("Onaylamak için paket adını yaz", "Type the package name to confirm"),
     "security_flatpak": (
-        "Flatpak sandbox kullanır; izinler uygulamaya göre değişir.",
-        "Flatpak uses a sandbox; permissions vary by application.",
+        "Sandbox: Flatpak confinement kullanır; izinler uygulamaya göre değişir.",
+        "Sandbox: Flatpak confinement is used; permissions vary by application.",
     ),
     "security_native": (
-        "Bu kaynak için sandbox garantisi yoktur.",
-        "Sandboxing is not guaranteed for this source.",
+        "Sandbox: SourceDock uygulama sandbox'ını garanti etmez.",
+        "Sandbox: SourceDock does not guarantee application sandboxing.",
+    ),
+    "security_snap": (
+        "Sandbox: Snap confinement durumu paket metadata'sına bağlıdır; classic bilgisi burada varsayılmaz.",
+        "Sandbox: Snap confinement comes from package metadata; classic status is not assumed here.",
+    ),
+    "security_signature_local": (
+        "Bu yerel veya taşınabilir öğenin imzası SourceDock tarafından doğrulanmadı.",
+        "The signature of this local or portable item was not verified by SourceDock.",
     ),
     "security_local_body": (
         "Yerel dosyanın yayıncısı ve imzası doğrulanmadı. Kurulumdan önce dosyanın kaynağına güvendiğinden emin ol.",
@@ -1071,6 +1179,73 @@ _UI_STRINGS = {
         "<b>Sürükle ve bırak:</b> Yerel paket dosyasını SourceDock'a bırakarak kurulum önizlemesini aç.",
         "<b>Drag and drop:</b> Drop a local package into SourceDock to open the installation preview.",
     ),
+    "version_unknown": ("Bilinmiyor", "Unknown"),
+    "version_no_update": ("—", "—"),
+    "updates_version_unavailable": (
+        "Kaynak yeni sürüm bilgisini sağlamadı.",
+        "The source did not provide a new version.",
+    ),
+    "sources_empty_value": ("—", "—"),
+    "retry_action": ("Tekrar dene", "Retry"),
+    "applications_more": ("Daha fazla", "More"),
+    "tooltip_installed_filter_other": ("AppImage, taşınabilir ve donanım yazılımı öğelerini göster", "Show AppImage, portable and firmware items"),
+    "updates_partial": ("Hızlı kaynak sonuçları gösteriliyor; diğer kaynaklar bekleniyor.", "Fast source results are shown; waiting for other sources."),
+    "firmware_confirm_cancel": ("İptal", "Cancel"),
+    "firmware_confirm_apply": ("Güncellemeyi Başlat", "Start Update"),
+    "password_operation": ("İşlem: {operation}", "Operation: {operation}"),
+    "store_transition_warning": (
+        "Bu APT paketi geçiş paketidir ve Firefox Snap paketine yönlendirir. Kurulum türünü aşağıdaki kaynak seçicisinden doğrula.",
+        "This APT package is transitional and redirects to the Firefox Snap package. Verify the installation type with the source selector below.",
+    ),
+    "operations_empty": ("Şu anda çalışan paket işlemi yok", "No package operation is running"),
+    "operations_empty_body": (
+        "Yeni bir kurulum, kaldırma veya güncelleme başladığında ilerleme burada görünecek.",
+        "Progress will appear here when an installation, removal or update starts.",
+    ),
+    "packages_count_summary": ("{count} paket yüklü", "{count} packages installed"),
+    "packages_upgradable_count": ("{count} güncellenebilir", "{count} upgradable"),
+    "operations_history_show": ("Geçmiş işlemleri göster", "Show operation history"),
+    "sources_copy_address": ("Adresi kopyala", "Copy address"),
+    "sources_unknown": ("Bilinmiyor", "Unknown"),
+    "sources_type": ("Tür", "Type"),
+    "sources_suite": ("Dağıtım / kanal", "Distribution / channel"),
+    "store_source_apt": ("APT", "APT"),
+    "store_source_dnf": ("DNF", "DNF"),
+    "store_source_pacman": ("Pacman", "Pacman"),
+    "store_source_zypper": ("Zypper", "Zypper"),
+    "store_category_shortcut": ("Kategori arama kısayolu", "Category search shortcut"),
+    "store_filter_installed": ("Kurulu", "Installed"),
+    "tooltip_store_filter_installed": (
+        "Yalnızca kurulu uygulamaları göster",
+        "Show installed applications only",
+    ),
+    "toast_close": ("Bildirimi kapat", "Dismiss notification"),
+    "toast_copied": ("Panoya kopyalandı", "Copied to clipboard"),
+    "toast_exported": ("Dosyaya aktarıldı", "Exported to file"),
+    "provider_timeout": (
+        "{source} yanıt vermiyor; diğer sonuçlar gösterildi.",
+        "{source} did not respond; the other results are shown.",
+    ),
+    "security_publisher_unknown": (
+        "Yayıncı bilgisi yok; bu, imza durumunu göstermez.",
+        "Publisher information is unavailable; this does not indicate signature status.",
+    ),
+    "security_publisher_metadata": (
+        "Yayıncı metadata'sı: {publisher}",
+        "Publisher metadata: {publisher}",
+    ),
+    "security_signature_flatpak": (
+        "İmza/bütünlük: seçilen Flatpak remote'u tarafından yönetilir.",
+        "Signature/integrity: handled by the selected Flatpak remote.",
+    ),
+    "security_signature_snap": (
+        "İmza/bütünlük: Snap Store tarafından yönetilir; bu ekranda classic varsayımı yapılmaz.",
+        "Signature/integrity: handled by the Snap Store; this screen does not assume classic confinement.",
+    ),
+    "security_signature_native": (
+        "İmza/bütünlük: depo imzaları paket yöneticisi tarafından kontrol edilir.",
+        "Signature/integrity: repository signatures are checked by the package manager.",
+    ),
 }
 for _key, (_tr, _en) in _UI_STRINGS.items():
     TRANSLATIONS["tr"][_key] = _tr
@@ -1087,8 +1262,37 @@ def t(language: str, key: str, **kwargs) -> str:
     return text
 
 
+def source_name(language: str, source: str) -> str:
+    """Return the product's stable, user-facing source terminology."""
+    key = f"store_source_{source}"
+    value = t(language, key)
+    return source.upper() if value == key else value
+
+
 def translate_backend_message(language: str, message: str) -> str:
     if "Komut basarisiz oldu:" in message or "Komut başarısız oldu:" in message:
         suffix = message.split(":", 1)[1].strip() if ":" in message else ""
         return f"{t(language, 'error_command')} {suffix}".strip()
     return message
+
+
+def translate_provider_error(language: str, message: str) -> str:
+    """Keep provider timeout feedback localized without hiding real errors."""
+    source, _, detail = message.partition(":")
+    if "timeout" in detail.casefold() or detail.strip().casefold() == "timeout":
+        return t(language, "provider_timeout", source=source_name(language, source.strip().lower()))
+    return message
+
+
+def translate_provider_notice(language: str, message: str, *, compact: bool = False) -> str:
+    match = re.fullmatch(
+        r"(?P<source>\w+) \(sistem\): (?P<count>\d+) arayüzsüz paket güncellenebilir → (?P<packages>.*)",
+        message,
+    )
+    if not match:
+        return message
+    summary = t(
+        language, "updates_status_system_packages",
+        source=source_name(language, match.group("source")), count=int(match.group("count")),
+    )
+    return summary if compact else f"{summary}: {match.group('packages')}"

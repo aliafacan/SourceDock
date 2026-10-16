@@ -14,6 +14,7 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, GObject, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
 from sourcedock.core.errors import AuthRequiredError, BackendError, SnapClassicRequiredError
+from sourcedock.core.icons import find_flatpak_icon_path, find_snap_icon_path
 from sourcedock.core.models import (
     NATIVE_SOURCES,
     SOURCE_APT as STORE_APT,
@@ -25,7 +26,8 @@ from sourcedock.core.models import (
     StoreResult,
     is_native_source,
 )
-from sourcedock.i18n import t
+from sourcedock.i18n import source_name, t, translate_provider_error
+from sourcedock.theme import PALETTES, resolve_theme
 from sourcedock.ui.components.dialogs import AppDetailDialog, show_snap_classic_dialog
 from sourcedock.ui.components.progress import OperationProgressWindow
 from sourcedock.ui.components.common import AppCard, ContentState, icon_button, set_status, style_tree_view
@@ -61,11 +63,15 @@ class StoreViewMixin:
         self.store_search_entry.set_hexpand(True)
         self.store_search_entry.connect("search-changed", self._on_store_search_changed)
         self.store_search_entry.connect("activate", self.on_store_search)
+        self.store_search_entry.set_no_show_all(True)
+        self.store_search_entry.hide()
         search_row.pack_start(self.store_search_entry, True, True, 0)
 
         self.store_search_btn = Gtk.Button()
         self.store_search_btn.get_style_context().add_class("suggested-action")
         self.store_search_btn.connect("clicked", self.on_store_search)
+        self.store_search_btn.set_no_show_all(True)
+        self.store_search_btn.hide()
         search_row.pack_start(self.store_search_btn, False, False, 0)
 
         filter_row = Gtk.FlowBox()
@@ -74,6 +80,11 @@ class StoreViewMixin:
         filter_row.set_row_spacing(6)
         filter_row.set_max_children_per_line(10)
         container.pack_start(filter_row, False, False, 0)
+
+        self.store_search_status = Gtk.Label(xalign=0)
+        self.store_search_status.get_style_context().add_class("dim-label")
+        self.store_search_status.set_line_wrap(True)
+        container.pack_start(self.store_search_status, False, False, 0)
         categories = Gtk.FlowBox()
         categories.set_selection_mode(Gtk.SelectionMode.NONE)
         categories.set_min_children_per_line(1)
@@ -87,8 +98,9 @@ class StoreViewMixin:
             ("graphics", "graphics"),
             ("system", "system"),
         ):
-            button = Gtk.Button(label=t(self.preferences.language, f"category_{key}"))
+            button = Gtk.ToggleButton(label=t(self.preferences.language, f"category_{key}"))
             button.get_style_context().add_class("filter-chip")
+            button.set_tooltip_text(t(self.preferences.language, "store_category_shortcut"))
             button.connect("clicked", self._on_store_category, query)
             categories.add(button)
             self.store_category_buttons.append((button, key))
@@ -100,6 +112,20 @@ class StoreViewMixin:
             button.connect("toggled", self.on_store_filter_toggled, source)
             filter_row.add(button)
             self.store_filter_buttons[source] = button
+
+        self.store_installed_filter = Gtk.ToggleButton(
+            label=t(self.preferences.language, "store_filter_installed")
+        )
+        self.store_installed_filter.get_style_context().add_class("filter-chip")
+        self.store_installed_filter.set_tooltip_text(
+            t(self.preferences.language, "tooltip_store_filter_installed")
+        )
+        self.store_installed_filter.get_accessible().set_name(
+            t(self.preferences.language, "store_filter_installed")
+        )
+        self.store_installed_filter.connect("toggled", self._on_store_installed_filter_toggled)
+        filter_row.add(self.store_installed_filter)
+        self.store_installed_only = False
 
         self.store_results_store = Gtk.TreeStore(
             GdkPixbuf.Pixbuf,
@@ -137,7 +163,7 @@ class StoreViewMixin:
         def _name_cell_data(_col, cell, model, it, _d):
             cell.set_property("style", Pango.Style.ITALIC if model.iter_parent(it) else Pango.Style.NORMAL)
             cell.set_property("foreground-set", bool(model.iter_parent(it)))
-            cell.set_property("foreground", "#aaaaaa")
+            cell.set_property("foreground", PALETTES[resolve_theme(self.preferences.theme)]["muted"])
 
         app_col.set_cell_data_func(name_rend, _name_cell_data)
         app_col.set_sort_column_id(_SC_NAME)
@@ -236,6 +262,8 @@ class StoreViewMixin:
         self.store_status = Gtk.Label()
         self.store_status.set_xalign(0)
         self.store_status.set_line_wrap(True)
+        self.store_status.set_no_show_all(True)
+        self.store_status.hide()
         store_action_bar.pack_start(self.store_status, True, True, 0)
 
         self.store_filter_buttons["all"].set_active(True)
@@ -244,19 +272,40 @@ class StoreViewMixin:
         )
 
     def _on_store_category(self, _button, query):
+        for button, _key in self.store_category_buttons:
+            button.set_active(button.get_label() == _button.get_label())
         self.store_search_entry.set_text(query)
         self.header_search.set_text(query)
         self.on_store_search()
 
     def _on_store_search_changed(self, _entry: Gtk.SearchEntry) -> None:
         """Debounce live discovery search so typing never starts one process per key."""
+        if getattr(self, "_suppress_store_search_changed", False) or getattr(
+            self, "_syncing_global_search", False
+        ):
+            return
+        query = self.store_search_entry.get_text().strip()
+        # The header search is the visible source of truth on Discover. Keep
+        # programmatic captures and the hidden page entry on the same query.
+        if self.header_search.get_text() != query:
+            header_cursor = self.header_search.get_position()
+            self._syncing_global_search = True
+            try:
+                self.header_search.set_text(query)
+            finally:
+                self._syncing_global_search = False
+            self.header_search.set_position(min(header_cursor, len(query)))
+        category_queries = {"office", "editor", "browser", "graphics", "system"}
+        if query not in category_queries:
+            for button, _key in self.store_category_buttons:
+                button.set_active(False)
         if self._store_search_timeout_id:
             try:
                 GLib.source_remove(self._store_search_timeout_id)
             except (TypeError, ValueError):
                 pass
             self._store_search_timeout_id = 0
-        if not self.store_search_entry.get_text().strip():
+        if not query:
             self._store_search_generation += 1
             self.store_busy = False
             self.store_results = []
@@ -267,12 +316,11 @@ class StoreViewMixin:
             )
             self._set_store_status(t(self.preferences.language, "store_empty"), "#666666")
             return
-        self._store_search_timeout_id = GLib.timeout_add(350, self._run_debounced_store_search)
-
-    def _run_debounced_store_search(self) -> bool:
-        self._store_search_timeout_id = 0
-        self.on_store_search()
-        return False
+        # Remote discovery is explicitly submitted with Enter. Starting a
+        # provider request for every partially typed word makes the header
+        # entry fight GTK's cursor position and creates stale partial results.
+        # Keep the local empty-state reset above, but leave non-empty text idle
+        # until the user submits it.
 
     def on_store_filter_toggled(self, button: Gtk.ToggleButton, source: str) -> None:
         if not hasattr(self, "store_results_store") or self.store_results_store is None:
@@ -287,8 +335,15 @@ class StoreViewMixin:
         self.store_filter_source = source
         self._render_store_results(self.store_results)
 
+    def _on_store_installed_filter_toggled(self, button: Gtk.ToggleButton) -> None:
+        self.store_installed_only = bool(button.get_active())
+        if hasattr(self, "store_results_store") and self.store_results_store is not None:
+            self._render_store_results(self.store_results)
+
     def on_store_search(self, *_args) -> None:
-        query = self.store_search_entry.get_text().strip()
+        if getattr(self, "_suppress_store_search", False):
+            return
+        query = self.header_search.get_text().strip() or self.store_search_entry.get_text().strip()
         if not query:
             return
         if self._store_search_timeout_id:
@@ -309,25 +364,43 @@ class StoreViewMixin:
         def worker():
             try:
                 sources = None if self.store_filter_source == "all" else {self.store_filter_source}
-                results = self.store_registry.search(query, sources=sources)
-                GLib.idle_add(self._finish_store_search, results, None, generation)
+                published = False
+
+                def publish(results, complete):
+                    nonlocal published
+                    published = True
+                    GLib.idle_add(self._finish_store_search, results, None, generation, complete)
+
+                results = self.store_registry.search(query, sources=sources, on_partial=publish)
+                if not published:
+                    GLib.idle_add(self._finish_store_search, results, None, generation, True)
             except BackendError as exc:
-                GLib.idle_add(self._finish_store_search, [], str(exc), generation)
+                GLib.idle_add(self._finish_store_search, [], str(exc), generation, True)
             except Exception as exc:
-                GLib.idle_add(self._finish_store_search, [], str(exc), generation)
+                GLib.idle_add(self._finish_store_search, [], str(exc), generation, True)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _finish_store_search(
-        self, results: list[StoreResult], error: str | None, generation: int | None = None
+        self,
+        results: list[StoreResult],
+        error: str | None,
+        generation: int | None = None,
+        complete: bool = True,
     ) -> bool:
         if generation is not None and generation != self._store_search_generation:
             return False
-        self.store_busy = False
-        self.store_search_btn.set_sensitive(True)
+        self.store_busy = not complete
+        self.store_search_btn.set_sensitive(complete)
         self.store_search_entry.set_sensitive(True)
         if error:
-            self.store_state.show_state(t(self.preferences.language, "store_error_title"), error, error=True)
+            self.store_state.show_state(
+                t(self.preferences.language, "store_error_title"),
+                error,
+                error=True,
+                retry_callback=self.on_store_search,
+                retry_label=t(self.preferences.language, "retry_action"),
+            )
             self._set_store_status(error, "red")
             return False
         self.store_results = results
@@ -335,7 +408,7 @@ class StoreViewMixin:
         visible_results = [result for result in results if result.is_application]
         if visible_results:
             self.store_state.show_content()
-        else:
+        elif complete:
             self.store_state.show_state(
                 t(self.preferences.language, "store_no_results"),
                 t(self.preferences.language, "store_applications_only")
@@ -344,18 +417,36 @@ class StoreViewMixin:
                 if getattr(self.store_registry, "missing_sources", [])
                 else "",
             )
-        msg = (
-            t(self.preferences.language, "store_no_results")
-            if not visible_results
-            else t(
+        if not complete:
+            self._set_store_status(t(self.preferences.language, "store_results_partial"), "#666666")
+            return False
+        self.store_search_metrics = getattr(self.store_registry, "last_search_metrics", {})
+        query = self.header_search.get_text().strip() or self.store_search_entry.get_text().strip()
+        msg = t(self.preferences.language, "store_no_results")
+        if visible_results:
+            count = len(self._group_store_results(visible_results, query=query))
+            msg = t(
                 self.preferences.language,
-                "store_results_count",
-                count=len(self._group_store_results(visible_results)),
+                "store_results_for_query" if query else "store_recommended",
+                query=query,
+                count=count,
             )
-        )
-        self._set_store_status(msg, "#666666")
+        provenance = self._store_provenance_status()
+        self._set_store_status(msg + (f"\n{provenance}" if provenance else ""), "#666666")
         if getattr(self.store_registry, "provider_errors", []):
-            self._set_store_status(msg + "\n" + "\n".join(self.store_registry.provider_errors), "red")
+            errors = []
+            seen_errors = set()
+            for error in self.store_registry.provider_errors:
+                translated = translate_provider_error(self.preferences.language, error)
+                key = translated.casefold()
+                if key in seen_errors:
+                    continue
+                seen_errors.add(key)
+                errors.append(translated)
+            self._set_store_status(
+                msg + (f"\n{provenance}" if provenance else "") + "\n" + "\n".join(errors),
+                "red",
+            )
         return False
 
     def on_store_result_selected(self, selection: Gtk.TreeSelection) -> None:
@@ -407,6 +498,9 @@ class StoreViewMixin:
         self.store_install_btn.set_sensitive(False)
         self._set_store_status(t(self.preferences.language, "store_action_running"), "#666666")
 
+        if not retry and getattr(self, "_cached_sudo_password", None):
+            self.store_registry.set_sudo_password(self._cached_sudo_password)
+
         lang = self.preferences.language
         self._active_op_seq += 1
         op_key = f"store_{self._active_op_seq}"
@@ -428,6 +522,7 @@ class StoreViewMixin:
             parent=self,
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
             language=lang,
+            cancel_fn=self.store_registry.cancel_current,
         )
         self.store_registry.set_output_callback(lambda line: GLib.idle_add(progress_dialog.append_log, line))
 
@@ -490,14 +585,18 @@ class StoreViewMixin:
         retry_key: str = "store_password_retry",
         classic: bool = False,
     ) -> bool:
+        if retry or exc.password_failed:
+            self._cached_sudo_password = None
         password = self._ask_sudo_password(
             retry=retry or exc.password_failed,
             message_key=message_key,
             retry_key=retry_key,
+            operation=result.name,
         )
         if password is None:
             self._finish_store_install(False, t(self.preferences.language, "status_cancelled"))
             return False
+        self._cached_sudo_password = password
         self.store_registry.set_sudo_password(password)
         self.store_busy = False
         self._run_store_install(result, retry=True, classic=classic)
@@ -515,7 +614,9 @@ class StoreViewMixin:
     def _store_result_is_installed(self, result: StoreResult) -> bool:
         return f"{result.source}:{result.app_id}" in self.installed_package_ids
 
-    def _group_store_results(self, results: list[StoreResult]) -> list[tuple[StoreResult, list[StoreResult]]]:
+    def _group_store_results(
+        self, results: list[StoreResult], query: str = ""
+    ) -> list[tuple[StoreResult, list[StoreResult]]]:
         source_order = {
             STORE_FLATPAK: 0,
             STORE_SNAP: 1,
@@ -525,23 +626,67 @@ class StoreViewMixin:
             STORE_ZYPPER: 2,
         }
         grouped: dict[str, list[StoreResult]] = {}
+        normalized_query = query.strip().casefold()
+        identity_aliases = {
+            "firefox": "org.mozilla.firefox",
+            "org.mozilla.firefox": "org.mozilla.firefox",
+        }
         for r in results:
             # A provider may expose the same package id under several sources.
             # Keep one search card and let its details dialog choose the source.
-            key = (
-                ("identity", r.identity.casefold())
-                if r.identity
-                else ("package", re.sub(r"[^a-z0-9.+:-]+", "", r.app_id.casefold()))
-            )
+            raw_identity = r.identity.casefold() if r.identity else ""
+            raw_package = re.sub(r"[^a-z0-9.+:-]+", "", r.app_id.casefold())
+            canonical = identity_aliases.get(raw_identity) or identity_aliases.get(raw_package)
+            key = ("identity", canonical or raw_identity) if (canonical or raw_identity) else ("package", raw_package)
             grouped.setdefault(key, []).append(r)
 
         output: list[tuple[StoreResult, list[StoreResult]]] = []
         for _key, variants in grouped.items():
-            sorted_variants = sorted(variants, key=lambda v: source_order.get(v.source, 9))
+            def variant_relevance(result: StoreResult) -> tuple[int, int]:
+                if normalized_query and result.app_id.casefold() == normalized_query:
+                    rank = 0
+                elif normalized_query and result.name.casefold() == normalized_query:
+                    rank = 1
+                elif normalized_query and (
+                    result.app_id.casefold().startswith(normalized_query)
+                    or result.name.casefold().startswith(normalized_query)
+                ):
+                    rank = 2
+                else:
+                    rank = 3
+                return rank, source_order.get(result.source, 9)
+
+            sorted_variants = sorted(variants, key=variant_relevance)
             primary = sorted_variants[0]
             children = sorted_variants[1:]
             output.append((primary, children))
-        return output
+
+        def relevance(group: tuple[StoreResult, list[StoreResult]]) -> tuple[int, str]:
+            primary = group[0]
+            variants = (primary, *group[1])
+            names = [variant.name.casefold() for variant in variants if variant.name]
+            app_ids = [variant.app_id.casefold() for variant in variants if variant.app_id]
+            metadata = [
+                value.casefold()
+                for variant in variants
+                for value in (variant.category, variant.description)
+                if value
+            ]
+            if normalized_query and normalized_query in app_ids:
+                rank = 0
+            elif normalized_query and normalized_query in names:
+                rank = 1
+            elif normalized_query and any(
+                value.startswith(normalized_query) for value in (*app_ids, *names)
+            ):
+                rank = 2
+            elif normalized_query and any(normalized_query in value for value in metadata):
+                rank = 3
+            else:
+                rank = 4
+            return rank, primary.name.casefold()
+
+        return sorted(output, key=relevance)
 
     def _render_store_results(self, results: list[StoreResult]) -> None:
         if not hasattr(self, "store_results_store") or self.store_results_store is None:
@@ -553,17 +698,17 @@ class StoreViewMixin:
             r
             for r in results
             if r.is_application
+            and (not getattr(self, "store_installed_only", False) or self._store_result_is_installed(r))
             and (
                 self.store_filter_source == "all"
                 or r.source == self.store_filter_source
                 or (self.store_filter_source in NATIVE_SOURCES and r.source in NATIVE_SOURCES)
             )
         ]
-        groups = self._group_store_results(filtered)
+        groups = self._group_store_results(filtered, query=self.store_search_entry.get_text())
+        source_states = getattr(self.store_registry, "last_search_source_states", {})
         for primary, children in groups:
-            card_pixbuf = self._get_store_pixbuf(primary)
-            if card_pixbuf:
-                card_pixbuf = card_pixbuf.scale_simple(48, 48, GdkPixbuf.InterpType.BILINEAR)
+            card_pixbuf = self._get_store_pixbuf(primary, 48)
             self.store_cards.add(
                 AppCard(
                     primary,
@@ -572,9 +717,10 @@ class StoreViewMixin:
                     self._open_store_detail_dialog,
                     self.preferences.language,
                     children,
+                    source_states,
                 )
             )
-            p_pixbuf = self._get_store_pixbuf(primary)
+            p_pixbuf = self._get_store_pixbuf(primary, 32)
             name_label = primary.name
             if children:
                 name_label = f"{primary.name}  (+{len(children)})"
@@ -584,7 +730,7 @@ class StoreViewMixin:
                 [
                     p_pixbuf,
                     name_label,
-                    primary.source.capitalize(),
+                    self._display_store_source(primary),
                     primary.description,
                     primary.version,
                     primary.remote,
@@ -593,13 +739,13 @@ class StoreViewMixin:
                 ],
             )
             for child in children:
-                c_pixbuf = self._get_store_pixbuf(child)
+                c_pixbuf = self._get_store_pixbuf(child, 32)
                 self.store_results_store.append(
                     p_iter,
                     [
                         c_pixbuf,
                         child.name,
-                        child.source.capitalize(),
+                        self._display_store_source(child),
                         child.description,
                         child.version,
                         child.remote,
@@ -609,7 +755,7 @@ class StoreViewMixin:
                 )
         self.store_cards.show_all()
 
-    def _scale_pixbuf_safe(self, pb: GdkPixbuf.Pixbuf | None, size: int = 24) -> GdkPixbuf.Pixbuf | None:
+    def _scale_pixbuf_safe(self, pb: GdkPixbuf.Pixbuf | None, size: int = 48) -> GdkPixbuf.Pixbuf | None:
         if pb is None:
             return None
         try:
@@ -621,26 +767,56 @@ class StoreViewMixin:
             pass
         return pb
 
-    def _get_store_pixbuf(self, result: StoreResult) -> GdkPixbuf.Pixbuf | None:
-        cache_key = f"store:{result.source}:{result.app_id}"
+    def _get_store_pixbuf(self, result: StoreResult, size: int = 48) -> GdkPixbuf.Pixbuf | None:
+        cache_key = f"store:{result.source}:{result.remote}:{result.app_id}:{size}"
         if cache_key in self._icon_pixbuf_cache:
             return self._icon_pixbuf_cache[cache_key]
         if result.icon_path:
             try:
-                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(result.icon_path, 24, 24, True)
+                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(result.icon_path, size, size, True)
                 if pb:
-                    pb = self._scale_pixbuf_safe(pb, 24)
+                    pb = self._scale_pixbuf_safe(pb, size)
                 self._icon_pixbuf_cache[cache_key] = pb
                 return pb
             except Exception:
                 pass
+        if result.source == STORE_FLATPAK:
+            flatpak_path = find_flatpak_icon_path(result.app_id, result.remote)
+            if flatpak_path:
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(flatpak_path, size, size, True)
+                    self._icon_pixbuf_cache[cache_key] = pb
+                    return pb
+                except Exception:
+                    pass
+        if result.source == STORE_SNAP:
+            snap_path = find_snap_icon_path(result.app_id)
+            if snap_path:
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(snap_path, size, size, True)
+                    self._icon_pixbuf_cache[cache_key] = pb
+                    return pb
+                except Exception:
+                    pass
         theme = Gtk.IconTheme.get_default()
-        for icon_name in (result.app_id, result.name.lower(), "application-x-executable"):
+        generic_names = {"application-x-executable", "application-x-executable-symbolic"}
+        fallback_by_source = {
+            STORE_FLATPAK: "package-x-generic",
+            STORE_SNAP: "package-x-generic",
+        }
+        fallback_name = fallback_by_source.get(result.source, "package-x-generic")
+        # A human name is not an icon ID. Resolving it through IconTheme can
+        # silently borrow an unrelated application's icon, especially for
+        # remote Snap results. Only use an exact provider ID, then a neutral
+        # package fallback.
+        candidates = [result.app_id] if result.app_id and result.app_id not in generic_names else []
+        candidates.append(fallback_name)
+        for icon_name in candidates:
             if theme.has_icon(icon_name):
                 try:
-                    pb = theme.load_icon(icon_name, 24, Gtk.IconLookupFlags.FORCE_SIZE)
+                    pb = theme.load_icon(icon_name, size, Gtk.IconLookupFlags.FORCE_SIZE)
                     if pb:
-                        pb = self._scale_pixbuf_safe(pb, 24)
+                        pb = self._scale_pixbuf_safe(pb, size)
                     self._icon_pixbuf_cache[cache_key] = pb
                     return pb
                 except Exception:
@@ -648,5 +824,44 @@ class StoreViewMixin:
         self._icon_pixbuf_cache[cache_key] = None
         return None
 
+    def _display_store_source(self, result: StoreResult) -> str:
+        label = source_name(self.preferences.language, result.source)
+        state = getattr(self.store_registry, "last_search_source_states", {}).get(result.source)
+        if state == "cached":
+            return f"{label} · {t(self.preferences.language, 'store_source_cached_short')}"
+        if state == "unavailable":
+            return f"{label} · {t(self.preferences.language, 'store_source_unavailable_short')}"
+        return label
+
+    def _store_provenance_status(self) -> str:
+        states = getattr(self.store_registry, "last_search_source_states", {})
+        if not isinstance(states, dict) or not states:
+            return ""
+        groups = {"live": [], "cached": [], "unavailable": []}
+        for source, state in states.items():
+            groups.setdefault(state, []).append(source_name(self.preferences.language, source))
+        lines = []
+        if groups["live"] and (groups["cached"] or groups["unavailable"]):
+            lines.append(t(self.preferences.language, "store_sources_live", sources=", ".join(groups["live"])))
+        if groups["cached"]:
+            lines.append(
+                t(
+                    self.preferences.language,
+                    "store_sources_cached",
+                    sources=", ".join(groups["cached"]),
+                )
+            )
+        if groups["unavailable"]:
+            lines.append(
+                t(
+                    self.preferences.language,
+                    "store_sources_unavailable",
+                    sources=", ".join(groups["unavailable"]),
+                )
+            )
+        return "\n".join(lines)
+
     def _set_store_status(self, message: str, color: str) -> None:
         set_status(self.store_status, message, color == "red")
+        if hasattr(self, "store_search_status"):
+            set_status(self.store_search_status, message, color == "red")

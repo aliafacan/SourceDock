@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 import os
 from pathlib import Path
 import shlex
@@ -38,6 +39,13 @@ class CommandRunner:
         if proc and proc.poll() is None and self._cancel_allowed:
             self._cancelled = True
             terminate_process(proc)
+            try:
+                proc.wait(timeout=0.8)
+            except (subprocess.TimeoutExpired, OSError):
+                terminate_process(proc, force=True)
+            return True
+        if self._cancel_allowed:
+            self._cancelled = True
             return True
         return False
 
@@ -100,29 +108,84 @@ class CommandRunner:
         timeout: int = 30,
         check: bool = False,
         input_text: str | None = None,
+        allow_cancel: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         """Standart bir komut çalıştırır."""
         wrapped = self._wrap_host(command)
-        if timeout >= 120:
-            return self._run_streaming(wrapped, timeout, check, stdin_text=input_text)
+        with NATIVE_OPERATION_LOCK if critical_command(wrapped) else nullcontext():
+            if timeout >= 120 or self._output_callback is not None:
+                return self._run_streaming(wrapped, timeout, check, stdin_text=input_text, allow_cancel=allow_cancel)
+            return self._run_subprocess(wrapped, command, timeout, check, input_text, allow_cancel=allow_cancel)
+
+    def run_read_only(
+        self,
+        command: list[str],
+        timeout: int = 30,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run a read-only query that can be cancelled as a provider times out."""
+        wrapped = self._wrap_host(command)
+        return self._run_subprocess(wrapped, command, timeout, check, None, allow_cancel=True)
+
+    def _run_subprocess(
+        self,
+        wrapped: list[str],
+        display_command: list[str],
+        timeout: int,
+        check: bool,
+        input_text: str | None,
+        allow_cancel: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        process: subprocess.Popen[str] | None = None
+        child_env = dict(os.environ)
+        for name in (
+            "GTK_PATH",
+            "GTK3_MODULES",
+            "GTK_EXE_PREFIX",
+            "GTK_IM_MODULE_FILE",
+            "GDK_PIXBUF_MODULEDIR",
+            "GDK_PIXBUF_MODULE_FILE",
+            "GIO_MODULE_DIR",
+            "GSETTINGS_SCHEMA_DIR",
+            "LOCPATH",
+        ):
+            child_env.pop(name, None)
+        if "/snap/" in child_env.get("LD_LIBRARY_PATH", ""):
+            child_env.pop("LD_LIBRARY_PATH", None)
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 wrapped,
-                input=input_text,
-                capture_output=True,
+                stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
-                check=False,
+                start_new_session=True,
+                env=child_env,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            self._current_process = process
+            self._cancel_allowed = allow_cancel
+            self._cancelled = False
+            stdout, stderr = process.communicate(input=input_text, timeout=timeout)
+            result = subprocess.CompletedProcess(wrapped, process.returncode, stdout, stderr)
+        except subprocess.TimeoutExpired as exc:
+            if process is not None:
+                terminate_process(process, force=True)
+                process.communicate()
             raise BackendError(
-                redact_text(f"Komut calistirilamadi: {' '.join(command)}\n{exc}", (self._sudo_password,))
+                redact_text(f"Komut calistirilamadi: {' '.join(display_command)}\n{exc}", (self._sudo_password,))
             ) from exc
+        except OSError as exc:
+            raise BackendError(
+                redact_text(f"Komut calistirilamadi: {' '.join(display_command)}\n{exc}", (self._sudo_password,))
+            ) from exc
+        finally:
+            self._current_process = None
+            self._cancel_allowed = False
 
         if check and result.returncode != 0:
             stderr = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
             raise BackendError(
-                redact_text(f"Komut basarisiz oldu: {' '.join(command)}\n{stderr}", (self._sudo_password,))
+                redact_text(f"Komut basarisiz oldu: {' '.join(display_command)}\n{stderr}", (self._sudo_password,))
             )
         return result
 
@@ -132,10 +195,16 @@ class CommandRunner:
         timeout: int,
         check: bool,
         stdin_text: str | None = None,
+        allow_cancel: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         """Komut çıktısını gerçek zamanlı olarak okur ve callback'e iletir."""
-        self._cancel_allowed = not critical_command(wrapped_command)
+        with NATIVE_OPERATION_LOCK if critical_command(wrapped_command) else nullcontext():
+            return self._run_streaming_locked(wrapped_command, timeout, check, stdin_text, allow_cancel=allow_cancel)
+
+    def _run_streaming_locked(self, wrapped_command, timeout, check, stdin_text, allow_cancel=True):
+        self._cancel_allowed = allow_cancel
         self._cancelled = False
+        secrets = (self._sudo_password,)
         try:
 
             def started(process):
@@ -147,17 +216,21 @@ class CommandRunner:
                 self._output_callback,
                 stdin_text,
                 started,
-                (self._sudo_password,),
+                secrets,
                 lambda: self._cancelled,
             )
             if self._cancelled:
                 raise BackendError("Operation cancelled.")
             if check and result.returncode != 0:
                 tail = "\n".join(result.stdout.splitlines()[-3:])
-                raise BackendError(redact_text(f"Komut basarisiz oldu: {' '.join(wrapped_command)}\n{tail}"))
+                raise BackendError(redact_text(
+                    f"Komut basarisiz oldu: {' '.join(wrapped_command)}\n{tail}", secrets,
+                ))
             return result
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise BackendError(f"Komut calistirilamadi: {' '.join(wrapped_command)}\n{exc}") from exc
+            raise BackendError(redact_text(
+                f"Komut calistirilamadi: {' '.join(wrapped_command)}\n{exc}", secrets,
+            )) from None
         finally:
             self._current_process = None
             self._cancel_allowed = False
@@ -167,19 +240,20 @@ class CommandRunner:
         command: list[str],
         timeout: int = 900,
         input_text: str | None = None,
+        allow_cancel: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         """Ayrıcalıklı (sudo) komut çalıştırır."""
         with NATIVE_OPERATION_LOCK:
             try:
-                return self._run_privileged_locked(command, timeout, input_text)
+                return self._run_privileged_locked(command, timeout, input_text, allow_cancel=allow_cancel)
             finally:
                 self.clear_sudo_password()
 
-    def _run_privileged_locked(self, command, timeout, input_text):
+    def _run_privileged_locked(self, command, timeout, input_text, allow_cancel=True):
         self._wait_for_apt_locks(command)
-        sudo_probe = self.run(["sudo", "-n", "true"], timeout=5)
+        sudo_probe = self.run(["sudo", "-n", "true"], timeout=5, allow_cancel=False)
         if sudo_probe.returncode == 0:
-            result = self.run(["sudo", "-n", *command], timeout=timeout, input_text=input_text)
+            result = self.run(["sudo", "-n", *command], timeout=timeout, input_text=input_text, allow_cancel=allow_cancel)
             self._raise_for_privileged_result(result, command)
             return result
 
@@ -192,7 +266,7 @@ class CommandRunner:
         if input_text is not None:
             stdin_text += input_text
 
-        result = self.run(["sudo", "-S", "-p", "", *command], timeout=timeout, input_text=stdin_text)
+        result = self.run(["sudo", "-S", "-p", "", *command], timeout=timeout, input_text=stdin_text, allow_cancel=allow_cancel)
         self._raise_for_privileged_result(result, command)
         return result
 
@@ -217,25 +291,36 @@ class CommandRunner:
     def _wait_for_apt_locks(self, command: list[str], max_wait: int = 300) -> None:
         if not command or command[0] not in {"apt", "apt-get", "nala", "dpkg"}:
             return
+        self._cancel_allowed = True
+        self._cancelled = False
         started = time.monotonic()
         last_message = ""
-        while True:
-            holders = self._apt_lock_holders()
-            if not holders:
-                if last_message and self._output_callback is not None:
-                    self._output_callback("APT kilidi boşaldı. İşleme devam ediliyor...")
-                return
-            summary = "; ".join(f"PID {pid}: {args}" for pid, args in holders[:3])
-            if len(holders) > 3:
-                summary += f"; +{len(holders) - 3} işlem"
-            message = f"APT meşgul: {summary}"
-            if message != last_message and self._output_callback is not None:
-                self._output_callback(message)
-                self._output_callback("Diğer APT işlemi bitince otomatik devam edilecek...")
-                last_message = message
-            if time.monotonic() - started >= max_wait:
-                raise BackendError(f"APT şu anda başka bir işlem tarafından kullanılıyor.\n{summary}")
-            time.sleep(2)
+        try:
+            while True:
+                if self._cancelled:
+                    raise BackendError("Operation cancelled.")
+                holders = self._apt_lock_holders()
+                if not holders:
+                    if last_message and self._output_callback is not None:
+                        self._output_callback("APT kilidi boşaldı. İşleme devam ediliyor...")
+                    return
+                summary = "; ".join(f"PID {pid}: {args}" for pid, args in holders[:3])
+                if len(holders) > 3:
+                    summary += f"; +{len(holders) - 3} işlem"
+                message = f"APT meşgul: {summary}"
+                if message != last_message and self._output_callback is not None:
+                    self._output_callback(message)
+                    self._output_callback("Diğer APT işlemi bitince otomatik devam edilecek...")
+                    last_message = message
+                if time.monotonic() - started >= max_wait:
+                    raise BackendError(f"APT şu anda başka bir işlem tarafından kullanılıyor.\n{summary}")
+                sleep_end = time.monotonic() + 1.5
+                while time.monotonic() < sleep_end:
+                    if self._cancelled:
+                        raise BackendError("Operation cancelled.")
+                    time.sleep(0.1)
+        finally:
+            self._cancel_allowed = False
 
     def _apt_lock_holders(self) -> list[tuple[str, str]]:
         script = r"""

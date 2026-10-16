@@ -134,6 +134,18 @@ class TestHelpAndTooltips(unittest.TestCase):
         self.assertEqual(len(pages), 4, "HelpDialog 4 adet stack sayfası içermelidir.")
         dialog.destroy()
 
+    def test_help_opens_the_current_page_topic_first(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest("A GTK display is required.")
+        dialog = HelpDialog(language="en", context="updates")
+        try:
+            self.assertEqual(dialog.stack.get_visible_child_name(), "features")
+            scroller = dialog.stack.get_child_by_name("features")
+            topic = scroller.get_child().get_child().get_children()[0]
+            self.assertEqual(topic.get_children()[0].get_text(), "Updates")
+        finally:
+            dialog.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()

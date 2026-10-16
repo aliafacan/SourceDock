@@ -16,7 +16,7 @@ from gi.repository import GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportM
 from sourcedock.i18n import t
 from sourcedock.core.history import OperationHistory
 from sourcedock.core.process import redact_text
-from sourcedock.ui.components.common import icon_button
+from sourcedock.ui.components.common import ContentState, icon_button, style_tree_view
 
 _OC_ICON = 0
 _OC_PID = 1
@@ -56,6 +56,7 @@ class OperationsViewMixin:
             str,
         )
         self.operations_tree = Gtk.TreeView(model=self.operations_store)
+        style_tree_view(self.operations_tree)
         self.operations_tree.set_headers_visible(True)
 
         sel = self.operations_tree.get_selection()
@@ -77,6 +78,7 @@ class OperationsViewMixin:
         pid_rend = Gtk.CellRendererText()
         self.operations_tree_col_pid = Gtk.TreeViewColumn("PID", pid_rend, text=_OC_PID)
         self.operations_tree_col_pid.set_fixed_width(80)
+        self.operations_tree_col_pid.set_visible(False)
         self.operations_tree.append_column(self.operations_tree_col_pid)
 
         pkg_rend = Gtk.CellRendererText()
@@ -88,7 +90,13 @@ class OperationsViewMixin:
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scroller.add(self.operations_tree)
-        container.pack_start(scroller, True, True, 0)
+        self.operations_state = ContentState(scroller)
+        self.operations_state.show_state(
+            t(self.preferences.language, "operations_empty"),
+            t(self.preferences.language, "operations_empty_body"),
+            icon_name="system-run-symbolic",
+        )
+        container.pack_start(self.operations_state, True, True, 0)
 
         action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         action_bar.get_style_context().add_class("action-bar")
@@ -97,7 +105,6 @@ class OperationsViewMixin:
         self.operations_pause_btn = Gtk.Button(label="Duraklat")
         self.operations_pause_btn.connect("clicked", self._on_operations_pause)
         self.operations_pause_btn.set_sensitive(False)
-        action_bar.pack_start(self.operations_pause_btn, False, False, 0)
         self.operations_pause_btn.set_no_show_all(True)
         self.operations_pause_btn.hide()
 
@@ -105,18 +112,23 @@ class OperationsViewMixin:
         self.operations_cancel_btn.get_style_context().add_class("destructive-action")
         self.operations_cancel_btn.connect("clicked", self._on_operations_cancel)
         self.operations_cancel_btn.set_sensitive(False)
+        self.operations_cancel_btn.set_no_show_all(True)
+        self.operations_cancel_btn.hide()
         action_bar.pack_start(self.operations_cancel_btn, False, False, 0)
         self.operations_cancel_btn.set_tooltip_text(t(self.preferences.language, "cancel_critical"))
         history_expander = Gtk.Expander(label=t(self.preferences.language, "operation_history"))
+        self.operations_history_expander = history_expander
         history_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.history_store = Gtk.ListStore(str, str, str, str)
         history_tree = Gtk.TreeView(model=self.history_store)
+        self.operations_history_columns = []
         for index, key in enumerate(
             ("operation_time", "operations_col_process", "applications_col_source", "operation_result")
         ):
             column = Gtk.TreeViewColumn(t(self.preferences.language, key), Gtk.CellRendererText(), text=index)
             column.set_resizable(True)
             history_tree.append_column(column)
+            self.operations_history_columns.append((column, key))
         history_scroll = Gtk.ScrolledWindow()
         history_scroll.set_min_content_height(120)
         history_scroll.set_max_content_height(200)
@@ -124,11 +136,13 @@ class OperationsViewMixin:
         history_box.pack_start(history_scroll, True, True, 0)
         history_actions = Gtk.Box(spacing=8)
         export = Gtk.Button()
+        self.operations_history_export_btn = export
         icon_button(
             export, "document-save-symbolic", t(self.preferences.language, "operation_history_export")
         )
         export.connect("clicked", self._on_history_export)
         clear = Gtk.Button()
+        self.operations_history_clear_btn = clear
         icon_button(clear, "edit-clear-symbolic", t(self.preferences.language, "operation_history_clear"))
         clear.connect("clicked", self._on_history_clear)
         history_actions.pack_end(clear, False, False, 0)
@@ -218,6 +232,24 @@ class OperationsViewMixin:
                     "",
                 ]
             )
+        has_operations = bool(self._active_ops or self._external_operations)
+        if has_operations:
+            self.operations_state.show_content()
+        else:
+            self.operations_state.show_state(
+                t(lang, "operations_empty"),
+                t(lang, "operations_empty_body"),
+                icon_name="system-run-symbolic",
+            )
+        def can_cancel(op):
+            cancel = op.get("cancel_fn")
+            owner = getattr(cancel, "__self__", None)
+            runner = getattr(owner, "_stream_runner", owner)
+            return bool(cancel and getattr(runner, "_cancel_allowed", False))
+
+        has_cancellable = any(can_cancel(op) for op in self._active_ops.values())
+        self.operations_cancel_btn.set_visible(has_cancellable)
+        self.operations_cancel_btn.set_sensitive(False)
 
     def _on_operations_selection_changed(self, selection: Gtk.TreeSelection) -> None:
         model, it = selection.get_selected()
@@ -244,6 +276,17 @@ class OperationsViewMixin:
         self._refresh_operations_list()
 
     def _refresh_history(self):
+        self.operations_history_expander.set_label(t(self.preferences.language, "operation_history"))
+        for column, key in self.operations_history_columns:
+            column.set_title(t(self.preferences.language, key))
+        icon_button(
+            self.operations_history_export_btn, "document-save-symbolic",
+            t(self.preferences.language, "operation_history_export"),
+        )
+        icon_button(
+            self.operations_history_clear_btn, "edit-clear-symbolic",
+            t(self.preferences.language, "operation_history_clear"),
+        )
         self.history_store.clear()
         for item in reversed(self.operation_history.load()):
             try:

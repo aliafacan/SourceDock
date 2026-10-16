@@ -6,7 +6,30 @@
 **Hedef sürümler:** `v1.0.1` (güvenlik/kararlılık), `v1.1.0` (UI/UX ve yayınlama), `v1.2.0+` (ek özellikler).  
 **Kullanım:** Bu dosyayı repo köküne `CODEX_PLAN.md` olarak koyabilir veya Codex'e doğrudan verebilirsin.
 
-## Uygulama Durumu — 14 Ekim 2026
+## Güncel Durum — 16 Ekim 2026
+
+Bu dosyanın görev kutuları mevcut yerel `1.3.0` kaynakları ve çalışan testlerle
+yeniden eşleştirildi. `[x]`, ilgili yerel uygulamanın/testin bulunduğunu;
+`[ ]` yanındaki **Kısmi**, **BLOCKED**, **NOT TESTED** veya **Açık (P2)** notları
+ise tam olarak neyin eksik olduğunu gösterir. Yerel birim testi gerçek paket
+kurulumunun veya GitHub CI koşusunun yerine geçmez.
+
+Bu turda örtük APT autoremove kaldırıldı; hassas toplu kaldırma onayı, kapsamlı
+Flatpak temizlik önizlemesi, parola redaksiyonu, portable kaldırmada yeniden
+deneme, tanılama çevirileri, bilgi/hata ayrımı ve kısmi checkbox durumu düzeltildi.
+X11 kabul aracı dış pencere çerçevesi ile gerçek kök ekran piksellerini ayrı ölçer.
+Eski ekran görüntüleri yeni sürüm adıyla paketlenmedi.
+
+Devam turunda CI için host komut koruması ve geçici test verisi yalıtımı eklendi;
+bağımsız detay/`--uninstall` işlemleri ortak onay ve worker akışına alındı.
+1.000 kayıtla gerçek GTK arama/filtre/kaydırma ölçümü dört X11/ölçek koşulunda
+geçti. Güncel takım: 193 test, hata ve atlama yok. Toplam 113 görev tikli,
+54 görev gerekçeleriyle açık/kısmi; gerçek VM ve güncel yerel ağacın uzak CI kabulü açık.
+
+Güncel dosya/test/ekran kanıtları ve kalan yayın engelleri:
+[16 Ekim çalışma raporu](docs/ROADMAP_COMPLETION_REPORT.md).
+
+## Önceki Uygulama Durumu — 14 Ekim 2026
 
 `1.2.0` için güvenlik sınırları, sol gezinme, tema sistemi, mağaza kartları,
 güncelleme merkezi, mini kurucu, kaynak görüntüleme ve uygulama listesi önizlemeli
@@ -27,15 +50,15 @@ doğrulama gerektirir. Son ekran görüntüsü/ölçüm sonuçları `docs/screen
 
 - [x] `README.md`, `ROADMAP.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml`, `packaging/build_deb.sh`, `main.py`, `sourcedock/` ve `tests/` incelenmeden dosya değiştirme.
 - [x] Önce kısa durum raporu hazırla: **mevcut / eksik / riskli / doğrulanmadı**; planı güncel `main` ile eşleştir.
-- [ ] Mevcut çalışan özellikleri ve TR/EN çeviri anahtarlarını koru. Eksik çevirileri tamamla; arayüzde sabit Türkçe/İngilizce metin bırakma.
-- [ ] Büyük işi küçük PR/commit'lere ayır. Her aşama sonunda testleri çalıştır, sonucu raporla. Başarısız testleri saklama.
-- [ ] Özellikle paket kurma, silme, yükseltme, arşiv çıkarma ve sudo gerektiren işler için **dry-run/mocked tests** kullan; CI ortamında gerçek host sistemini değiştirme.
-- [ ] Root olarak GUI çalıştırma. Yetki yükseltmeyi olabildiğince dar tut. Kullanıcı parolasını loglama, diske yazma veya hata raporuna ekleme.
-- [ ] Güvenilmeyen paketin kodunu yalnızca ikon/metadata okumak için çalıştırma. `shell=True`, kontrolsüz `rm -rf`/`rmtree`, string birleştirmeli shell komutları kullanma.
-- [ ] `GTK 3 / PyGObject` mevcut teknik temel; UI yenilemesinde önce onunla yapılabilecekleri değerlendir. **GTK4/libadwaita'ya otomatik geçiş yapma**; maliyet/uyumluluk raporunu ayrı hazırla.
-- [ ] İzin vermeden kullanıcıdaki kurulu uygulamaları kaldırma, sistem paketlerini değiştirme, kurulu depoları manipüle etme veya mevcut çalışma dizinlerini temizleme.
-- [ ] Kullanıcıyı yanıltan göstergeler oluşturma: sahte derecelendirme, uydurma indirme sayısı, sahte güncelleme güvenliği, doğrulanmamış 'tested on' etiketleri yasak.
-- [ ] Her faz sonunda: değişen dosyalar, test komutları ve sonuçları, manuel test adımları, bilinen sınırlamalar, sonraki faz bağımlılıkları.
+- [ ] Mevcut çalışan özellikleri ve TR/EN çeviri anahtarlarını koru. Eksik çevirileri tamamla; arayüzde sabit Türkçe/İngilizce metin bırakma. **Durum (16.10.2026):** Kısmi: dinamik tanılama ve geçmiş çevirileri düzeltildi; tüm backend hata mesajlarının yerelleştirme denetimi açık.
+- [ ] Büyük işi küçük PR/commit'lere ayır. Her aşama sonunda testleri çalıştır, sonucu raporla. Başarısız testleri saklama. **Durum (16.10.2026):** Kısmi: değişiklikler ve testler aşamalarla yürütüldü; kullanıcının izni olmadan commit/PR oluşturulmadı.
+- [x] Özellikle paket kurma, silme, yükseltme, arşiv çıkarma ve sudo gerektiren işler için **dry-run/mocked tests** kullan; CI ortamında gerçek host sistemini değiştirme.
+- [x] Root olarak GUI çalıştırma. Yetki yükseltmeyi olabildiğince dar tut. Kullanıcı parolasını loglama, diske yazma veya hata raporuna ekleme.
+- [x] Güvenilmeyen paketin kodunu yalnızca ikon/metadata okumak için çalıştırma. `shell=True`, kontrolsüz `rm -rf`/`rmtree`, string birleştirmeli shell komutları kullanma.
+- [x] `GTK 3 / PyGObject` mevcut teknik temel; UI yenilemesinde önce onunla yapılabilecekleri değerlendir. **GTK4/libadwaita'ya otomatik geçiş yapma**; maliyet/uyumluluk raporunu ayrı hazırla.
+- [x] İzin vermeden kullanıcıdaki kurulu uygulamaları kaldırma, sistem paketlerini değiştirme, kurulu depoları manipüle etme veya mevcut çalışma dizinlerini temizleme.
+- [x] Kullanıcıyı yanıltan göstergeler oluşturma: sahte derecelendirme, uydurma indirme sayısı, sahte güncelleme güvenliği, doğrulanmamış 'tested on' etiketleri yasak.
+- [x] Her faz sonunda: değişen dosyalar, test komutları ve sonuçları, manuel test adımları, bilinen sınırlamalar, sonraki faz bağımlılıkları.
 
 ## 1. Mevcut proje envanteri (inceleme sırasında gözlenen)
 
@@ -45,108 +68,108 @@ doğrulama gerektirir. Son ekran görüntüsü/ölçüm sonuçları `docs/screen
 - [x] `tests/` altında birim testleri ve GitHub Actions CI yapılandırması.
 - [x] `packaging/sourcedock_1.0.0_all.deb` ve derleme betiği.
 - [x] `CONTRIBUTING.md`, issue/PR şablonları, `ROADMAP.md`.
-- [ ] **GitHub Release** yoktu (13.10.2026 incelemesi); yeniden doğrula.
-- [ ] Repository **topics** boştu; yeniden doğrula.
+- [x] **GitHub Release** yoktu (13.10.2026 incelemesi); yeniden doğrula. **Kanıt (16.10.2026):** GitHub Releases API salt okunur sorgulandı; sonuç `[]`, henüz Release yok. Bu kutu yayımlama değil durum doğrulamasıdır.
+- [x] Repository **topics** boştu; yeniden doğrula. **Kanıt (16.10.2026):** GitHub repository API `topics: []`; liste hâlâ boş, uzak ayarlar değiştirilmedi.
 - [x] README'de gerçek arayüz ekran görüntüleri eklendi; kurulum gösterim GIF'i ayrıca doğrulanacak.
 - [x] `LICENSE` dosyasındaki GPLv3 metni kısaltılmıştı: tam, değişmemiş GPLv3 metniyle düzelt.
-- [ ] CI'nin farklı dağıtım ve Python/GTK kombinasyonlarında gerçekten geçtiğini doğrulamak gerekiyor.
+- [ ] CI'nin farklı dağıtım ve Python/GTK kombinasyonlarında gerçekten geçtiğini doğrulamak gerekiyor. **Durum (16.10.2026):** Kısmi: uzak `13f6f0b` commit'inin CI koşusu başarılı; güncel yerel değişiklikler bu koşuda yok. Dağıtım matrisi sonucu güncel ağaç için doğrulanmadı.
 
 ## 2. P0 — Güvenlik ve veri koruma (v1.0.1'den önce)
 
 ### P0.1 Portable kaldırmada güvenli yol doğrulaması
 **İlgili dosya:** `sourcedock/backend/portable.py`
 
-- [ ] `PortableProvider.remove()` içindeki `shutil.rmtree(application.install_path, ignore_errors=True)` yolunu gözden geçir.
-- [ ] Sadece **SourceDock tarafından yönetildiği kanıtlanan** uygulama dizinlerini sil; path'in yönetilen kök altında olduğunu `Path.resolve()` ve `relative_to()` ile doğrula. Sembolik bağları ve `..` geçişlerini reddet.
-- [ ] Kullanıcının seçtiği özel konuma kurulum destekleniyorsa, güvenli sahiplik kaydı/manifest olmadan asla otomatik dizin silme.
-- [ ] Desktop dosyası silme için de kullanıcı uygulama dizini ve SourceDock'ın oluşturduğu kayıt kontrolü yap.
+- [x] `PortableProvider.remove()` içindeki `shutil.rmtree(application.install_path, ignore_errors=True)` yolunu gözden geçir.
+- [x] Sadece **SourceDock tarafından yönetildiği kanıtlanan** uygulama dizinlerini sil; path'in yönetilen kök altında olduğunu `Path.resolve()` ve `relative_to()` ile doğrula. Sembolik bağları ve `..` geçişlerini reddet.
+- [x] Kullanıcının seçtiği özel konuma kurulum destekleniyorsa, güvenli sahiplik kaydı/manifest olmadan asla otomatik dizin silme.
+- [x] Desktop dosyası silme için de kullanıcı uygulama dizini ve SourceDock'ın oluşturduğu kayıt kontrolü yap.
 - [x] `ignore_errors=True` yerine kullanıcıya anlaşılır hata raporu, başarısızsa kaydı silmeme ve geri denenebilir durum kullan.
-- [ ] Registre edilmiş sahte `/home/user/Documents`, symlink, bozuk kayıt, eksik dosya ve başarılı kaldırma testlerini ekle.
+- [x] Registre edilmiş sahte `/home/user/Documents`, symlink, bozuk kayıt, eksik dosya ve başarılı kaldırma testlerini ekle.
 
 **Kabul kriteri:** Manipüle edilmiş registry kaydıyla SourceDock tarafından yönetilmeyen herhangi bir dizin silinemez.
 
 ### P0.2 Arşiv çıkarma: Zip Slip, symlink, tar filter, zip bomb
 **İlgili dosya:** `sourcedock/backend/local_packages.py`
 
-- [ ] `_safe_extract_archive` içindeki `str(target).startswith(str(dest_resolved))` kontrolünü dizin bazlı `relative_to()` doğrulamasıyla değiştir.
-- [ ] `tar` için link, hardlink, device/special file, mutlak yol, `../`, mevcut symlink zincirleri ve izinleri güvenlik açısından ele al.
-- [ ] Eski Python sürümlerinde `tarfile` filtre davranışına güvenme: ya güvenli özel doğrulama uygula ya desteklenen minimum sürümü güncelle.
-- [ ] ZIP dosyalarında symlink girişlerini ve yazma sırasındaki symlink yarışlarını ele al.
-- [ ] Maksimum toplam açılmış veri, dosya adedi, dosya başına sınır ve isteğe bağlı boyut oranı koruması uygula.
-- [ ] Açma işlemini rastgele sistem konumuna değil, güvenli geçici dizine yap. Doğrulama sonrası hedefe atomik/geçişi güvenli taşı.
-- [ ] İşlem başarısızsa eski kurulumun korunacağını garanti et; kısmen açılmış içeriği temizle.
-- [ ] Güvenlik regresyon testleri: `app/../evil`, `apps-copy/evil`, absolute path, symlink escape, nested tar symlink, zip bomb simülasyonu.
+- [x] `_safe_extract_archive` içindeki `str(target).startswith(str(dest_resolved))` kontrolünü dizin bazlı `relative_to()` doğrulamasıyla değiştir.
+- [x] `tar` için link, hardlink, device/special file, mutlak yol, `../`, mevcut symlink zincirleri ve izinleri güvenlik açısından ele al.
+- [x] Eski Python sürümlerinde `tarfile` filtre davranışına güvenme: ya güvenli özel doğrulama uygula ya desteklenen minimum sürümü güncelle.
+- [x] ZIP dosyalarında symlink girişlerini ve yazma sırasındaki symlink yarışlarını ele al.
+- [x] Maksimum toplam açılmış veri, dosya adedi, dosya başına sınır ve isteğe bağlı boyut oranı koruması uygula.
+- [x] Açma işlemini rastgele sistem konumuna değil, güvenli geçici dizine yap. Doğrulama sonrası hedefe atomik/geçişi güvenli taşı.
+- [x] İşlem başarısızsa eski kurulumun korunacağını garanti et; kısmen açılmış içeriği temizle.
+- [x] Güvenlik regresyon testleri: `app/../evil`, `apps-copy/evil`, absolute path, symlink escape, nested tar symlink, zip bomb simülasyonu.
 
 **Kabul kriteri:** Kötü niyetli arşiv hedef dışına tek dosya dahi yazamaz; önceki kurulum hata sonrasında korunur.
 
 ### P0.3 AppImage metadata ayrıştırma güvenliği
 **İlgili dosya:** `sourcedock/backend/local_packages.py`
 
-- [ ] `_extract_appimage_icon_and_info()` içindeki `[file_path, '--appimage-extract', ...]` çağrılarının güvenlik riskini doğrula.
-- [ ] Metadata okumada dosyanın executable kodunu çalıştırmayan güvenli ayrıştırıcı seçenekleri araştır; mümkün değilse açık güven onayı + izole yardımcı işlem + sağlam uyarı kullan.
-- [ ] Dosyaya `chmod +x` uygulamadan önce kullanıcıya davranışı açıkça göster ve yalnızca gerekli anda uygula.
+- [x] `_extract_appimage_icon_and_info()` içindeki `[file_path, '--appimage-extract', ...]` çağrılarının güvenlik riskini doğrula.
+- [x] Metadata okumada dosyanın executable kodunu çalıştırmayan güvenli ayrıştırıcı seçenekleri araştır; mümkün değilse açık güven onayı + izole yardımcı işlem + sağlam uyarı kullan.
+- [x] Dosyaya `chmod +x` uygulamadan önce kullanıcıya davranışı açıkça göster ve yalnızca gerekli anda uygula.
 - [x] Güvenilmeyen AppImage üzerinde metadata görüntülemenin beklenmedik kod yürütmediğini test et.
 
 ### P0.4 Sudo, yetki sınırı ve işlem iptali
 **İlgili dosya:** `sourcedock/core/runner.py`, ilgili UI diyaloğu
 
-- [ ] `set_sudo_password()` / `sudo -S` akışındaki kimlik bilgisi ömrünü gözden geçir: yalnızca geçici bellek, temizleme, hata/iptalde temizleme.
-- [ ] `polkit`/`pkexec` veya sistemin desteklediği yetkilendirme mekanizması için mimari öneri ve küçük proof-of-concept hazırla; güvenli olmayan acele geçiş yapma.
-- [ ] Hata loglarında komut argümanlarının gizli veri içerip içermediğini kontrol et; redaksiyon ekle.
-- [ ] `_run_streaming()` için mutlak zaman aşımı ve iptal davranışını sınır durumlarında test et (çıkış üretmeyen proses, child process, bloke stdout, SIGTERM'e direnme).
-- [ ] APT/DPKG sırasında zorla iptalin paket veritabanını bozma riskini UI'da belirt. Kritik işlemlerde güvenli iptal davranışı tasarla.
-- [ ] Aynı kaynağa yönelik eşzamanlı kur/kaldır/güncelle işlemlerini serileştir.
+- [x] `set_sudo_password()` / `sudo -S` akışındaki kimlik bilgisi ömrünü gözden geçir: yalnızca geçici bellek, temizleme, hata/iptalde temizleme.
+- [ ] `polkit`/`pkexec` veya sistemin desteklediği yetkilendirme mekanizması için mimari öneri ve küçük proof-of-concept hazırla; güvenli olmayan acele geçiş yapma. **Durum (16.10.2026):** Kısmi: docs/AUTHORIZATION.md önerisi mevcut; çalışır, bağımsız denetlenmiş Polkit helper/policy henüz yok.
+- [x] Hata loglarında komut argümanlarının gizli veri içerip içermediğini kontrol et; redaksiyon ekle.
+- [x] `_run_streaming()` için mutlak zaman aşımı ve iptal davranışını sınır durumlarında test et (çıkış üretmeyen proses, child process, bloke stdout, SIGTERM'e direnme).
+- [x] APT/DPKG sırasında zorla iptalin paket veritabanını bozma riskini UI'da belirt. Kritik işlemlerde güvenli iptal davranışı tasarla.
+- [x] Aynı kaynağa yönelik eşzamanlı kur/kaldır/güncelle işlemlerini serileştir.
 
 ### P0.5 Paket kaynağı ve güven göstergeleri
 
-- [ ] Yerel `.deb`/`.rpm`/`.AppImage`/arşiv kurulumunda **kaynak, yayıncı (biliniyorsa), imza/doğrulama durumu, yetki seviyesi** göster.
-- [ ] “Güvenli” rozeti yalnızca gerçekten doğrulanan bir mekanizma varsa göster; aksi halde “Doğrulanmadı”.
-- [ ] Snap classic gibi geniş izinleri anlaşılır, manipülasyonsuz anlat ve kullanıcı onayını koru.
-- [ ] Paket kurulumu yapılmadan önce etkilenecek bağımlılıkların ve olası kaldırmaların önizlemesini sun (backend destekliyorsa).
+- [x] Yerel `.deb`/`.rpm`/`.AppImage`/arşiv kurulumunda **kaynak, yayıncı (biliniyorsa), imza/doğrulama durumu, yetki seviyesi** göster.
+- [x] “Güvenli” rozeti yalnızca gerçekten doğrulanan bir mekanizma varsa göster; aksi halde “Doğrulanmadı”.
+- [x] Snap classic gibi geniş izinleri anlaşılır, manipülasyonsuz anlat ve kullanıcı onayını koru.
+- [ ] Paket kurulumu yapılmadan önce etkilenecek bağımlılıkların ve olası kaldırmaların önizlemesini sun (backend destekliyorsa). **Durum (16.10.2026):** Kısmi: yerel .deb için APT simülasyonu mevcut; diğer sağlayıcıların değişiklik planları açık.
 
 ## 3. P1 — Test, CI, dağıtım ve bakım (v1.0.1 / v1.1.0)
 
 ### P1.1 Tekrarlanabilir test sistemi
 
-- [ ] Testleri birim, entegrasyon (mock/fake CLI) ve manuel dağıtım smoke test olarak ayır.
-- [ ] APT, DNF, Pacman, Zypper, Flatpak, Snap için komut çıktısı fixture'ları ve hata senaryoları oluştur.
-- [ ] Veri/parsing testleri: farklı locale çıktıları, sürüm karşılaştırması, boş metadata, bağlantı kesintisi, yetki reddi, bozuk paket, depo erişilemezliği.
-- [ ] İşlem kuyrukları, ilerleme, iptal, geri dönme ve UI thread donmaması için test ekle.
-- [ ] GUI smoke testlerini `Xvfb` altında çalıştır; gerektiğinde ekran görüntüsüyle manuel doğrulama raporu üret.
-- [ ] `ruff`, uygun formatter, isteğe bağlı tip denetimi ve güvenlik taraması ekle; kural setini mevcut koda göre aşamalı uygula.
+- [x] Testleri birim, entegrasyon (mock/fake CLI) ve manuel dağıtım smoke test olarak ayır.
+- [ ] APT, DNF, Pacman, Zypper, Flatpak, Snap için komut çıktısı fixture'ları ve hata senaryoları oluştur. **Durum (16.10.2026):** Kısmi: altı sağlayıcı için fake komut/parsing testleri var; bütün locale/hata fixture kombinasyonları tamamlanmadı.
+- [ ] Veri/parsing testleri: farklı locale çıktıları, sürüm karşılaştırması, boş metadata, bağlantı kesintisi, yetki reddi, bozuk paket, depo erişilemezliği. **Durum (16.10.2026):** Kısmi: sürüm, boş metadata, yetki ve timeout testleri var; tüm bozuk-paket/depo/ağ/locale kombinasyonları açık.
+- [x] İşlem kuyrukları, ilerleme, iptal, geri dönme ve UI thread donmaması için test ekle.
+- [x] GUI smoke testlerini `Xvfb` altında çalıştır; gerektiğinde ekran görüntüsüyle manuel doğrulama raporu üret.
+- [ ] `ruff`, uygun formatter, isteğe bağlı tip denetimi ve güvenlik taraması ekle; kural setini mevcut koda göre aşamalı uygula. **Durum (16.10.2026):** Kısmi: Ruff ve formatter yapılandırması var; depo genelinde formatter ve ayrı güvenlik taraması kabulü açık.
 - [x] CI Python yorumlayıcısı ile sistem `python3-gi` modülünün uyumunu doğrula. Özel `setup-python` ile yanlış interpreter seçimi olursa matrix stratejisini düzelt.
-- [ ] CI'da repo üzerinde test yapılırken host paket yöneticisini çağırmadığını garanti et.
-- [ ] CI başarısızlığında kırmızı badge'i gizleme; düzelt.
+- [x] CI'da repo üzerinde test yapılırken host paket yöneticisini çağırmadığını garanti et. **Kanıt (16.10.2026):** CI `tools/run_tests.py` audit korumasını kullanıyor; paket/yetki/kabuk/bilinmeyen komutlar engelleniyor, test verisi geçici dizinde. 193 testte 0 beklenmeyen çağrı; canlı sentinel engelleme testi var. Bu güvenilir testler için kaza korumasıdır, kötü niyetli Python/native kodu için OS sandbox değildir.
+- [ ] CI başarısızlığında kırmızı badge'i gizleme; düzelt. **Durum (16.10.2026):** Kısmi: son uzak CI başarılı (38545352107); güncel yerel ağacın GitHub CI koşusu bekleniyor, badge gizlenmedi.
 
 ### P1.2 Gerçek dağıtım destek matrisi
 
-- [ ] Öncelik: Zorin OS (gerçek makine), Ubuntu LTS, Debian stable.
-- [ ] Sonra VM/container uygunluğuna göre Fedora, openSUSE, Arch/Manjaro.
-- [ ] Her ortam için **başlatma, katalog, arama, kurulu uygulamalar, dry-run/izole kurulum, güncelleme bilgisi, kaldırma, MIME/çift tık, TR/EN, dark/light, HiDPI** testlerini kaydet.
-- [ ] En az bir gerçek makinede Flatpak/Snap yokken davranışı doğrula.
-- [ ] Destek tablosunu `docs/COMPATIBILITY.md` olarak yayınla: **Tested / Experimental / Not tested / Unsupported**.
-- [ ] `Architecture: all` paketinin Python kodu açısından doğru olduğunu, ancak bağımlılık ve Debian aile sınırlarını belgede açık yaz.
+- [ ] Öncelik: Zorin OS (gerçek makine), Ubuntu LTS, Debian stable. **Durum (16.10.2026):** BLOCKED: temiz Zorin/Ubuntu/Debian test VM'si ve gerçek kurulum kabulü yok.
+- [ ] Sonra VM/container uygunluğuna göre Fedora, openSUSE, Arch/Manjaro. **Durum (16.10.2026):** BLOCKED: Fedora/openSUSE/Arch test ortamları yok.
+- [ ] Her ortam için **başlatma, katalog, arama, kurulu uygulamalar, dry-run/izole kurulum, güncelleme bilgisi, kaldırma, MIME/çift tık, TR/EN, dark/light, HiDPI** testlerini kaydet. **Durum (16.10.2026):** BLOCKED: gerçek dağıtım/işlem matrisi tamamlanmadı.
+- [ ] En az bir gerçek makinede Flatpak/Snap yokken davranışı doğrula. **Durum (16.10.2026):** NOT TESTED: gerçek Flatpak/Snap bulunmayan makine kabulü yapılmadı; otomatik eksik-sağlayıcı durumları ayrı.
+- [x] Destek tablosunu `docs/COMPATIBILITY.md` olarak yayınla: **Tested / Experimental / Not tested / Unsupported**.
+- [x] `Architecture: all` paketinin Python kodu açısından doğru olduğunu, ancak bağımlılık ve Debian aile sınırlarını belgede açık yaz.
 
 ### P1.3 Paketleme ve sürümleme
 
 - [x] `packaging/build_deb.sh` içindeki hardcoded `VERSION=1.0.0` değerini tek sürüm kaynağına bağla (`sourcedock/constants.py`).
-- [ ] Build çıktısını kalıcı `packaging/` içinde commit etmek yerine release artifact olarak yönetmeyi değerlendir; mevcut kullanıcılar için geçişi açıklığa kavuştur.
-- [ ] `dpkg-deb --build` sonrasında `lintian` benzeri kalite kontrolleri (mevcutsa) çalıştır.
-- [ ] İkon/MIME/Desktop Entry doğrulaması: `desktop-file-validate`, `appstreamcli validate`, uygun MIME testleri.
-- [ ] Bağımlılıklar ile README'de beyan edilen minimum Python/Ubuntu sürümlerini tutarlı hale getir.
-- [ ] `install.sh` ve `uninstall.sh` işlemlerinin `.deb` ile kurulan dosyalara zarar vermediğini doğrula; iki yöntemin birlikte kullanım stratejisini tanımla.
-- [ ] **Debian ailesi için yayınla; diğer dağıtımlar için aynı `.deb`'i evrensel çözüm diye sunma.** `rpm`/PKGBUILD/Flatpak paketleme daha sonra ayrı testli iş olabilir.
-- [ ] GitHub Actions ile tag bazlı build, test, SHA-256 ve **taslak release** oluşturma akışı kur (yayın kararı onayla).
+- [x] Build çıktısını kalıcı `packaging/` içinde commit etmek yerine release artifact olarak yönetmeyi değerlendir; mevcut kullanıcılar için geçişi açıklığa kavuştur.
+- [ ] `dpkg-deb --build` sonrasında `lintian` benzeri kalite kontrolleri (mevcutsa) çalıştır. **Durum (16.10.2026):** BLOCKED: Lintian kurulu değil; betikte isteğe bağlı kontrolü var.
+- [ ] İkon/MIME/Desktop Entry doğrulaması: `desktop-file-validate`, `appstreamcli validate`, uygun MIME testleri. **Durum (16.10.2026):** Kısmi: desktop/AppStream ve MIME birim kontrolleri mevcut; gerçek dosya ilişkilendirmeleri VM kabulünü bekliyor.
+- [x] Bağımlılıklar ile README'de beyan edilen minimum Python/Ubuntu sürümlerini tutarlı hale getir.
+- [ ] `install.sh` ve `uninstall.sh` işlemlerinin `.deb` ile kurulan dosyalara zarar vermediğini doğrula; iki yöntemin birlikte kullanım stratejisini tanımla. **Durum (16.10.2026):** Kısmi: APT sahiplik koruması ve iki manuel kurulumun kaldırma sırası düzeltildi; gerçek birlikte-kullanım yaşam döngüsü VM kabulünü bekliyor.
+- [x] **Debian ailesi için yayınla; diğer dağıtımlar için aynı `.deb`'i evrensel çözüm diye sunma.** `rpm`/PKGBUILD/Flatpak paketleme daha sonra ayrı testli iş olabilir.
+- [x] GitHub Actions ile tag bazlı build, test, SHA-256 ve **taslak release** oluşturma akışı kur (yayın kararı onayla).
 
 ### P1.4 Lisans ve dokümantasyon
 
 - [x] Tam GPL-3.0 lisans metnini `LICENSE` içine ekle; GitHub'ın tanıması yayın sonrası doğrulanacak.
-- [ ] Tüm üçüncü taraf asset, icon, bağımlılık ve lisansları kontrol et; gerekirse `THIRD_PARTY_NOTICES.md`.
-- [ ] `README.md` içinde **Install → Screenshot → Features → Supported distros → FAQ → Contribute** sırası oluştur.
-- [ ] README'deki aşırı kesin iddiaları (“universal”, “blazing-fast”, “full support”) test durumuna göre kalibre et.
+- [ ] Tüm üçüncü taraf asset, icon, bağımlılık ve lisansları kontrol et; gerekirse `THIRD_PARTY_NOTICES.md`. **Durum (16.10.2026):** Kısmi: üçüncü taraf bildirimleri ve tam GPL pakete eklendi; tüm upstream varlık/bağımlılık lisans envanteri henüz tamamlanmadı.
+- [x] `README.md` içinde **Install → Screenshot → Features → Supported distros → FAQ → Contribute** sırası oluştur.
+- [x] README'deki aşırı kesin iddiaları (“universal”, “blazing-fast”, “full support”) test durumuna göre kalibre et.
 - [x] `SECURITY.md`: güvenlik bildirimi yöntemi, kapsam ve yanıt ilkeleri.
 - [x] `CHANGELOG.md`, `docs/TROUBLESHOOTING.md`, `docs/ARCHITECTURE.md`, `docs/COMPATIBILITY.md`.
-- [ ] PR/issue şablonlarına dağıtım/sürüm, Python/GTK, backend, hata logu (kişisel veri redakte edilmiş) ve tekrar adımları ekle.
+- [x] PR/issue şablonlarına dağıtım/sürüm, Python/GTK, backend, hata logu (kişisel veri redakte edilmiş) ve tekrar adımları ekle.
 
 ## 4. P1 — UI/UX yeniden tasarım (v1.1.0)
 
@@ -167,112 +190,112 @@ doğrulama gerektirir. Son ekran görüntüsü/ölçüm sonuçları `docs/screen
 
 ### 4.2 Görsel kimlik ve tasarım sistemi
 
-- [ ] Koyu tema: koyu kömür/lacivert tonlarında nötr yüzey; beyaz yerine yumuşak açık metin; elektrik sarısı **yalnızca vurgu ve işlem durumu**. Koyu arayüzü neon reklam panosuna çevirme.
-- [ ] Açık tema: sıcak/nötr beyaz yüzey, çok hafif sınır çizgileri, okunaklı koyu metin, aynı vurgu semantiği.
-- [ ] Font: sistem fontu (GNOME'da Cantarell/Adwaita uyumu dahil), sistem fallback; ekstra font yüklemesi gerektirme.
-- [ ] Spacing sistemi: 4/8/12/16/24/32; kart köşe yarıçapları 10–14 px; düzenli hizalama.
-- [ ] Kontrast: normal metin için WCAG AA'ya hedefle; bilgi yalnızca renkle ifade edilmesin.
-- [ ] İkonlar: GTK/Adwaita sembolik ikonları ve mevcut özgün SourceDock ikonu; anlam tutarlılığı. Emoji ile ikon ikamesi yapma.
-- [ ] Hareket: 120–200 ms yumuşak geçişler, sistem reduced-motion tercihine saygı.
-- [ ] Uygun ekranlar: 1024×768, 1366×768, 1920×1080 ve HiDPI; minimum pencere genişliği/scroll davranışı.
+- [x] Koyu tema: koyu kömür/lacivert tonlarında nötr yüzey; beyaz yerine yumuşak açık metin; elektrik sarısı **yalnızca vurgu ve işlem durumu**. Koyu arayüzü neon reklam panosuna çevirme.
+- [x] Açık tema: sıcak/nötr beyaz yüzey, çok hafif sınır çizgileri, okunaklı koyu metin, aynı vurgu semantiği.
+- [x] Font: sistem fontu (GNOME'da Cantarell/Adwaita uyumu dahil), sistem fallback; ekstra font yüklemesi gerektirme.
+- [ ] Spacing sistemi: 4/8/12/16/24/32; kart köşe yarıçapları 10–14 px; düzenli hizalama. **Durum (16.10.2026):** Kısmi: aralık sistemi mevcut; kart köşeleri docs/UI_DESIGN.md kararıyla en fazla 8 px, burada yazan 10–14 px uygulanmadı.
+- [ ] Kontrast: normal metin için WCAG AA'ya hedefle; bilgi yalnızca renkle ifade edilmesin. **Durum (16.10.2026):** Kısmi: açık/koyu kontrast hataları düzeltildi; bütün durumların ölçülmüş WCAG AA denetimi açık.
+- [x] İkonlar: GTK/Adwaita sembolik ikonları ve mevcut özgün SourceDock ikonu; anlam tutarlılığı. Emoji ile ikon ikamesi yapma.
+- [ ] Hareket: 120–200 ms yumuşak geçişler, sistem reduced-motion tercihine saygı. **Durum (16.10.2026):** Kısmi: GTK geçişleri mevcut; reduced-motion kabul testi açık.
+- [ ] Uygun ekranlar: 1024×768, 1366×768, 1920×1080 ve HiDPI; minimum pencere genişliği/scroll davranışı. **Durum (16.10.2026):** Kısmi: gerçek kök ekran ve modal ölçüm altyapısı düzeltildi; son çalışma sonuçları bağlantılı raporda.
 - [x] GTK CSS token katmanı oluştur: background/surface/surface-hover/border/text-muted/accent/success/warning/danger/focus.
-- [ ] `sourcedock/theme.py` ve `sourcedock/ui/components` parçalarını yeniden kullanılabilir bileşenlere ayır.
+- [x] `sourcedock/theme.py` ve `sourcedock/ui/components` parçalarını yeniden kullanılabilir bileşenlere ayır.
 
 ### 4.3 Bilgi mimarisi ve genel pencere
 
 - [x] **Sol yan çubuk**: Keşfet, Kurulu, Güncellemeler, İşlemler; alt bölüm: Yerel Paket Kur, Ayarlar, Yardım.
-- [ ] **Üst bar**: aktif sayfa başlığı, global arama (`Ctrl+K` veya `Ctrl+F`), güncelleme sayacı, işlem durum düğmesi, gerektiğinde kaynak filtresi.
+- [x] **Üst bar**: aktif sayfa başlığı, global arama (`Ctrl+K` veya `Ctrl+F`), güncelleme sayacı, işlem durum düğmesi, gerektiğinde kaynak filtresi.
 - [x] 1100 px altında yan çubuğu daralt veya uyumlu hale getir. Pencere küçükken düğmeler kaybolmasın.
-- [ ] Global boş/yükleniyor/hata durumları; ortak toast/snackbar; keyboard focus ve ekran okuyucu açıklamaları.
-- [ ] Verisi henüz gelmeyen kartlarda skeleton veya sakin spinner; kilitlenmiş gibi görünmesin.
-- [ ] Uzun ağ/bekleme işlemleri GTK main thread'i bloklamasın. Biten veri UI thread'inde güncellensin.
+- [ ] Global boş/yükleniyor/hata durumları; ortak toast/snackbar; keyboard focus ve ekran okuyucu açıklamaları. **Durum (16.10.2026):** Kısmi: ortak yükleniyor/boş/hata bileşeni ve odak stilleri mevcut; ortak toast ve tam ekran okuyucu kabulü açık.
+- [x] Verisi henüz gelmeyen kartlarda skeleton veya sakin spinner; kilitlenmiş gibi görünmesin.
+- [ ] Uzun ağ/bekleme işlemleri GTK main thread'i bloklamasın. Biten veri UI thread'inde güncellensin. **Durum (16.10.2026):** Kısmi: sorgular ve bağımsız güncelleme/kaldırma artık worker'da; `--uninstall` ortak güvenlik onayını kullanıyor. GTK heartbeat, yetki/iptal/hata ve kapanma testleri geçti. İlk CLI uygulama araması ve yerel dosya önizlemesinin tüm ağır açılış yolları için yükleme akışı henüz denetlenmedi.
 
 ### 4.4 Keşfet / Mağaza ekranı
 
-- [ ] Üstte anlamlı arama alanı, kategori çipleri (Üretkenlik, Geliştirme, İnternet, Grafik, Sistem vb.).
-- [ ] Tek büyük promosyon görseli yerine isteğe bağlı sade **öne çıkan uygulamalar** alanı; doğrulanmış veri yoksa sahte popülerlik bilgisi gösterme.
-- [ ] Grid kartında: gerçek ikon, isim, kısa açıklama, kaynaklar, kurulu/güncelleme durumu ve tek net eylem.
-- [ ] Aynı uygulamanın farklı kaynaklarını mümkünse **birleştirilmiş görünümde** sun; aynı uygulamaları anlaşılmaz tekrarlarla listeleme.
-- [ ] Filtreler: kaynak, kurulu, kategori, istemci mimarisi (veri destekliyorsa). Sıralama net ve açıklanabilir olsun.
-- [ ] Arama sonucu yok, repo çevrimdışı, Flatpak kurulu değil, yetki yok gibi durumlara ayrı mesaj ve çözüm bağlantısı.
+- [x] Üstte anlamlı arama alanı, kategori çipleri (Üretkenlik, Geliştirme, İnternet, Grafik, Sistem vb.).
+- [ ] Tek büyük promosyon görseli yerine isteğe bağlı sade **öne çıkan uygulamalar** alanı; doğrulanmış veri yoksa sahte popülerlik bilgisi gösterme. **Durum (16.10.2026):** Açık (isteğe bağlı): doğrulanmış öne çıkan katalog alanı eklenmedi.
+- [x] Grid kartında: gerçek ikon, isim, kısa açıklama, kaynaklar, kurulu/güncelleme durumu ve tek net eylem.
+- [x] Aynı uygulamanın farklı kaynaklarını mümkünse **birleştirilmiş görünümde** sun; aynı uygulamaları anlaşılmaz tekrarlarla listeleme.
+- [ ] Filtreler: kaynak, kurulu, kategori, istemci mimarisi (veri destekliyorsa). Sıralama net ve açıklanabilir olsun. **Durum (16.10.2026):** Kısmi: kaynak ve kategori arama/sıralaması mevcut; kurulu ve mimari filtreleri tüm sağlayıcılarda yok.
+- [x] Arama sonucu yok, repo çevrimdışı, Flatpak kurulu değil, yetki yok gibi durumlara ayrı mesaj ve çözüm bağlantısı.
 
 ### 4.5 Uygulama detay sayfası
 
-- [ ] Başlık: ikon, ad, doğrulanabilen yayıncı, kısa açıklama, kur/kaldır/güncelle/aç.
-- [ ] Kaynak seçici: APT / Flatpak / Snap / diğer; sürüm, boyut, sandbox, kaynak ve izin karşılaştırması.
-- [ ] Açıklama; ekran görüntüsü galerisi (AppStream metadata varsa); sürüm, homepage, lisans, yüklü boyut, değişiklikler.
-- [ ] Güvenlik paneli: **Kaynak doğrulanmış / doğrulanmadı / bilinmiyor**, sandbox/izinler; kaynaklar arasında tarafsız rehber.
+- [x] Başlık: ikon, ad, doğrulanabilen yayıncı, kısa açıklama, kur/kaldır/güncelle/aç.
+- [x] Kaynak seçici: APT / Flatpak / Snap / diğer; sürüm, boyut, sandbox, kaynak ve izin karşılaştırması.
+- [x] Açıklama; ekran görüntüsü galerisi (AppStream metadata varsa); sürüm, homepage, lisans, yüklü boyut, değişiklikler.
+- [x] Güvenlik paneli: **Kaynak doğrulanmış / doğrulanmadı / bilinmiyor**, sandbox/izinler; kaynaklar arasında tarafsız rehber.
 - [x] Metadata yoksa sahte ekran görüntüsü/yorum/derecelendirme uydurma.
-- [ ] Kurulum sırasında 'iptal' düğmesinin gerçek güvenli davranışını açıkça belirt.
+- [x] Kurulum sırasında 'iptal' düğmesinin gerçek güvenli davranışını açıkça belirt.
 
 ### 4.6 Kurulu uygulamalar
 
-- [ ] Masaüstü uygulamaları ile çekirdek/sistem bağımlılıklarını ayır; varsayılan görünüm acemi kullanıcıyı paket kalabalığına boğmasın.
-- [ ] Arama, kaynak filtreleri, isteğe bağlı ayrıntı tablosu, liste/grid geçişi.
-- [ ] Toplu kaldırma için seçim, toplam sayı ve net onay; sistem açısından hassas paketlerde ekstra doğrulama.
-- [ ] Uygulamayı Aç, Dosyayı Göster, Ayrıntılar, Güncelle, Kaldır eylemleri gerçek backend desteğine göre koşullu gösterilsin.
-- [ ] Kaldırma sırasında kullanıcı verisi siliniyorsa bundan ayrıca bahset; varsayılan olarak silme.
+- [x] Masaüstü uygulamaları ile çekirdek/sistem bağımlılıklarını ayır; varsayılan görünüm acemi kullanıcıyı paket kalabalığına boğmasın.
+- [ ] Arama, kaynak filtreleri, isteğe bağlı ayrıntı tablosu, liste/grid geçişi. **Durum (16.10.2026):** Kısmi: arama/kaynak/kategori ve ayrıntılı tablo mevcut; Kurulu ekranında ayrı grid görünümü yok.
+- [x] Toplu kaldırma için seçim, toplam sayı ve net onay; sistem açısından hassas paketlerde ekstra doğrulama.
+- [x] Uygulamayı Aç, Dosyayı Göster, Ayrıntılar, Güncelle, Kaldır eylemleri gerçek backend desteğine göre koşullu gösterilsin.
+- [x] Kaldırma sırasında kullanıcı verisi siliniyorsa bundan ayrıca bahset; varsayılan olarak silme.
 
 ### 4.7 Güncellemeler merkezi
 
-- [ ] APT/DNF/Pacman/Zypper, Flatpak, Snap, firmware, runtime öğelerini **kaynak etiketleriyle** tek listede sun.
-- [ ] Gruplar: Uygulamalar / Sistem / Firmware / Çalışma Ortamları; toplam sayı ve yalnızca doğru ölçülmüş indirme boyutunu göster.
-- [ ] Seçerek güncelle, hepsini güncelle (uygunsa), yeniden kontrol et, değişiklik notları.
-- [ ] Yeniden başlatma gerektiriyorsa tespit et ve işlemler sonrasında öner; kesin değilse kesin ifade kullanma.
+- [x] APT/DNF/Pacman/Zypper, Flatpak, Snap, firmware, runtime öğelerini **kaynak etiketleriyle** tek listede sun.
+- [x] Gruplar: Uygulamalar / Sistem / Firmware / Çalışma Ortamları; toplam sayı ve yalnızca doğru ölçülmüş indirme boyutunu göster.
+- [x] Seçerek güncelle, hepsini güncelle (uygunsa), yeniden kontrol et, değişiklik notları.
+- [x] Yeniden başlatma gerektiriyorsa tespit et ve işlemler sonrasında öner; kesin değilse kesin ifade kullanma.
 - [x] Firmware/dbx güncellemelerinde özel onay ve güç/cihaz uyarıları; üretici bilgisi yalnızca metadata varsa gösterilir.
-- [ ] Güncelleme hatalarında çalışan öğeleri koru, başarısız öğeleri açık raporla.
+- [x] Güncelleme hatalarında çalışan öğeleri koru, başarısız öğeleri açık raporla.
 
 ### 4.8 Mini Installer: SourceDock'ın ayırt edici özelliği
 
-- [ ] Dosya çift tıklanınca ana mağazayı yüklemeden **hızlı, küçük, odaklı** pencere aç.
-- [ ] Dosya adı, format, boyut, algılanan paket adı, kurulu sürüm, kurulacak sürüm, kaynak yolu, mimari göster.
-- [ ] Eylemler: Yeni Kur / Güncelle / Yeniden Kur / Sürüm Düşür / Aç veya İptal; yalnızca mantıksal olarak mümkün olanları göster.
-- [ ] Sürüm düşürme ve şüpheli paket için belirgin ama bağırmayan uyarı.
-- [ ] Kurulum aşamasında aynı pencere içinde gerçek ilerleme, ayrıntı açılır bölümü ve başarısızlıkta yeniden dene.
-- [ ] Başarılıysa 'Uygulamayı Aç', 'Kapat', isteğe bağlı 'Ayrıntılar'.
-- [ ] Ekran okuyucu, klavye, uzun dosya adı, TR/EN ve küçük ekran testleri.
+- [x] Dosya çift tıklanınca ana mağazayı yüklemeden **hızlı, küçük, odaklı** pencere aç.
+- [x] Dosya adı, format, boyut, algılanan paket adı, kurulu sürüm, kurulacak sürüm, kaynak yolu, mimari göster.
+- [x] Eylemler: Yeni Kur / Güncelle / Yeniden Kur / Sürüm Düşür / Aç veya İptal; yalnızca mantıksal olarak mümkün olanları göster.
+- [x] Sürüm düşürme ve şüpheli paket için belirgin ama bağırmayan uyarı.
+- [x] Kurulum aşamasında aynı pencere içinde gerçek ilerleme, ayrıntı açılır bölümü ve başarısızlıkta yeniden dene.
+- [x] Başarılıysa 'Uygulamayı Aç', 'Kapat', isteğe bağlı 'Ayrıntılar'.
+- [ ] Ekran okuyucu, klavye, uzun dosya adı, TR/EN ve küçük ekran testleri. **Durum (16.10.2026):** Kısmi: TR/EN ve pencere ölçümleri mevcut; gerçek ekran okuyucu ve bütün klavye akışları açık.
 
 ### 4.9 İşlemler, ayarlar, yardım
 
-- [ ] İşlemler ekranında her işi **hazırlanıyor → indiriliyor → kuruluyor → tamamlandı/başarısız** şeklinde doğru durumla göster.
-- [ ] İşlem geçmişi: saat, işlem, kaynak, sonuç; maskeleme ve kullanıcı kontrollü temizleme.
-- [ ] Ayarlar: Tema (Sistem/Açık/Koyu), dil (TR/EN), arayüz yoğunluğu/ölçek, kaynak tercihleri, güncelleme kontrolü.
-- [ ] Riskli deneysel ayarlar 'Gelişmiş' bölümünde tutulmalı; varsayılanlar güvenli olmalı.
-- [ ] F1 yardım mevcut; yeni ekran isimleri ve tooltip'lere göre güncelle, bağlama duyarlı yardım ekle.
+- [x] İşlemler ekranında her işi **hazırlanıyor → indiriliyor → kuruluyor → tamamlandı/başarısız** şeklinde doğru durumla göster.
+- [x] İşlem geçmişi: saat, işlem, kaynak, sonuç; maskeleme ve kullanıcı kontrollü temizleme.
+- [x] Ayarlar: Tema (Sistem/Açık/Koyu), dil (TR/EN), arayüz yoğunluğu/ölçek, kaynak tercihleri, güncelleme kontrolü.
+- [x] Riskli deneysel ayarlar 'Gelişmiş' bölümünde tutulmalı; varsayılanlar güvenli olmalı.
+- [x] F1 yardım mevcut; yeni ekran isimleri ve tooltip'lere göre güncelle, bağlama duyarlı yardım ekle.
 
 ### 4.10 Erişilebilirlik ve kalite kontrol
 
-- [ ] Tab sırası, odak halkası, ekran okuyucu isimleri, ESC/Enter davranışları.
-- [ ] Türkçe uzun kelime ve İngilizce metin taşmaları; 90/100/110/125% ölçekte kontrol.
-- [ ] Koyu/açık tema; klavye ile tüm ana görevler; minimum pencere boyutu.
-- [ ] Gerçek veri ile ekran görüntüleri: ana sayfa, detay, kurulu, güncelleme, mini-installer, ayarlar.
-- [ ] UI performansı: 1.000+ uygulama kaydıyla scroll, arama ve filtreyi ölç; makul hedef belirle ve raporla.
+- [ ] Tab sırası, odak halkası, ekran okuyucu isimleri, ESC/Enter davranışları. **Durum (16.10.2026):** Kısmi: odak/erişilebilir isim ve Enter/ESC/Space yolları var; tam Tab/Orca kabulü açık.
+- [ ] Türkçe uzun kelime ve İngilizce metin taşmaları; 90/100/110/125% ölçekte kontrol. **Durum (16.10.2026):** Kısmi: son ölçümler raporda; tüm uzun metin/ölçek akışlarının manuel kabulü açık.
+- [ ] Koyu/açık tema; klavye ile tüm ana görevler; minimum pencere boyutu. **Durum (16.10.2026):** Kısmi: tema ve pencere ölçümleri mevcut; bütün ana görevlerin klavye kabulü açık.
+- [x] Gerçek veri ile ekran görüntüleri: ana sayfa, detay, kurulu, güncelleme, mini-installer, ayarlar.
+- [x] UI performansı: 1.000+ uygulama kaydıyla scroll, arama ve filtreyi ölç; makul hedef belirle ve raporla. **Kanıt (16.10.2026):** `tools/ui_performance.py`, 1.000 sentetik kayıt, 5 ölçülen tekrar; 1024×768 ve 1366×768, %100/%125. Gerçek başlık araması/kaynak/kategori/son satıra kaydırma için ilk GTK çizimi ve p95 hedefleri raporlandı; dört koşu PASS. Bu GPU FPS, gerçek ağ araması veya tüm gerçek ikon kataloglarının sertifikası değildir.
 
 ## 5. P2 — Kullanıcı açısından değerli yeni özellikler (v1.2+)
 
-- [ ] **Kurulu uygulama listesini dışa aktar / içe aktar:** kaynak türü, paket kimliği, sürüm (bilgi amaçlı), hedef dağıtım uyumluluğu; geri yükleme önce simülasyon/önizleme.
-- [ ] **Tek uygulama, farklı kaynaklar:** benzer eşleme hataları için açık kullanıcı kontrolü; yanlış eşleşme olmadan APT/Flatpak/Snap kıyaslaması.
-- [ ] **Paket kaynak yöneticisi:** Flatpak remote, Snap kanalı, native repo bilgilerinin güvenli gösterimi; değiştirme ayrı onayla.
-- [ ] **Gereksiz/verisiz paket temizliği:** yalnızca sistem sağlayıcısının güvenli tahminiyle; neyin silineceği önce listelensin.
-- [ ] **İşlem geçmişi dışa aktarma:** kullanıcı adı/ev dizini ve parola gibi bilgileri redakte ederek.
-- [ ] **Bildirim alanı:** arka planda güvenli kontrol / sistem bildirimleri, gereksiz sürekli arka plan servisi olmadan.
-- [ ] **Güncelleme öncesi snapshot entegrasyonu:** Timeshift/Btrfs varlığı ve uygun yetki kontrolü; desteklenmeyende pasif.
-- [ ] **AppImage update deneyimi:** yalnızca doğrulanmış update metadata varsa; AppImageUpdate bağımlılığı açıklansın.
-- [ ] **İsteğe bağlı otomatik tema ve sistem vurgu uyumu.**
-- [ ] **Yeni yerelleştirmeler:** gettext/Weblate benzeri katkı akışı (mevcut sözlük yapısını dikkate al).
+- [x] **Kurulu uygulama listesini dışa aktar / içe aktar:** kaynak türü, paket kimliği, sürüm (bilgi amaçlı), hedef dağıtım uyumluluğu; geri yükleme önce simülasyon/önizleme.
+- [ ] **Tek uygulama, farklı kaynaklar:** benzer eşleme hataları için açık kullanıcı kontrolü; yanlış eşleşme olmadan APT/Flatpak/Snap kıyaslaması. **Durum (16.10.2026):** Kısmi: kesin kimliklerle gruplama/kaynak seçimi var; kullanıcının eşleştirmeyi düzeltme akışı yok.
+- [ ] **Paket kaynak yöneticisi:** Flatpak remote, Snap kanalı, native repo bilgilerinin güvenli gösterimi; değiştirme ayrı onayla. **Durum (16.10.2026):** Kısmi: URI/suite/component/kapsam bilgileri salt okunur gösteriliyor; depo değiştirme/kanal düzenleme akışı yok.
+- [x] **Gereksiz/verisiz paket temizliği:** yalnızca sistem sağlayıcısının güvenli tahminiyle; neyin silineceği önce listelensin.
+- [x] **İşlem geçmişi dışa aktarma:** kullanıcı adı/ev dizini ve parola gibi bilgileri redakte ederek.
+- [ ] **Bildirim alanı:** arka planda güvenli kontrol / sistem bildirimleri, gereksiz sürekli arka plan servisi olmadan. **Durum (16.10.2026):** Açık (P2): isteğe bağlı arka plan kontrolü/sistem bildirimleri uygulanmadı.
+- [ ] **Güncelleme öncesi snapshot entegrasyonu:** Timeshift/Btrfs varlığı ve uygun yetki kontrolü; desteklenmeyende pasif. **Durum (16.10.2026):** BLOCKED (P2): snapshot sağlayıcısı ve disposable Btrfs/Timeshift kabul ortamı yok.
+- [ ] **AppImage update deneyimi:** yalnızca doğrulanmış update metadata varsa; AppImageUpdate bağımlılığı açıklansın. **Durum (16.10.2026):** Kısmi (P2): AppImageUpdate ve update-info varlığına bakılıyor; update metadata doğrulama kabulü açık.
+- [ ] **İsteğe bağlı otomatik tema ve sistem vurgu uyumu.** **Durum (16.10.2026):** Kısmi (P2): otomatik sistem teması var; sistem vurgu rengi entegrasyonu yok.
+- [ ] **Yeni yerelleştirmeler:** gettext/Weblate benzeri katkı akışı (mevcut sözlük yapısını dikkate al). **Durum (16.10.2026):** Açık (P2): ek diller için gettext/Weblate katkı altyapısı yok.
 
 ## 6. GitHub görünürlüğü ve topluluk (P1/P2)
 
-- [ ] Repo topics: `linux`, `package-manager`, `gtk3`, `python`, `flatpak`, `snap`, `appimage`, `apt`, `linux-desktop`, `zorin-os`.
-- [ ] README ilk ekran: logo, tek cümlelik değer önerisi, gerçek ekran görüntüsü/GIF, Release indirme bağlantısı, distro uyumu ve CI.
-- [ ] Sürüm yayınında otomatik SHA-256 dosyası ve anlaşılır sürüm notları.
-- [ ] `v1.0.1` release sonrası GIF/video: arama → kaynak seçimi → kurulum → güncelleme → mini installer.
-- [ ] `good first issue`, `help wanted`, `bug`, `enhancement`, `documentation` etiketleri oluştur; katkı isteyen küçük görevleri açık issue yap.
-- [ ] GitHub Discussions: Q&A, Ideas, Announcements. Issue'larla görev takibini karıştırma.
-- [ ] `docs/COMPATIBILITY.md` sayfasını görünür kıl; Linux topluluklarından gerçek testçi iste.
-- [ ] Sürüm hazır olunca DEV.to teknik yazı; Reddit r/linuxapps / r/linux (kurallara uy); Show HN; yalnızca samimi ve kanıtlanabilir bilgi.
-- [ ] Başarı metriği: yıldızlardan önce **başarılı kurulum, sorunsuz paket işlemi, geri dönen kullanıcı, kapatılan hata ve dış katkıcı** sayısı.
-- [ ] Lisans, ekran görüntüsü ve demo tamamlanmadan aşırı tanıtıma çıkma.
+- [ ] Repo topics: `linux`, `package-manager`, `gtk3`, `python`, `flatpak`, `snap`, `appimage`, `apt`, `linux-desktop`, `zorin-os`. **Durum (16.10.2026):** Açık: uzak topics doğrulandı ve boş (`[]`); önerilen başlıklar yayımlanmadı.
+- [ ] README ilk ekran: logo, tek cümlelik değer önerisi, gerçek ekran görüntüsü/GIF, Release indirme bağlantısı, distro uyumu ve CI. **Durum (16.10.2026):** Kısmi: logo/gerçek ekran/uyumluluk/CI bağlantısı var; yayınlanmış sürüm bağlantısı ve demo kabulü açık.
+- [x] Sürüm yayınında otomatik SHA-256 dosyası ve anlaşılır sürüm notları.
+- [ ] `v1.0.1` release sonrası GIF/video: arama → kaynak seçimi → kurulum → güncelleme → mini installer. **Durum (16.10.2026):** BLOCKED: gerçek kurulum kabulü bitmeden kurulum demosu yayınlanmadı.
+- [ ] `good first issue`, `help wanted`, `bug`, `enhancement`, `documentation` etiketleri oluştur; katkı isteyen küçük görevleri açık issue yap. **Durum (16.10.2026):** NOT TESTED: uzak etiket/issue kurulumu bu turda yapılmadı.
+- [ ] GitHub Discussions: Q&A, Ideas, Announcements. Issue'larla görev takibini karıştırma. **Durum (16.10.2026):** Açık: repository API `has_discussions: false`; etkinleştirme/kategori değişikliği yapılmadı.
+- [ ] `docs/COMPATIBILITY.md` sayfasını görünür kıl; Linux topluluklarından gerçek testçi iste. **Durum (16.10.2026):** Kısmi: uyumluluk tablosu görünür; dış testçi çağrısı yayınlanmadı.
+- [ ] Sürüm hazır olunca DEV.to teknik yazı; Reddit r/linuxapps / r/linux (kurallara uy); Show HN; yalnızca samimi ve kanıtlanabilir bilgi. **Durum (16.10.2026):** BLOCKED: yayın kabulü bitmedi; dış tanıtım yapılmadı.
+- [ ] Başarı metriği: yıldızlardan önce **başarılı kurulum, sorunsuz paket işlemi, geri dönen kullanıcı, kapatılan hata ve dış katkıcı** sayısı. **Durum (16.10.2026):** Açık: benimsenme/gerçek kurulum başarısı için veri toplanmadı.
+- [x] Lisans, ekran görüntüsü ve demo tamamlanmadan aşırı tanıtıma çıkma.
 
 ## 7. Önerilen uygulama sırası ve GitHub PR'leri
 
@@ -409,17 +432,17 @@ Proceed with UI Phase 4 only: Standalone Mini Installer, Operations, Settings an
 
 ## 11. Doğrulama kontrol listesi (yayından önce)
 
-- [ ] Yeni ve temiz Zorin kurulumunda `.deb` kurulur, açılır, çalışır ve kaldırılabilir.
-- [ ] `.deb` kaldırma kullanıcı belgelerini veya diğer uygulamaları silmez.
-- [ ] `.deb`, `.AppImage`, `.flatpakref` ve portable arşivler için gerçek örneklerle güvenli kurulum akışı doğrulanır.
-- [ ] Kötü niyetli arşiv ve manipüle edilmiş portable kayıtları testlerden geçer.
-- [ ] Yetki hatası veya ağ kesilmesinde kullanıcı net hata ve çözüm görür; uygulama donmaz.
-- [ ] Farklı provider'lar eksik olduğunda arayüz kırılmaz.
-- [ ] TR/EN; dark/light; 1024×768, 1366×768, 1920×1080 testleri geçer.
-- [ ] `unittest`, kalite kontrolleri ve CI yeşil; sonuçlar Release notlarına yazılır.
-- [ ] `LICENSE` tam; üçüncü taraf lisansları uygun; README gerçeği yansıtıyor.
-- [ ] Tag, Release, indirilebilir `.deb`, checksum, destek matrisi, ekran görüntüsü ve kısa demo mevcut.
-- [ ] İlk kullanıcı raporları için Issues/Discussions açık ve güvenlik bildirim kanalı net.
+- [ ] Yeni ve temiz Zorin kurulumunda `.deb` kurulur, açılır, çalışır ve kaldırılabilir. **Durum (16.10.2026):** BLOCKED: temiz Zorin VM kurulum/kaldırma kabulü yok.
+- [ ] `.deb` kaldırma kullanıcı belgelerini veya diğer uygulamaları silmez. **Durum (16.10.2026):** BLOCKED: gerçek .deb remove/purge VM kanıtı yok.
+- [ ] `.deb`, `.AppImage`, `.flatpakref` ve portable arşivler için gerçek örneklerle güvenli kurulum akışı doğrulanır. **Durum (16.10.2026):** BLOCKED: gerçek paket kurulumları disposable ortamda henüz çalıştırılmadı.
+- [x] Kötü niyetli arşiv ve manipüle edilmiş portable kayıtları testlerden geçer.
+- [ ] Yetki hatası veya ağ kesilmesinde kullanıcı net hata ve çözüm görür; uygulama donmaz. **Durum (16.10.2026):** Kısmi: timeout/auth/hata ve donmama regresyonları var; gerçek ağ/işlem VM kabulü açık.
+- [x] Farklı provider'lar eksik olduğunda arayüz kırılmaz.
+- [ ] TR/EN; dark/light; 1024×768, 1366×768, 1920×1080 testleri geçer. **Durum (16.10.2026):** Kısmi: gerçek X11 ölçümleri raporda; bütün görevlerin manuel çoklu ekran/HiDPI kabulü açık.
+- [ ] `unittest`, kalite kontrolleri ve CI yeşil; sonuçlar Release notlarına yazılır. **Durum (16.10.2026):** Kısmi: yerel test/lint/derleme var; güncel çalışma ağacının uzak CI kanıtı ve Release notları yok.
+- [ ] `LICENSE` tam; üçüncü taraf lisansları uygun; README gerçeği yansıtıyor. **Durum (16.10.2026):** Kısmi: tam GPL/README kalibrasyonu/bildirimler var; eksiksiz üçüncü taraf lisans denetimi açık.
+- [ ] Tag, Release, indirilebilir `.deb`, checksum, destek matrisi, ekran görüntüsü ve kısa demo mevcut. **Durum (16.10.2026):** BLOCKED: onaylı tag/Release/demo ve gerçek kurulum kabulü henüz yok.
+- [ ] İlk kullanıcı raporları için Issues/Discussions açık ve güvenlik bildirim kanalı net. **Durum (16.10.2026):** Kısmi: güvenlik kanalı ve yerel şablonlar var; uzak API Issues açık, Discussions kapalı gösteriyor.
 
 ## 12. Kaynaklar
 
