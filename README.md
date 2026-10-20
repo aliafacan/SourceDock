@@ -77,15 +77,32 @@ SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based
 
 *(Note: The `voltapp` command is maintained as a backward-compatibility alias during the 1.3.0 release).*
 
+### GNOME Shell Desktop Integration (Optional)
+
+The `.deb` package installs the GNOME desktop right-click integration (`sourcedock-menu@aliafacan.dev`) to `/usr/share/gnome-shell/extensions/`. GNOME Shell requires new extensions to be enabled explicitly by the user:
+
+1. Enable the extension:
+   ```bash
+   gnome-extensions enable sourcedock-menu@aliafacan.dev
+   ```
+2. Verify its status:
+   ```bash
+   gnome-extensions info sourcedock-menu@aliafacan.dev
+   ```
+
+*(Note: If the extension is not immediately recognized by GNOME Shell after installation, log out and log back in to refresh your desktop session).*
+
 ---
 
 ## Compatibility & Support Matrix
 
 | Environment | Status | Verification Evidence |
 | :--- | :---: | :--- |
-| **Zorin OS 17 / 18** | **Verified** | Real workstation testing: clean `.deb` installation via Polkit, live desktop navigation, and actual APT package install/remove cycles. |
+| **Zorin OS 18.1** | **Verified** | Real workstation testing: clean `.deb` installation, live desktop navigation, and actual APT package install/remove cycles. |
+| **Zorin OS 17.x** | **Untested** | Core stack compatible with Ubuntu 22.04 base; covered by automated CI test suite. |
 | **Ubuntu 22.04 & 24.04** | **CI PASS** | Verified in automated CI: 281/281 unit tests passing under Xvfb/Openbox, Ruff clean, compileall clean, and `.deb` package build. |
-| **Debian 11 / 12** | **Supported** | Compatible via `.deb` package (requires Python 3.10+ and GTK 3). |
+| **Debian 12** | **Compatible** | Compatible dependencies via `.deb` package (Python 3.11+ and GTK 3); live hardware testing pending. |
+| **Debian 11** | **Unsupported** | Ships with Python 3.9 by default; SourceDock strictly requires Python >= 3.10. |
 | **Fedora / openSUSE / Arch** | **Experimental** | Backend parser and execution abstractions verified via mocked test suites; native packaging (.rpm / PKGBUILD) not yet provided. |
 
 For detailed environment test breakdowns and architectural boundaries, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
