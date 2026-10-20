@@ -77,15 +77,32 @@ SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint 
 
 *(Not: `voltapp` komutu 1.3.0 sürüm geçişi boyunca geriye dönük uyumluluk için alias olarak korunmaktadır).*
 
+### GNOME Shell Masaüstü Entegrasyonu (İsteğe Bağlı)
+
+`.deb` paketi, GNOME masaüstü sağ tık menü entegrasyonunu (`sourcedock-menu@aliafacan.dev`) `/usr/share/gnome-shell/extensions/` dizinine yükler. GNOME Shell, yeni eklentilerin masaüstü oturumunda kullanıcı tarafından açıkça etkinleştirilmesini gerektirir:
+
+1. Eklentiyi etkinleştirin:
+   ```bash
+   gnome-extensions enable sourcedock-menu@aliafacan.dev
+   ```
+2. Durumunu doğrulayın:
+   ```bash
+   gnome-extensions info sourcedock-menu@aliafacan.dev
+   ```
+
+*(Not: Kurulum sonrasında eklenti GNOME Shell tarafından hemen tanınmazsa, oturumu kapatıp yeniden açarak masaüstü oturumunuzu yenileyin).*
+
 ---
 
 ## Uyumluluk ve Destek Matrisi
 
 | Ortam | Durum | Doğrulama Kanıtı |
 | :--- | :---: | :--- |
-| **Zorin OS 17 / 18** | **Doğrulandı** | Gerçek kullanıcı ortamı testi: Polkit ile temiz `.deb` kurulumu, canlı masaüstü kullanımı ve gerçek APT paketi kurma/kaldırma döngüsü. |
+| **Zorin OS 18.1** | **Doğrulandı** | Gerçek kullanıcı ortamı testi: Temiz `.deb` kurulumu, canlı masaüstü kullanımı ve gerçek APT paketi kurma/kaldırma döngüsü. |
+| **Zorin OS 17.x** | **Test Edilmedi** | Çekirdek yığın Ubuntu 22.04 ile uyumludur; otomatik CI test takımı kapsamındadır. |
 | **Ubuntu 22.04 & 24.04** | **CI PASS** | Otomatik CI doğrulaması: Xvfb/Openbox altında 281/281 test, Ruff ve compileall temiz, `.deb` paket inşası başarılı. |
-| **Debian 11 / 12** | **Destekleniyor** | `.deb` paketi üzerinden uyumlu (Python 3.10+ ve GTK 3 gerektirir). |
+| **Debian 12** | **Uyumlu** | `.deb` paketi üzerinden bağımlılıklar uyumludur (Python 3.11+ ve GTK 3); canlı donanım testi beklemededir. |
+| **Debian 11** | **Desteklenmiyor** | Varsayılan olarak Python 3.9 ile gelir; SourceDock kesin olarak Python >= 3.10 gerektirir. |
 | **Fedora / openSUSE / Arch** | **Deneysel** | Ayrıştırıcı ve yürütme katmanı birim testlerle doğrulandı; yerel paketleme (.rpm / PKGBUILD) henüz sunulmamaktadır. |
 
 Ayrıntılı ortam testleri ve mimari sınırlar için [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) belgesine bakınız.
