@@ -31,6 +31,7 @@ class AppPreferences:
     check_updates_on_start: bool = False
     notifications_enabled: bool = True
     detailed_table_default: bool = True
+    show_technical_packages: bool = False
 
 
 class PreferencesStore:
@@ -77,6 +78,7 @@ class PreferencesStore:
             check_updates_on_start=raw.get("check_updates_on_start") is True,
             notifications_enabled=raw.get("notifications_enabled", True) is not False,
             detailed_table_default=raw.get("detailed_table_default", True) is not False,
+            show_technical_packages=raw.get("show_technical_packages") is True,
         )
 
 

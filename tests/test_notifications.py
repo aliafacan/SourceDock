@@ -19,21 +19,30 @@ class TestDesktopNotifications(unittest.TestCase):
         runner.run.assert_not_called()
 
     def test_runner_executes_notify_send_with_arguments(self):
+        import subprocess
         runner = MagicMock()
         runner.command_exists.return_value = True
-        runner.run.return_value = MagicMock(exit_code=0)
+        expected_cmd = ["notify-send", "-a", "SourceDock", "-i", "software-update-available", "-u", "normal", "Update", "3 packages available"]
+        runner.run.return_value = subprocess.CompletedProcess(expected_cmd, 0, "", "")
 
         result = send_desktop_notification("Update", "3 packages available", icon="software-update-available", runner=runner)
         self.assertTrue(result)
-        runner.run.assert_called_once_with(
-            ["notify-send", "-a", "SourceDock", "-i", "software-update-available", "-u", "normal", "Update", "3 packages available"],
-            timeout=5,
-        )
+        runner.run.assert_called_once_with(expected_cmd, timeout=5)
 
     def test_runner_returns_false_on_non_zero_exit(self):
+        import subprocess
         runner = MagicMock()
         runner.command_exists.return_value = True
-        runner.run.return_value = MagicMock(exit_code=1)
+        runner.run.return_value = subprocess.CompletedProcess(["notify-send"], 1, "", "notification daemon error")
+
+        result = send_desktop_notification("Title", "Body", runner=runner)
+        self.assertFalse(result)
+
+    def test_runner_handles_timeout_and_exceptions(self):
+        import subprocess
+        runner = MagicMock()
+        runner.command_exists.return_value = True
+        runner.run.side_effect = subprocess.TimeoutExpired(cmd=["notify-send"], timeout=5)
 
         result = send_desktop_notification("Title", "Body", runner=runner)
         self.assertFalse(result)

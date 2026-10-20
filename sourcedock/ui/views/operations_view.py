@@ -100,7 +100,10 @@ class OperationsViewMixin:
 
         action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         action_bar.get_style_context().add_class("action-bar")
+        action_bar.set_no_show_all(True)
+        action_bar.hide()
         container.pack_start(action_bar, False, False, 0)
+        self.operations_action_bar = action_bar
 
         self.operations_pause_btn = Gtk.Button(label="Duraklat")
         self.operations_pause_btn.connect("clicked", self._on_operations_pause)
@@ -116,6 +119,11 @@ class OperationsViewMixin:
         self.operations_cancel_btn.hide()
         action_bar.pack_start(self.operations_cancel_btn, False, False, 0)
         self.operations_cancel_btn.set_tooltip_text(t(self.preferences.language, "cancel_critical"))
+
+        def _sync_operations_action_bar_vis(*_args):
+            action_bar.set_visible(self.operations_cancel_btn.get_visible())
+
+        self.operations_cancel_btn.connect("notify::visible", _sync_operations_action_bar_vis)
         history_expander = Gtk.Expander(label=t(self.preferences.language, "operation_history"))
         self.operations_history_expander = history_expander
         history_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)

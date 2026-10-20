@@ -1098,18 +1098,23 @@ class InstalledViewMixin:
         self._set_application_controls_sensitive(False)
         self._set_applications_status(t(self.preferences.language, "store_action_running"), "#666666")
 
-        if not retry and getattr(self, "_cached_sudo_password", None):
-            self.application_registry.set_sudo_password(self._cached_sudo_password)
+        cached_pwd = self.get_cached_sudo_password() if hasattr(self, "get_cached_sudo_password") else None
+        if not retry and cached_pwd:
+            self.application_registry.set_sudo_password(cached_pwd)
 
         lang = self.preferences.language
         self._active_op_seq += 1
         op_key = f"app_{self._active_op_seq}"
+        op_id = f"op_installed_{self._active_op_seq}_{int(time.monotonic() * 1000)}"
+        runner = self.application_registry.runner
+        cancel_action = lambda: runner.cancel_current(target=op_id)
+
         self._register_active_op(
             op_key,
             f"app {action_name}",
             progress_message or action_name,
             None,
-            cancel_fn=self.application_registry.runner.cancel_current,
+            cancel_fn=cancel_action,
         )
 
         progress_dialog = OperationProgressWindow(
@@ -1118,17 +1123,19 @@ class InstalledViewMixin:
             parent=self,
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
             language=lang,
-            cancel_fn=self.application_registry.runner.cancel_current,
+            cancel_fn=cancel_action,
         )
-        self.application_registry.runner.set_output_callback(
-            lambda line: GLib.idle_add(progress_dialog.append_log, line)
+        runner.set_output_callback(
+            lambda line: GLib.idle_add(progress_dialog.append_log, line),
+            op_id=op_id,
         )
 
         def worker():
+            runner.bind_thread_op(op_id)
             try:
                 worker_callable()
             except AuthRequiredError as exc:
-                self.application_registry.runner.set_output_callback(None)
+                runner.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key)
                 GLib.idle_add(progress_dialog.destroy)
                 GLib.idle_add(
@@ -1143,23 +1150,64 @@ class InstalledViewMixin:
                     retry,
                 )
             except BackendError as exc:
-                self.application_registry.runner.set_output_callback(None)
+                err_text = str(exc)
+                ctx = runner.get_operation_context(op_id) if hasattr(runner, "get_operation_context") else None
+                if ctx and getattr(ctx, "lingering", False) is True:
+                    notice = "İşlem arka planda güvenle tamamlanması bekleniyor..."
+                    def _log_inst_lingering():
+                        progress_dialog.append_log(notice)
+                        return False
+                    GLib.idle_add(_log_inst_lingering)
+
+                    def _finalize_inst(retcode: int | None):
+                        runner.set_output_callback(None, op_id=op_id)
+                        if retcode == 0:
+                            GLib.idle_add(self._unregister_active_op, op_key, True, t(lang, success_message_key))
+                            msg = t(self.preferences.language, success_message_key)
+                            GLib.idle_add(progress_dialog.finish, True, msg)
+                            GLib.idle_add(self._finish_application_task, True, msg, refresh_after)
+                        else:
+                            fail_msg = f"{err_text} (Kod {retcode})"
+                            GLib.idle_add(self._unregister_active_op, op_key, False, fail_msg)
+                            msg = self._application_error_message(fail_msg)
+                            GLib.idle_add(progress_dialog.finish, False, msg)
+                            GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
+
+                    wait_timeout = getattr(runner, "_lingering_wait_timeout", 1800)
+                    completed = ctx.completed_event.wait(timeout=wait_timeout)
+                    if completed:
+                        _finalize_inst(ctx.returncode)
+                        return
+                    else:
+                        def _log_inst_running():
+                            progress_dialog.append_log("İşlem arka planda güvenle devam ediyor...")
+                            return False
+                        GLib.idle_add(_log_inst_running)
+
+                        def _watch_inst():
+                            ctx.completed_event.wait()
+                            _finalize_inst(ctx.returncode)
+                        threading.Thread(target=_watch_inst, daemon=True, name=f"watch-inst-{op_id}").start()
+                        return
+                runner.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key, False, str(exc))
                 msg = self._application_error_message(str(exc))
                 GLib.idle_add(progress_dialog.finish, False, msg)
                 GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
             except Exception as exc:
-                self.application_registry.runner.set_output_callback(None)
+                runner.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key, False, str(exc))
                 msg = str(exc)
                 GLib.idle_add(progress_dialog.finish, False, msg)
                 GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
             else:
-                self.application_registry.runner.set_output_callback(None)
+                runner.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key, True, t(lang, success_message_key))
                 msg = t(self.preferences.language, success_message_key)
                 GLib.idle_add(progress_dialog.finish, True, msg)
                 GLib.idle_add(self._finish_application_task, True, msg, refresh_after)
+            finally:
+                runner.unbind_thread_op(op_id)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1175,12 +1223,20 @@ class InstalledViewMixin:
         retry: bool,
     ) -> bool:
         if retry or exc.password_failed:
+            if hasattr(self, "clear_cached_sudo_password"):
+                self.clear_cached_sudo_password()
             self._cached_sudo_password = None
         password = self._ask_sudo_password(retry=retry or exc.password_failed)
         if password is None:
+            if hasattr(self, "clear_cached_sudo_password"):
+                self.clear_cached_sudo_password()
+            self._cached_sudo_password = None
             self._finish_application_task(False, t(self.preferences.language, "status_cancelled"), False)
             return False
-        self._cached_sudo_password = password
+        if hasattr(self, "set_cached_sudo_password"):
+            self.set_cached_sudo_password(password)
+        else:
+            self._cached_sudo_password = password
         self.application_registry.set_sudo_password(password)
         self.applications_busy = False
         self._run_application_task(
@@ -1328,17 +1384,25 @@ class InstalledViewMixin:
         total = len(self.applications)
 
         shown = len(filtered)
+        show_technical = getattr(self.preferences, "show_technical_packages", False)
         hidden = (
             max(total - shown, 0)
             if self.application_filter_source == "all"
             and self.application_filter_category == "__all__"
             and not self.application_search_text
+            and not show_technical
             else 0
         )
         summary_key = "applications_count_summary_hidden" if hidden else "applications_count_summary"
         self.applications_summary_label.set_text(
             t(self.preferences.language, summary_key, count=shown, total=total, hidden=hidden)
         )
+        if hidden:
+            self.applications_summary_label.set_tooltip_text(
+                t(self.preferences.language, "tooltip_installed_summary_hidden")
+            )
+        else:
+            self.applications_summary_label.set_tooltip_text(None)
         if not self.applications_loading:
             if filtered:
                 self.installed_state.show_content()
@@ -1477,9 +1541,11 @@ class InstalledViewMixin:
         query = self.application_search_text.lower()
 
         results = []
+        show_technical = getattr(self.preferences, "show_technical_packages", False)
         for app in self.applications:
             if (
                 source == "all"
+                and not show_technical
                 and not app.desktop_file
                 and app.source in (SOURCE_FLATPAK, SOURCE_SNAP, SOURCE_FIRMWARE)
             ):
