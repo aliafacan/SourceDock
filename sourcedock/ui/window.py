@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 import gi
 
 gi.require_version("Gdk", "3.0")
@@ -70,6 +71,7 @@ class MainWindow(
         self.applications_loading = False
         self.applications_busy = False
         self._cached_sudo_password: str | None = None
+        self._cached_sudo_timestamp: float = 0.0
         self.application_filter_buttons: dict[str, Gtk.ToggleButton] = {}
         self.filtered_applications: list[UnifiedApplication] = []
         self._suppress_global_search_changed = False
@@ -103,7 +105,7 @@ class MainWindow(
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_resizable(True)
         self.get_style_context().add_class("icon-settings-window")
-        self.connect("destroy", Gtk.main_quit)
+        self.connect("destroy", self._on_window_destroy)
 
         self._build_ui()
         self._apply_theme()
@@ -541,17 +543,46 @@ class MainWindow(
         if target_file:
             GLib.idle_add(self.prompt_and_install_file, target_file)
 
+    def get_cached_sudo_password(self) -> str | None:
+        if not hasattr(self, "_cached_sudo_password") or not self._cached_sudo_password:
+            return None
+        timestamp = getattr(self, "_cached_sudo_timestamp", 0.0)
+        # FIX P1-03: timestamp=0.0 means "not set" → treat as expired, never return stale password.
+        # Previously: "timestamp > 0.0 AND elapsed > 900" allowed 0.0 to bypass expiry entirely.
+        if not timestamp or time.monotonic() - timestamp > 900:
+            self.clear_cached_sudo_password()
+            return None
+        return self._cached_sudo_password
+
+    def set_cached_sudo_password(self, password: str | None) -> None:
+        self._cached_sudo_password = password
+        self._cached_sudo_timestamp = time.monotonic() if password else 0.0
+
+    def clear_cached_sudo_password(self) -> None:
+        self._cached_sudo_password = None
+        self._cached_sudo_timestamp = 0.0
+        if hasattr(self, "application_registry") and self.application_registry:
+            self.application_registry.runner.clear_sudo_password()
+        if hasattr(self, "store_registry") and self.store_registry:
+            self.store_registry.clear_sudo_password()
+
+    def _on_window_destroy(self, *_args) -> None:
+        self.clear_cached_sudo_password()
+        Gtk.main_quit()
+
     def _ask_sudo_password(
         self,
         retry: bool = False,
         message_key: str = "applications_password_message",
         retry_key: str = "applications_password_retry",
         operation: str = "",
+        message: str | None = None,
     ) -> str | None:
-        if not retry and getattr(self, "_cached_sudo_password", None):
-            return self._cached_sudo_password
-        if retry:
-            self._cached_sudo_password = None
+        if not retry:
+            cached = self.get_cached_sudo_password()
+            if cached:
+                return cached
+        self.clear_cached_sudo_password()
 
         dialog = Gtk.Dialog(
             title=t(self.preferences.language, "password_title"),
@@ -590,8 +621,9 @@ class MainWindow(
         password = entry.get_text()
         dialog.destroy()
         if response == Gtk.ResponseType.OK and password:
-            self._cached_sudo_password = password
+            self.set_cached_sudo_password(password)
             return password
+        self.clear_cached_sudo_password()
         return None
 
     def _show_error_dialog(self, message: str) -> None:

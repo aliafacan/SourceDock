@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import re
 
 import gi
@@ -250,7 +251,10 @@ class StoreViewMixin:
 
         store_action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         store_action_bar.get_style_context().add_class("action-bar")
+        store_action_bar.set_no_show_all(True)
+        store_action_bar.hide()
         container.pack_start(store_action_bar, False, False, 0)
+        self.store_action_bar = store_action_bar
 
         self.store_install_btn = Gtk.Button()
         self.store_install_btn.get_style_context().add_class("suggested-action")
@@ -265,6 +269,14 @@ class StoreViewMixin:
         self.store_status.set_no_show_all(True)
         self.store_status.hide()
         store_action_bar.pack_start(self.store_status, True, True, 0)
+
+        def _sync_store_action_bar_vis(*_args):
+            store_action_bar.set_visible(
+                self.store_install_btn.get_visible() or self.store_status.get_visible()
+            )
+
+        self.store_install_btn.connect("notify::visible", _sync_store_action_bar_vis)
+        self.store_status.connect("notify::visible", _sync_store_action_bar_vis)
 
         self.store_filter_buttons["all"].set_active(True)
         self.store_state.show_state(
@@ -498,8 +510,9 @@ class StoreViewMixin:
         self.store_install_btn.set_sensitive(False)
         self._set_store_status(t(self.preferences.language, "store_action_running"), "#666666")
 
-        if not retry and getattr(self, "_cached_sudo_password", None):
-            self.store_registry.set_sudo_password(self._cached_sudo_password)
+        cached_pwd = self.get_cached_sudo_password() if hasattr(self, "get_cached_sudo_password") else getattr(self, "_cached_sudo_password", None)
+        if not retry and cached_pwd:
+            self.store_registry.set_sudo_password(cached_pwd)
 
         lang = self.preferences.language
         self._active_op_seq += 1
@@ -507,13 +520,16 @@ class StoreViewMixin:
         remote = getattr(result, "remote", None) or "flathub"
         classic_flag = "--classic " if classic else ""
         op_cmd = f"{result.source} install {classic_flag}{remote} {result.app_id}"
+        op_id = f"op_store_{self._active_op_seq}_{int(time.monotonic() * 1000)}"
+        cancel_action = lambda: self.store_registry.cancel_current(target=op_id)
+
         self._register_active_op(
             op_key,
             op_cmd,
             result.name,
             self._get_store_pixbuf(result),
             download_size=result.download_size_str or "",
-            cancel_fn=self.store_registry.cancel_current,
+            cancel_fn=cancel_action,
         )
 
         progress_dialog = OperationProgressWindow(
@@ -522,23 +538,27 @@ class StoreViewMixin:
             parent=self,
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
             language=lang,
-            cancel_fn=self.store_registry.cancel_current,
+            cancel_fn=cancel_action,
         )
-        self.store_registry.set_output_callback(lambda line: GLib.idle_add(progress_dialog.append_log, line))
+        self.store_registry.set_output_callback(
+            lambda line: GLib.idle_add(progress_dialog.append_log, line),
+            op_id=op_id,
+        )
 
         apt_msg_key = "store_apt_password_message"
         apt_retry_key = "store_apt_password_retry"
 
         def worker() -> None:
+            self.store_registry.bind_thread_op(op_id)
             try:
                 self.store_registry.install(result, classic=classic)
             except SnapClassicRequiredError:
-                self.store_registry.set_output_callback(None)
+                self.store_registry.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key)
                 GLib.idle_add(progress_dialog.destroy)
                 GLib.idle_add(self._handle_snap_classic_required, result)
             except AuthRequiredError as exc:
-                self.store_registry.set_output_callback(None)
+                self.store_registry.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key)
                 GLib.idle_add(progress_dialog.destroy)
                 msg_key = apt_msg_key if is_native_source(result.source) else "store_password_message"
@@ -547,23 +567,64 @@ class StoreViewMixin:
                     self._handle_store_auth_required, result, exc, retry, msg_key, retry_key, classic
                 )
             except BackendError as exc:
-                self.store_registry.set_output_callback(None)
+                err_text = str(exc)
+                runner = getattr(self.store_registry, "runner", None)
+                ctx = runner.get_operation_context(op_id) if runner and hasattr(runner, "get_operation_context") else None
+                if ctx and getattr(ctx, "lingering", False) is True:
+                    notice = "İşlem arka planda güvenle tamamlanması bekleniyor..."
+                    def _log_store_lingering():
+                        progress_dialog.append_log(notice)
+                        return False
+                    GLib.idle_add(_log_store_lingering)
+
+                    def _finalize_store(retcode: int | None):
+                        self.store_registry.set_output_callback(None, op_id=op_id)
+                        if retcode == 0:
+                            msg = t(self.preferences.language, "store_install_done")
+                            GLib.idle_add(self._unregister_active_op, op_key, True, msg)
+                            GLib.idle_add(progress_dialog.finish, True, msg)
+                            GLib.idle_add(self._finish_store_install, True, msg)
+                        else:
+                            msg = f"{err_text} (Kod {retcode})"
+                            GLib.idle_add(self._unregister_active_op, op_key, False, msg)
+                            GLib.idle_add(progress_dialog.finish, False, msg)
+                            GLib.idle_add(self._finish_store_install, False, msg)
+
+                    wait_timeout = getattr(runner, "_lingering_wait_timeout", 1800)
+                    completed = ctx.completed_event.wait(timeout=wait_timeout)
+                    if completed:
+                        _finalize_store(ctx.returncode)
+                        return
+                    else:
+                        def _log_store_running():
+                            progress_dialog.append_log("İşlem arka planda güvenle devam ediyor...")
+                            return False
+                        GLib.idle_add(_log_store_running)
+
+                        def _watch_store():
+                            ctx.completed_event.wait()
+                            _finalize_store(ctx.returncode)
+                        threading.Thread(target=_watch_store, daemon=True, name=f"watch-store-{op_id}").start()
+                        return
+                self.store_registry.set_output_callback(None, op_id=op_id)
                 msg = str(exc)
                 GLib.idle_add(self._unregister_active_op, op_key, False, msg)
                 GLib.idle_add(progress_dialog.finish, False, msg)
                 GLib.idle_add(self._finish_store_install, False, msg)
             except Exception as exc:
-                self.store_registry.set_output_callback(None)
+                self.store_registry.set_output_callback(None, op_id=op_id)
                 msg = str(exc)
                 GLib.idle_add(self._unregister_active_op, op_key, False, msg)
                 GLib.idle_add(progress_dialog.finish, False, msg)
                 GLib.idle_add(self._finish_store_install, False, msg)
             else:
-                self.store_registry.set_output_callback(None)
+                self.store_registry.set_output_callback(None, op_id=op_id)
                 msg = t(self.preferences.language, "store_install_done")
                 GLib.idle_add(self._unregister_active_op, op_key, True, msg)
                 GLib.idle_add(progress_dialog.finish, True, msg)
                 GLib.idle_add(self._finish_store_install, True, msg)
+            finally:
+                self.store_registry.unbind_thread_op(op_id)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -585,8 +646,11 @@ class StoreViewMixin:
         retry_key: str = "store_password_retry",
         classic: bool = False,
     ) -> bool:
-        if retry or exc.password_failed:
-            self._cached_sudo_password = None
+        if retry or getattr(exc, "password_failed", False):
+            if hasattr(self, "clear_cached_sudo_password"):
+                self.clear_cached_sudo_password()
+            else:
+                self._cached_sudo_password = None
         password = self._ask_sudo_password(
             retry=retry or exc.password_failed,
             message_key=message_key,
@@ -594,9 +658,16 @@ class StoreViewMixin:
             operation=result.name,
         )
         if password is None:
+            if hasattr(self, "clear_cached_sudo_password"):
+                self.clear_cached_sudo_password()
+            else:
+                self._cached_sudo_password = None
             self._finish_store_install(False, t(self.preferences.language, "status_cancelled"))
             return False
-        self._cached_sudo_password = password
+        if hasattr(self, "set_cached_sudo_password"):
+            self.set_cached_sudo_password(password)
+        else:
+            self._cached_sudo_password = password
         self.store_registry.set_sudo_password(password)
         self.store_busy = False
         self._run_store_install(result, retry=True, classic=classic)

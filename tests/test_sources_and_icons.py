@@ -1,6 +1,7 @@
 """Read-only source parsing and Flatpak icon discovery contracts."""
 
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -141,23 +142,47 @@ class TestRemoteManagement(unittest.TestCase):
 
         runner = MagicMock()
         runner.command_exists.return_value = True
-        runner.run.return_value = MagicMock(exit_code=0)
+        cmd = [
+            "flatpak",
+            "remote-add",
+            "--if-not-exists",
+            "--user",
+            "flathub",
+            "https://dl.flathub.org/repo/flathub.flatpakrepo",
+        ]
+        runner.run.return_value = subprocess.CompletedProcess(cmd, 0, "", "")
 
         ok, err = add_flatpak_remote(
             runner, "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo", user=True
         )
         self.assertTrue(ok)
-        runner.run.assert_called_once_with(
-            [
-                "flatpak",
-                "remote-add",
-                "--if-not-exists",
-                "--user",
-                "flathub",
-                "https://dl.flathub.org/repo/flathub.flatpakrepo",
-            ],
-            timeout=30,
-        )
+        self.assertEqual(err, "")
+        runner.run.assert_called_once_with(cmd, timeout=30)
+
+    def test_add_flatpak_remote_failure_propagates_stderr(self):
+        from unittest.mock import MagicMock
+        from sourcedock.backend.sources import add_flatpak_remote
+
+        runner = MagicMock()
+        runner.command_exists.return_value = True
+        cmd = ["flatpak", "remote-add", "--if-not-exists", "--user", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"]
+        runner.run.return_value = subprocess.CompletedProcess(cmd, 1, "", "error: GPG verification failed")
+
+        ok, err = add_flatpak_remote(runner, "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo", user=True)
+        self.assertFalse(ok)
+        self.assertEqual(err, "error: GPG verification failed")
+
+    def test_add_flatpak_remote_handles_exception(self):
+        from unittest.mock import MagicMock
+        from sourcedock.backend.sources import add_flatpak_remote
+
+        runner = MagicMock()
+        runner.command_exists.return_value = True
+        runner.run.side_effect = subprocess.TimeoutExpired(cmd=["flatpak"], timeout=30)
+
+        ok, err = add_flatpak_remote(runner, "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo", user=True)
+        self.assertFalse(ok)
+        self.assertIn("timed out", err.lower())
 
     def test_remove_flatpak_remote_builds_fixed_argv(self):
         from unittest.mock import MagicMock
@@ -165,14 +190,38 @@ class TestRemoteManagement(unittest.TestCase):
 
         runner = MagicMock()
         runner.command_exists.return_value = True
-        runner.run.return_value = MagicMock(exit_code=0)
+        cmd = ["flatpak", "remote-delete", "--force", "--user", "flathub"]
+        runner.run.return_value = subprocess.CompletedProcess(cmd, 0, "", "")
 
         ok, err = remove_flatpak_remote(runner, "flathub", user=True)
         self.assertTrue(ok)
-        runner.run.assert_called_once_with(
-            ["flatpak", "remote-delete", "--force", "--user", "flathub"],
-            timeout=30,
-        )
+        self.assertEqual(err, "")
+        runner.run.assert_called_once_with(cmd, timeout=30)
+
+    def test_remove_flatpak_remote_failure_propagates_stderr(self):
+        from unittest.mock import MagicMock
+        from sourcedock.backend.sources import remove_flatpak_remote
+
+        runner = MagicMock()
+        runner.command_exists.return_value = True
+        cmd = ["flatpak", "remote-delete", "--force", "--user", "flathub"]
+        runner.run.return_value = subprocess.CompletedProcess(cmd, 1, "", "error: Remote flathub not found")
+
+        ok, err = remove_flatpak_remote(runner, "flathub", user=True)
+        self.assertFalse(ok)
+        self.assertEqual(err, "error: Remote flathub not found")
+
+    def test_remove_flatpak_remote_handles_exception(self):
+        from unittest.mock import MagicMock
+        from sourcedock.backend.sources import remove_flatpak_remote
+
+        runner = MagicMock()
+        runner.command_exists.return_value = True
+        runner.run.side_effect = OSError("No such file or directory")
+
+        ok, err = remove_flatpak_remote(runner, "flathub", user=True)
+        self.assertFalse(ok)
+        self.assertIn("No such file or directory", err)
 
 
 if __name__ == "__main__":

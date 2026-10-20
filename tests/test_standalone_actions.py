@@ -96,7 +96,7 @@ class TestStandaloneActions(unittest.TestCase):
         self.assertTrue(self.history.append.call_args.args[2])
 
     def test_cached_sudo_password_is_reused_without_prompting(self):
-        self.dialog._cached_sudo_password = "cached-session-secret"
+        self.dialog.set_cached_sudo_password("cached-session-secret")
         self.registry.remove.side_effect = None
         with (
             patch("sourcedock.ui.components.app_details_dialog.Gtk.Dialog.run", return_value=Gtk.ResponseType.OK),

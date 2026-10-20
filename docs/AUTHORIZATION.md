@@ -10,6 +10,25 @@ nonblocking selector, so silence does not disable the timeout. Safe cancellation
 terminates the process group, with a bounded fallback for a child ignoring SIGTERM.
 The operation result is reported only after the worker exits.
 
+### Credential Lifecycle and Authorization Isolation
+
+- **Centralized Session Auth**: Sudo passwords are held in a single session
+  context on the main application window and are never duplicated across views or dialogs.
+- **Strict 15-minute TTL**: In-memory credentials expire automatically after 15 minutes,
+  aligning with the default Linux sudo timestamp cache (`timestamp_timeout`).
+- **Immediate Invalidation**: The cached credential is immediately cleared upon:
+  1. An authentication failure (`AuthRequiredError` with `password_failed=True`).
+  2. User cancellation of an authentication or operation dialog.
+  3. Main window destruction / session termination (`destroy` event).
+- **Redaction Guard**: All streaming command output, exceptions, and diagnostics
+  actively redact secrets and user home paths via `redact_text()`.
+- **Cancellation Boundary**: Active mutating package transactions (APT, dpkg, DNF,
+  RPM, Pacman, Zypper, Snap, fwupdmgr) are marked critical (`critical_command()`);
+  invoking UI cancellation on these operations returns `False` and leaves the
+  underlying process group intact to prevent filesystem lock and transaction corruption.
+  Safe phases, such as waiting for APT locks (`_wait_for_apt_locks`) or read-only provider
+  queries, support immediate, responsive cancellation.
+
 ## Polkit Migration Proposal
 
 An installed helper should expose a fixed operation enum, validate package IDs and

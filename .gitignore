@@ -47,3 +47,14 @@ debian/*.log
 # Shareable UI showcase artifacts
 /artifacts/
 
+# Virtual Environment & Linter Caches
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# Local Codex Task Notes
+SOURCEDOCK_*_CODEX.md
+
+# Benchmark and Temporary Test JSON Artifacts
+docs/screenshots/validation.json
+docs/screenshots/performance_benchmark.json

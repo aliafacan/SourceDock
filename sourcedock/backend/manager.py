@@ -82,6 +82,27 @@ def _flatpak_purge_data_path(app_id: str) -> Path:
 class ApplicationRegistry:
     """Sistemdeki tüm kurulu paket kaynaklarını yöneten ana kayıt defteri."""
 
+    @staticmethod
+    def _is_completed_success(res: object) -> bool:
+        if res is None:
+            return False
+        returncode = getattr(res, "returncode", None)
+        if isinstance(returncode, bool):
+            return False
+        if isinstance(returncode, int):
+            return returncode == 0
+        return False
+
+    @staticmethod
+    def _extract_error(res: object, fallback: str = "Komut basarisiz oldu") -> str:
+        if res is None:
+            return "İşlem sonucu geçersiz (boş)."
+        stderr = getattr(res, "stderr", None)
+        stdout = getattr(res, "stdout", None)
+        msg = str(stderr or "").strip() or str(stdout or "").strip()
+        return msg if msg else fallback
+
+
     PROVIDER_TIMEOUT_SECONDS = 5.0
 
     def __init__(self, distro_info: DistroInfo | None = None, runner: CommandRunner | None = None):
@@ -140,7 +161,8 @@ class ApplicationRegistry:
 
     def refresh_update_cache_silent(self) -> None:
         try:
-            sudo_free = self.runner.run(["sudo", "-n", "true"], timeout=5).returncode == 0
+            sudo_res = self.runner.run(["sudo", "-n", "true"], timeout=5)
+            sudo_free = self._is_completed_success(sudo_res)
             if sudo_free and self.native_provider.is_available():
                 cmd = self.native_provider.refresh_cache_command()
                 if cmd:
@@ -292,17 +314,25 @@ class ApplicationRegistry:
     def list_packages(self) -> list[PackageInfo]:
         return self.native_provider.list_all_packages()
 
+    def _update_native_packages_for_provider(self, prov: BaseNativeProvider, names: list[str]) -> None:
+        if not names:
+            return
+        if prov.source == SOURCE_APT:
+            self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", *names), timeout=1800)
+        elif prov.source == SOURCE_DNF:
+            self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
+        elif prov.source == SOURCE_PACMAN:
+            self.runner.run_privileged(["pacman", "-S", "--noconfirm", *names], timeout=1800)
+        elif prov.source == SOURCE_ZYPPER:
+            self.runner.run_privileged(["zypper", "--non-interactive", "update", "-y", *names], timeout=1800)
+        else:
+            for name in names:
+                self.runner.run_privileged(prov.update_command(name), timeout=1800)
+
     def update_packages(self, names: list[str]) -> None:
         if not names:
             return
-        if self.native_provider.source == SOURCE_APT:
-            self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", *names), timeout=1800)
-        elif self.native_provider.source == SOURCE_DNF:
-            self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
-        elif self.native_provider.source == SOURCE_PACMAN:
-            self.runner.run_privileged(["pacman", "-S", "--noconfirm", *names], timeout=1800)
-        elif self.native_provider.source == SOURCE_ZYPPER:
-            self.runner.run_privileged(["zypper", "--non-interactive", "update", "-y", *names], timeout=1800)
+        self._update_native_packages_for_provider(self.native_provider, names)
 
     def launch(self, application: UnifiedApplication) -> None:
         if application.source == SOURCE_FLATPAK:
@@ -409,23 +439,109 @@ class ApplicationRegistry:
             return
         raise BackendError("Bilinmeyen uygulama kaynagi.")
 
-    def update_all(self, applications: list[UnifiedApplication]) -> None:
-        sources = {application.source for application in applications}
-        for native_src in NATIVE_SOURCES:
-            if native_src in sources:
-                prov = self.get_native_provider(native_src)
-                if prov.is_available():
-                    self.runner.run_privileged(prov.update_all_command(), timeout=3600)
+    def update_all(self, applications: list[UnifiedApplication], whole_system: bool = False) -> None:
+        if not applications:
+            return
 
-        if SOURCE_FLATPAK in sources and self.runner.command_exists("flatpak"):
-            self.runner.run(["flatpak", "update", "-y"], timeout=3600, check=True)
-        if SOURCE_SNAP in sources and self.runner.command_exists("snap"):
-            self.runner.run_privileged(["snap", "refresh"], timeout=3600)
-        if SOURCE_FIRMWARE in sources and self.runner.command_exists("fwupdmgr"):
-            self.runner.run(["fwupdmgr", "update", "-y"], timeout=3600, check=False)
-        for application in applications:
-            if application.source == SOURCE_APPIMAGE and application.update_supported:
-                self.runner.run(["AppImageUpdate", application.install_path], timeout=1800, check=False)
+        failures: list[str] = []
+
+        if whole_system:
+            sources = {application.source for application in applications}
+            for native_src in NATIVE_SOURCES:
+                if native_src in sources:
+                    prov = self.get_native_provider(native_src)
+                    if prov and prov.is_available():
+                        try:
+                            self.runner.run_privileged(prov.update_all_command(), timeout=3600)
+                        except Exception as exc:
+                            failures.append(f"{prov.display_name}: {exc}")
+
+            if SOURCE_FLATPAK in sources and self.runner.command_exists("flatpak"):
+                try:
+                    self.runner.run(["flatpak", "update", "-y"], timeout=3600, check=True)
+                except Exception as exc:
+                    failures.append(f"Flatpak: {exc}")
+            if SOURCE_SNAP in sources and self.runner.command_exists("snap"):
+                try:
+                    self.runner.run_privileged(["snap", "refresh"], timeout=3600)
+                except Exception as exc:
+                    failures.append(f"Snap: {exc}")
+            if SOURCE_FIRMWARE in sources and self.runner.command_exists("fwupdmgr"):
+                res = self.runner.run(["fwupdmgr", "update", "-y"], timeout=3600, check=False)
+                if not self._is_completed_success(res):
+                    failures.append(f"Firmware: {self._extract_error(res, 'fwupdmgr update failed')}")
+            for application in applications:
+                if application.source == SOURCE_APPIMAGE and application.update_supported:
+                    res = self.runner.run(["AppImageUpdate", application.install_path], timeout=1800, check=False)
+                    if not self._is_completed_success(res):
+                        failures.append(f"AppImage ({application.name}): {self._extract_error(res, 'AppImageUpdate failed')}")
+            if failures:
+                raise BackendError("Bazı güncellemeler başarısız oldu:\n" + "\n".join(failures))
+            return
+
+        # whole_system=False: Hedeflenen seçili paketler
+        native_apps = [app for app in applications if is_native_source(app.source)]
+        if native_apps:
+            native_by_src: dict[str, list[str]] = {}
+            for app in native_apps:
+                native_by_src.setdefault(app.source, []).append(app.package_name)
+            for src, names in native_by_src.items():
+                prov = self.get_native_provider(src)
+                if prov and prov.is_available():
+                    try:
+                        self._update_native_packages_for_provider(prov, names)
+                    except Exception as exc:
+                        failures.append(f"{prov.display_name} ({', '.join(names)}): {exc}")
+
+        flatpak_apps = [app for app in applications if app.source == SOURCE_FLATPAK]
+        if flatpak_apps and self.runner.command_exists("flatpak"):
+            user_base = os.path.expanduser("~/.local/share/flatpak")
+            for app in flatpak_apps:
+                cmd = ["flatpak", "update"]
+                if app.install_path.startswith(user_base):
+                    cmd.append("--user")
+                elif app.install_path.startswith("/var/lib/flatpak"):
+                    cmd.append("--system")
+                cmd.extend(["-y", app.package_name])
+                res = self.runner.run(cmd, timeout=1800, check=False)
+                if not self._is_completed_success(res):
+                    failures.append(f"Flatpak ({app.name}): {self._extract_error(res, 'update failed')}")
+
+        snap_apps = [app for app in applications if app.source == SOURCE_SNAP]
+        if snap_apps and self.runner.command_exists("snap"):
+            for app in snap_apps:
+                try:
+                    self.runner.run_privileged(["snap", "refresh", app.package_name], timeout=1800)
+                except Exception as exc:
+                    failures.append(f"Snap ({app.name}): {exc}")
+
+        firmware_apps = [app for app in applications if app.source == SOURCE_FIRMWARE]
+        if firmware_apps:
+            if not self.runner.command_exists("fwupdmgr"):
+                for app in firmware_apps:
+                    failures.append(f"Firmware ({app.name}): fwupdmgr sistemi mevcut değil.")
+            else:
+                for app in firmware_apps:
+                    device_id = app.package_name.strip()
+                    if not device_id:
+                        failures.append(
+                            f"Firmware ({app.name}): Aygıt kimliği belirtilmedi; "
+                            "seçili öğe için genel firmware güncellemesi başlatılamaz."
+                        )
+                        continue
+                    # P0-04: Seçili firmware güncellemesi genel güncellemeye dönüşmez; aygıtı hedefler
+                    res = self.runner.run(["fwupdmgr", "update", "-y", device_id], timeout=3600, check=False)
+                    if not self._is_completed_success(res):
+                        failures.append(f"Firmware ({app.name}): {self._extract_error(res, 'fwupdmgr update failed')}")
+
+        for app in applications:
+            if app.source == SOURCE_APPIMAGE and app.update_supported:
+                res = self.runner.run(["AppImageUpdate", app.install_path], timeout=1800, check=False)
+                if not self._is_completed_success(res):
+                    failures.append(f"AppImage ({app.name}): {self._extract_error(res, 'AppImageUpdate failed')}")
+
+        if failures:
+            raise BackendError("Bazı güncellemeler tamamlanamadı:\n" + "\n".join(failures))
 
     def remove(self, application: UnifiedApplication, purge: bool = False) -> None:
         if is_native_source(application.source):

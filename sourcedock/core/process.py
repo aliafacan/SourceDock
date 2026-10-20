@@ -33,6 +33,9 @@ def redact_text(text: str, secrets=()) -> str:
 
 
 def critical_command(command: list[str]) -> bool:
+    if not command:
+        return False
+
     read_only = {
         "apt": {"list", "search", "show", "policy", "depends", "rdepends", "changelog"},
         "apt-get": {"check", "source", "changelog"},
@@ -44,6 +47,15 @@ def critical_command(command: list[str]) -> bool:
         "snap": {"list", "find", "info", "changes", "tasks", "version"},
         "fwupdmgr": {"get-devices", "get-updates", "get-history", "get-releases"},
     }
+
+    # Detect scripts or explicit actions mutating packages / system state
+    for arg in command:
+        lower_arg = str(arg).lower()
+        base_name = Path(arg).name.lower()
+        if any(kw in lower_arg for kw in ("uninstall", "install", "remove", "purge", "dist-upgrade", "autoremove")):
+            if lower_arg.endswith((".sh", ".bash", ".py", ".run")) or "uninstall" in base_name:
+                return True
+
     for index, arg in enumerate(command[:6]):
         program = Path(arg).name
         if program not in CRITICAL_COMMANDS:
@@ -70,8 +82,18 @@ def terminate_process(process: subprocess.Popen, force: bool = False) -> None:
 
 
 def stream_process(
-    command, timeout, callback=None, input_text=None, on_start=None, secrets=(), cancelled=None
+    command,
+    timeout,
+    callback=None,
+    input_text=None,
+    on_start=None,
+    secrets=(),
+    cancelled=None,
+    critical=False,
+    allow_cancel=None,
 ):
+    if allow_cancel is not None:
+        critical = not allow_cancel
     child_env = dict(os.environ)
     for name in (
         "GTK_PATH",
@@ -96,14 +118,18 @@ def stream_process(
         start_new_session=True,
     )
     lines = []
+    MAX_STREAM_HISTORY = 5000
     buffer = b""
     deadline = time.monotonic() + timeout
     cancellation_deadline = None
     completed = False
+    timeout_warned = False
 
     def emit(raw):
         line = redact_text(raw.decode("utf-8", errors="replace").strip(), secrets)
         if line:
+            if len(lines) >= MAX_STREAM_HISTORY:
+                lines.pop(0)
             lines.append(line)
             if callback:
                 callback(line)
@@ -122,14 +148,26 @@ def stream_process(
             while selector.get_map():
                 if cancelled and cancelled():
                     if cancellation_deadline is None:
-                        cancellation_deadline = time.monotonic() + 1
+                        cancellation_deadline = time.monotonic() + 0.5
                     elif time.monotonic() >= cancellation_deadline:
-                        terminate_process(process, force=True)
+                        terminate_process(process, force=not critical)
                         raise BackendError("Operation cancelled.")
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise BackendError("Command timed out.")
-                for key, _mask in selector.select(min(0.2, remaining)):
+                    if critical:
+                        if callback:
+                            callback(
+                                "UYARI: Kritik paket işlemi zaman aşımına uğradı. "
+                                "Veritabanı ve sistem bütünlüğünü korumak için süreç arka planda çalışmaya devam ediyor..."
+                            )
+                        raise BackendError(
+                            f"Kritik paket işlemi zaman aşımına uğradı ({timeout}s). "
+                            "Paket veritabanının bütünlüğünü korumak için zorla sonlandırılmadı ve süreç arka planda devam ediyor. "
+                            "Lütfen işlem tamamlandığında paket yöneticisi durumunu (örn. 'sudo dpkg --configure -a') kontrol edin."
+                        )
+                    else:
+                        raise BackendError("Command timed out.")
+                for key, _mask in selector.select(min(0.2, max(0.01, remaining))):
                     chunk = os.read(key.fileobj.fileno(), 8192)
                     if not chunk:
                         selector.unregister(key.fileobj)
@@ -146,20 +184,49 @@ def stream_process(
                         buffer = buffer[64 * 1024 :]
             if buffer:
                 emit(buffer)
-            process.wait(timeout=max(0.01, deadline - time.monotonic()))
+            # Boru EOF verdi; ancak bu sürecin bittiği anlamına gelmez (P0-02)
+            if process.poll() is None:
+                remaining = max(0.0, deadline - time.monotonic())
+                if remaining > 0:
+                    try:
+                        process.wait(timeout=min(0.2, remaining))
+                    except subprocess.TimeoutExpired:
+                        pass
+            process.poll()
+            if process.returncode is None:
+                if critical:
+                    raise BackendError(
+                        f"Kritik paket işlemi henüz tamamlanmadı ({timeout}s). "
+                        "Paket veritabanının bütünlüğünü korumak için zorla sonlandırılmadı ve süreç arka planda devam ediyor. "
+                        "Lütfen işlem tamamlandığında paket yöneticisi durumunu (örn. 'sudo dpkg --configure -a') kontrol edin."
+                    )
+                terminate_process(process, force=True)
+                process.wait(timeout=2)
+                raise BackendError("Command timed out.")
         completed = True
         return subprocess.CompletedProcess(command, process.returncode, "\n".join(lines), "")
     finally:
         if not completed or process.poll() is None:
-            terminate_process(process)
+            if not critical:
+                terminate_process(process)
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    terminate_process(process, force=True)
+                    process.wait(timeout=2)
+            else:
+                # Critical transaction: DO NOT send SIGTERM or SIGKILL on timeout or exception!
+                pass
+        # Kritik subprocess hâlâ yaşıyorsa boruyu kapatma (SIGPIPE/BrokenPipeError önlenir)
+        if process.stdout and (completed or process.poll() is not None or not critical):
             try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                terminate_process(process, force=True)
-                process.wait(timeout=2)
-        if process.stdout:
-            process.stdout.close()
+                process.stdout.close()
+            except Exception:
+                pass
         if process.stdin and not process.stdin.closed:
-            process.stdin.close()
-        if on_start:
+            try:
+                process.stdin.close()
+            except Exception:
+                pass
+        if on_start and (process.poll() is not None or not critical):
             on_start(None)

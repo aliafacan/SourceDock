@@ -191,6 +191,7 @@ class TestRegistryFirmwareDispatch(unittest.TestCase):
     def test_registry_update_all_firmware(self):
         runner = MagicMock(spec=CommandRunner)
         runner.command_exists.return_value = True
+        runner.run.return_value = subprocess.CompletedProcess(args=["fwupdmgr"], returncode=0, stdout="", stderr="")
         registry = ApplicationRegistry(runner=runner)
 
         apps = [
@@ -203,7 +204,15 @@ class TestRegistryFirmwareDispatch(unittest.TestCase):
             )
         ]
 
-        registry.update_all(apps)
+        # Selected firmware update must be targeted to the specific device ID
+        registry.update_all(apps, whole_system=False)
+        runner.run.assert_any_call(["fwupdmgr", "update", "-y", "fw-dev-1"], timeout=3600, check=False)
+        self.assertNotIn(unittest.mock.call(["fwupdmgr", "update", "-y"], timeout=3600, check=False), runner.run.call_args_list)
+
+        # Whole system firmware update performs global update
+        runner.run.reset_mock()
+        runner.run.return_value = subprocess.CompletedProcess(args=["fwupdmgr"], returncode=0, stdout="", stderr="")
+        registry.update_all(apps, whole_system=True)
         runner.run.assert_any_call(["fwupdmgr", "update", "-y"], timeout=3600, check=False)
 
 

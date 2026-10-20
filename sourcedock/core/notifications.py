@@ -33,7 +33,7 @@ def send_desktop_notification(
             return False
         try:
             res = runner.run(args, timeout=5)
-            return getattr(res, "exit_code", 1) == 0
+            return getattr(res, "returncode", getattr(res, "exit_code", 1)) == 0
         except Exception:
             return False
 

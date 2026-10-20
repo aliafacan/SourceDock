@@ -227,9 +227,9 @@ class AdvancedViewMixin:
                 continue
             add_diag.destroy()
 
-            def add_worker():
+            def add_worker(target_name: str, target_url: str) -> None:
                 ok, err = add_flatpak_remote(
-                    self.application_registry.runner, remote_name, remote_url, user=True
+                    self.application_registry.runner, target_name, target_url, user=True
                 )
                 if ok:
                     GLib.idle_add(on_success)
@@ -238,7 +238,7 @@ class AdvancedViewMixin:
                 elif hasattr(self, "show_toast"):
                     GLib.idle_add(self.show_toast, err or t(lang, "sources_error"), "error")
 
-            threading.Thread(target=add_worker, daemon=True).start()
+            threading.Thread(target=add_worker, args=(remote_name, remote_url), daemon=True).start()
             break
 
 

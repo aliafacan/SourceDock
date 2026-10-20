@@ -483,11 +483,16 @@ class OperationProgressWindow(Gtk.Window):
             GLib.timeout_add(2000, self._auto_close)
 
     def _on_cancel_clicked(self, _button=None) -> None:
-        if getattr(self, "_cancel_btn", None) is not None:
-            self._cancel_btn.set_sensitive(False)
-            self._cancel_btn.set_label(t(self.language, "progress_cancelling"))
         if self._cancel_fn:
-            self._cancel_fn()
+            ok = self._cancel_fn()
+            if ok:
+                if getattr(self, "_cancel_btn", None) is not None:
+                    self._cancel_btn.set_sensitive(False)
+                    self._cancel_btn.set_label(t(self.language, "progress_cancelling"))
+            else:
+                if getattr(self, "_cancel_btn", None) is not None:
+                    self._cancel_btn.set_sensitive(False)
+                self._status_label.set_text(t(self.language, "cancel_critical"))
 
     def _auto_close(self) -> bool:
         if self._done:

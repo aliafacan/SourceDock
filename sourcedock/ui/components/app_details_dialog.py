@@ -8,6 +8,7 @@ from configparser import ConfigParser
 import os
 from pathlib import Path
 import threading
+import time
 
 import gi
 
@@ -116,6 +117,8 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         self._removal_operation = removal_operation
         self._action_busy = False
         self._destroyed = False
+        self._cached_sudo_password: str | None = None
+        self._cached_sudo_timestamp: float = 0.0
 
         self.connect("destroy", self._on_destroy)
         self.connect("delete-event", self._on_delete_event)
@@ -126,6 +129,39 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         self._destroyed = True
         if self.standalone and not self._action_busy:
             Gtk.main_quit()
+
+    def get_cached_sudo_password(self) -> str | None:
+        parent_win = self.get_transient_for()
+        if parent_win and hasattr(parent_win, "get_cached_sudo_password"):
+            return parent_win.get_cached_sudo_password()
+        if getattr(self, "_destroyed", False):
+            self.clear_cached_sudo_password()
+            return None
+        pwd = getattr(self, "_cached_sudo_password", None)
+        if not pwd:
+            return None
+        timestamp = getattr(self, "_cached_sudo_timestamp", 0.0)
+        if not timestamp or time.monotonic() - timestamp > 900:
+            self.clear_cached_sudo_password()
+            return None
+        return pwd
+
+    def set_cached_sudo_password(self, password: str | None) -> None:
+        parent_win = self.get_transient_for()
+        if parent_win and hasattr(parent_win, "set_cached_sudo_password"):
+            parent_win.set_cached_sudo_password(password)
+            return
+        self._cached_sudo_password = password
+        self._cached_sudo_timestamp = time.monotonic() if password else 0.0
+
+    def clear_cached_sudo_password(self) -> None:
+        parent_win = self.get_transient_for()
+        if parent_win and hasattr(parent_win, "clear_cached_sudo_password"):
+            parent_win.clear_cached_sudo_password()
+        self._cached_sudo_password = None
+        self._cached_sudo_timestamp = 0.0
+        if hasattr(self, "registry") and hasattr(self.registry, "runner"):
+            self.registry.runner.clear_sudo_password()
 
     def _on_delete_event(self, _widget, _event) -> bool:
         if self._action_busy:
@@ -482,26 +518,40 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             return
         self._action_busy = True
         self._action_bar.set_sensitive(False)
+        op_id = f"op_detail_{id(self)}_{int(time.monotonic() * 1000)}"
+        cancel_action = (
+            (lambda: self.registry.cancel_current(target=op_id))
+            if hasattr(self.registry, "cancel_current")
+            else (lambda: self.registry.runner.cancel_current(target=op_id))
+        )
         progress = OperationProgressWindow(
             title=t(self.language, f"details_btn_{action}"),
             message=self.application.name,
             parent=self,
             language=self.language,
-            cancel_fn=self.registry.runner.cancel_current,
+            cancel_fn=cancel_action,
         )
 
-        parent_win = self.get_transient_for()
-        cached = getattr(self, "_cached_sudo_password", None) or getattr(parent_win, "_cached_sudo_password", None)
+        def get_auth_pwd():
+            return self.get_cached_sudo_password()
+
+        def set_auth_pwd(pwd):
+            self.set_cached_sudo_password(pwd)
+
+        def clear_auth_pwd():
+            self.clear_cached_sudo_password()
+
+        cached = get_auth_pwd()
         if cached:
             self.registry.set_sudo_password(cached)
 
         def finish(error):
+            if not self._action_busy:
+                return False
             if isinstance(error, AuthRequiredError) and not self._destroyed:
                 if error.password_failed:
-                    self._cached_sudo_password = None
-                    if hasattr(parent_win, "_cached_sudo_password"):
-                        parent_win._cached_sudo_password = None
-                cached_now = getattr(self, "_cached_sudo_password", None) or getattr(parent_win, "_cached_sudo_password", None)
+                    clear_auth_pwd()
+                cached_now = get_auth_pwd()
                 if cached_now and not error.password_failed:
                     self.registry.set_sudo_password(cached_now)
                     start_worker()
@@ -511,12 +561,11 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
                     message_key="applications_password_message", retry_key="applications_password_retry",
                 )
                 if password is not None:
-                    self._cached_sudo_password = password
-                    if hasattr(parent_win, "_cached_sudo_password"):
-                        parent_win._cached_sudo_password = password
+                    set_auth_pwd(password)
                     self.registry.set_sudo_password(password)
                     start_worker()
                     return False
+                clear_auth_pwd()
                 message = t(self.language, "status_cancelled")
             elif error is not None:
                 message = str(error)
@@ -543,20 +592,65 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
 
         def worker():
             error = None
+            if hasattr(self.registry, "bind_thread_op"):
+                self.registry.bind_thread_op(op_id)
+            elif hasattr(self.registry.runner, "bind_thread_op"):
+                self.registry.runner.bind_thread_op(op_id)
+            should_finish_now = True
             try:
                 operation()
             except Exception as exc:
-                error = exc
+                orig_exc = exc
+                runner = getattr(self.registry, "runner", None)
+                ctx = runner.get_operation_context(op_id) if runner and hasattr(runner, "get_operation_context") else None
+                if ctx and getattr(ctx, "lingering", False) is True:
+                    def _log_lingering():
+                        progress.append_log("İşlem arka planda güvenle tamamlanması bekleniyor...")
+                        return False
+                    GLib.idle_add(_log_lingering)
+                    wait_timeout = getattr(runner, "_lingering_wait_timeout", 1800)
+                    completed = ctx.completed_event.wait(timeout=wait_timeout)
+                    if completed:
+                        if ctx.returncode == 0:
+                            error = None
+                        else:
+                            error = orig_exc
+                    else:
+                        should_finish_now = False
+                        def _log_still_running():
+                            progress.append_log("İşlem arka planda güvenle devam ediyor...")
+                            return False
+                        GLib.idle_add(_log_still_running)
+
+                        def _watch_lingering():
+                            ctx.completed_event.wait()
+                            self.registry.runner.set_output_callback(None, op_id=op_id)
+                            self.registry.runner.clear_sudo_password()
+                            final_err = None if ctx.returncode == 0 else orig_exc
+                            GLib.idle_add(lambda: (finish(final_err), False)[1])
+
+                        threading.Thread(target=_watch_lingering, daemon=True, name=f"watch-{op_id}").start()
+                else:
+                    error = orig_exc
             finally:
-                self.registry.runner.set_output_callback(None)
-                self.registry.runner.clear_sudo_password()
-            GLib.idle_add(finish, error)
+                if hasattr(self.registry, "unbind_thread_op"):
+                    self.registry.unbind_thread_op(op_id)
+                elif hasattr(self.registry.runner, "unbind_thread_op"):
+                    self.registry.runner.unbind_thread_op(op_id)
+                if should_finish_now:
+                    self.registry.runner.set_output_callback(None, op_id=op_id)
+                    self.registry.runner.clear_sudo_password()
+            if should_finish_now:
+                GLib.idle_add(lambda: (finish(error), False)[1])
 
         def start_worker():
-            cached_now = getattr(self, "_cached_sudo_password", None) or getattr(parent_win, "_cached_sudo_password", None)
+            cached_now = get_auth_pwd()
             if cached_now and not getattr(self.registry.runner, "_sudo_password", None):
                 self.registry.set_sudo_password(cached_now)
-            self.registry.runner.set_output_callback(lambda line: GLib.idle_add(progress.append_log, line))
+            self.registry.runner.set_output_callback(
+                lambda line: GLib.idle_add(progress.append_log, line),
+                op_id=op_id,
+            )
             self._action_thread = threading.Thread(target=worker, name="sourcedock-detail-action", daemon=True)
             self._action_thread.start()
 
