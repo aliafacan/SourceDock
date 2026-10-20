@@ -94,7 +94,7 @@ For detailed environment test breakdowns and architectural boundaries, see [docs
 
 ## Limitations & Security
 
-- **Do Not Run as Root**: SourceDock should always be launched from a regular user desktop session. Privileged package actions request authorization on demand via Polkit (`pkexec`).
+- **Do Not Run as Root**: SourceDock should always be launched from a regular user desktop session. Privileged package operations (APT/system actions) request authorization using `sudo` with secure in-memory caching and a strict 15-minute TTL.
 - **Optional Tools**: Flatpak, Snap, and fwupd integrations are strictly optional. If not installed on the host, their sections remain inactive without error.
 - **Hardware Firmware**: Firmware devices are inspected in read-only mode via `fwupd`; automated hardware flashing is never initiated.
 - **GNOME Shell Extension**: The optional right-click extension (`sourcedock-menu@aliafacan.dev`) targets modern GNOME Shell (46+) AppMenu APIs.
@@ -120,7 +120,7 @@ python3 main.py /path/to/package.deb
 ### Running the Test Suite
 The full guarded test suite (281 tests) runs headless under an Xvfb display and Openbox window manager:
 ```bash
-xvfb-run -a /usr/bin/python3 tools/run_tests.py --require-wm
+xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```
 
 ### Building the Debian Package
