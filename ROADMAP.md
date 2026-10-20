@@ -37,7 +37,7 @@
 ## 🏗️ Aşama 2: Modüler Mimari & Markalama (SourceDock)
 - [x] **2.1. Kod Bölme (Clean Architecture)**
   - 3764 satırlık devasa `ui.py` ve 1402 satırlık `applications.py` paketlere bölündü (`sourcedock/core/`, `sourcedock/backend/`, `sourcedock/store/`, `sourcedock/ui/views/`, `sourcedock/ui/components/`).
-  - `main.py`Giriş noktası  sadeleştirildi ve Snap ortam sızıntılarını önleyen temizleme mantığı eklendi.
+  - Giriş noktası (`main.py`) sadeleştirildi ve Snap ortam sızıntılarını önleyen ortam temizleme mantığı eklendi.
 - [x] **2.2. Yeniden Markalama & Logo**
   - Kaynak düğümlerini tek bir dock üzerinde birleştiren özgün vektörel logo (`assets/sourcedock.svg`, PNG türevleri) oluşturuldu ve pencere ikonu olarak bağlandı.
   - GPL-3.0 Lisansı ve çift dilli `README.md` hazırlandı, GitHub reposuna pushlandı.

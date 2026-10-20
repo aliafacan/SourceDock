@@ -94,7 +94,7 @@ Ayrıntılı ortam testleri ve mimari sınırlar için [docs/COMPATIBILITY.md](d
 
 ## Sınırlar ve Güvenlik
 
-- **Root Olarak Çalıştırmayın**: SourceDock daima normal kullanıcı oturumundan açılmalıdır. Yetki gerektiren paket işlemlerinde Polkit (`pkexec`) üzerinden izin istenir.
+- **Root Olarak Çalıştırmayın**: SourceDock daima normal kullanıcı oturumundan açılmalıdır. Yetki gerektiren paket işlemlerinde (APT/sistem eylemleri) bellek içi önbelleğe ve 15 dakikalık TTL sınırına sahip `sudo` üzerinden güvenli yetkilendirme istenir.
 - **İsteğe Bağlı Araçlar**: Flatpak, Snap ve fwupd entegrasyonları tamamen isteğe bağlıdır; sistemde bulunmadıklarında hata vermeksizin devre dışı kalırlar.
 - **Donanım Yazılımı**: Firmware cihazları salt okunur olarak incelenir; otomatik donanım yazımı asla başlatılmaz.
 - **GNOME Shell Eklentisi**: İsteğe bağlı sağ tık menü eklentisi (`sourcedock-menu@aliafacan.dev`) modern GNOME Shell (46+) AppMenu API'lerini hedefler.
@@ -120,7 +120,7 @@ python3 main.py /dosya/yolu/paket.deb
 ### Test Takımını Çalıştırma
 Korumalı tam test takımı (281 test), Xvfb ekranı ve Openbox pencere yöneticisi altında çalıştırılır:
 ```bash
-xvfb-run -a /usr/bin/python3 tools/run_tests.py --require-wm
+xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```
 
 ### Debian Paketini Derleme
