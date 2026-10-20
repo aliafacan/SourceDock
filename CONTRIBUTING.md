@@ -74,7 +74,7 @@ sourcedock/
 ## 🌍 2. Çift Dilli Yerelleştirme (i18n) Zorunluluğu
 
 Kullanıcı arayüzünde görünen **hiçbir metin koda doğrudan (hardcoded) yazılmamalıdır**.
-- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) hem `tr` hem de `en` dillerinde [`sourcedock/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/sourcedock/i18n.py) dosyasına eklenmelidir.
+- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) hem `tr` hem de `en` dillerinde [`sourcedock/i18n.py`](sourcedock/i18n.py) dosyasına eklenmelidir.
 - Arayüzde `t(lang, "anahtar_adi")` fonksiyonu kullanılmalıdır.
 - Ayarlar penceresinden dil değiştirildiğinde arayüzün anında güncellenebilmesi için dinamik yenileme (`_refresh_texts`) metoduna dahil edilmelidir.
 
@@ -217,7 +217,7 @@ sourcedock/
 ## 🌍 2. Bilingual Localization (i18n) Requirement
 
 **Zero Hardcoded Strings:**
-- Every new label, button text, error message, or tooltip must be defined in both `en` and `tr` within [`sourcedock/i18n.py`](file:///home/ali/Desktop/projeler/zorin/app_manager/sourcedock/i18n.py).
+- Every new label, button text, error message, or tooltip must be defined in both `en` and `tr` within [`sourcedock/i18n.py`](sourcedock/i18n.py).
 - Use `t(lang, "key_name")` in UI components.
 - Ensure all text elements are registered in `_refresh_texts()` so language changes apply instantly without requiring an application restart.
 

@@ -1,5 +1,8 @@
 # SourceDock 1.3.0 | V9 Kabul Ortami Hazirlik Plani
 
+> [!NOTE]
+> **Tarihî Çalışma Raporu / Historical Report (16.10.2026):** Bu belge ilk V9 ortam hazırlık planını kaydeder. Güncel 1.3.0 sürüm durumu için [README.md](../README.md) ve [COMPATIBILITY.md](COMPATIBILITY.md) belgelerine bakınız.
+
 > Bu belge ilk V9 ortam koşusunu kaydeder. 16 Ekim takip çalışmasında X11
 > boyutlandırma aracındaki CSD kenarlık hatası düzeltildi; güncel ölçümler,
 > kaynak timeout'ları ve kalan işler [çalışma raporunda](ROADMAP_COMPLETION_REPORT.md).

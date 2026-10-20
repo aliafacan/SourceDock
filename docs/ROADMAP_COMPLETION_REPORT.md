@@ -1,5 +1,8 @@
 # SourceDock Roadmap Follow-Up
 
+> [!NOTE]
+> **Historical Report (2026-10-16):** This document records an earlier roadmap follow-up checkpoint. For current 1.3.0 release status, see [README.md](../README.md) and [COMPATIBILITY.md](COMPATIBILITY.md).
+
 Date: 2026-10-16. Source version: 1.3.0. Scope: the current dirty working tree,
 not the remote GitHub revision. Existing local changes and historical screenshots
 were preserved. No commit, push, tag, release, host package transaction or firmware
@@ -12,7 +15,7 @@ GNOME oturumu ve uzak CI kabulu tamamlanmadigi icin yayin hazirligi kanitlanmis 
 
 ## Checklist Accounting
 
-`SOURCEDOCK_CODEX_ROADMAP_UI.md` is now the task-by-task status source:
+`archive/archive/SOURCEDOCK_CODEX_ROADMAP_UI.md` is now the task-by-task status source:
 
 - 113 checked entries: 109 from the initial pass and four in the continuation.
 - 54 unchecked entries, each with a specific partial, open, blocked or untested note.
@@ -129,7 +132,7 @@ Files changed in this continuation (other pre-existing dirty files were preserve
 - `main.py`, `sourcedock/ui/components/app_details_dialog.py`, `sourcedock/ui/components/progress.py`
 - `sourcedock/core/icons.py`, `tools/test_guard.py`, `tools/run_tests.py`, `tools/ui_performance.py`
 - `tests/test_host_guard.py`, `tests/test_standalone_actions.py`, `tests/test_sources_and_icons.py`
-- `README.md`, `CONTRIBUTING.md`, `tests/README.md`, `SOURCEDOCK_CODEX_ROADMAP_UI.md`, this report
+- `README.md`, `CONTRIBUTING.md`, `tests/README.md`, `archive/archive/SOURCEDOCK_CODEX_ROADMAP_UI.md`, this report
 
 Evidence root: `/tmp/sourcedock-roadmap-followup-20261016/`.
 `final-tests.log` is the complete guarded run; `performance-final/*.json` and
@@ -285,7 +288,7 @@ SOURCEDOCK_TEST_PACKAGE=/tmp/sourcedock-roadmap-20261016/delivery-package/source
 This list excludes unrelated pre-existing dirty files and screenshots:
 
 ```text
-SOURCEDOCK_CODEX_ROADMAP_UI.md
+archive/SOURCEDOCK_CODEX_ROADMAP_UI.md
 .github/workflows/ci.yml
 .github/workflows/release.yml
 THIRD_PARTY_NOTICES.md
