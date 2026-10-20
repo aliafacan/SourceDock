@@ -14,13 +14,9 @@
 - **Exception Scoping**: Resolved Python 3 exception variable unbinding across installer and store views.
 
 ### Packaging, Branding & Compatibility
-- **SourceDock Rebrand**: Full rename of the application, repository, desktop metadata, icons, and package from VoltApp to SourceDock.
-- **Backward Compatibility**: Seamless upgrade path via Debian control directives (`Replaces: voltapp`, `Breaks: voltapp (<< 1.3.0)`, `Provides: voltapp`), retaining `voltapp` CLI alias and preserving user settings.
-- **System Verification**: Verified on Zorin OS (real host installation, UI navigation, and `apt` install/remove test lifecycle) and GitHub Actions (Ubuntu 22.04 & 24.04 with 281 tests passing under Xvfb/Openbox).
-
-- Rename the public application, repository content, desktop identity, icon name and Debian package to SourceDock.
-- Keep `voltapp` as a compatibility command and MIME desktop alias during the migration release.
-- Migrate preferences and portable/history data paths without discarding existing VoltApp data.
+- **SourceDock Rebrand**: Full rename of the application, repository, desktop metadata, icons, and Debian package from VoltApp to SourceDock.
+- **Backward Compatibility**: Seamless upgrade path via Debian control directives (`Replaces: voltapp`, `Breaks: voltapp (<< 1.3.0)`, `Provides: voltapp`), retaining `voltapp` CLI alias and preserving user settings. (Note: End-to-end upgrade verification from an existing VoltApp installation remains pending disposable VM testing).
+- **System Verification**: Verified on Zorin OS 18.1 (real host installation, UI navigation, and `apt` install/remove test lifecycle) and GitHub Actions (Ubuntu 22.04 & 24.04 with 281 tests passing under Xvfb/Openbox).
 
 ## 1.2.0 - 2026-10-14 (Prepared Locally)
 
