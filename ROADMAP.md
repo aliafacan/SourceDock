@@ -14,6 +14,8 @@
 | **Aşama 4** | Yeni Paket Formatları (.deb, .AppImage, .tar.gz, vb.) | ✅ Tamamlandı |
 | **Aşama 5** | Dağıtımdan Bağımsız (Distro-Agnostic) Mimari | ✅ Tamamlandı |
 | **Aşama 6** | Açık Kaynak Hazırlığı & Paketleme (.deb, CI/CD, Docs) | ✅ Tamamlandı |
+| **Aşama 7** | Güvenlik, İşlem Kilitleri ve Kararlılık (1.3.0 RC1) | ✅ Tamamlandı |
+| **Aşama 8** | Genişletilmiş Dağıtım ve Masaüstü Entegrasyonu | 📋 Planlandı |
 
 ---
 
@@ -35,7 +37,7 @@
 ## 🏗️ Aşama 2: Modüler Mimari & Markalama (SourceDock)
 - [x] **2.1. Kod Bölme (Clean Architecture)**
   - 3764 satırlık devasa `ui.py` ve 1402 satırlık `applications.py` paketlere bölündü (`sourcedock/core/`, `sourcedock/backend/`, `sourcedock/store/`, `sourcedock/ui/views/`, `sourcedock/ui/components/`).
-  - `main.py` 26 satıra indirildi; kök dosyalar geriye dönük uyumlu re-exporter haline getirildi.
+  - `main.py`Giriş noktası  sadeleştirildi ve Snap ortam sızıntılarını önleyen temizleme mantığı eklendi.
 - [x] **2.2. Yeniden Markalama & Logo**
   - Kaynak düğümlerini tek bir dock üzerinde birleştiren özgün vektörel logo (`assets/sourcedock.svg`, PNG türevleri) oluşturuldu ve pencere ikonu olarak bağlandı.
   - GPL-3.0 Lisansı ve çift dilli `README.md` hazırlandı, GitHub reposuna pushlandı.
@@ -98,8 +100,33 @@
   - `.github/pull_request_template.md`.
 - [x] **6.2. Otomasyon & CI/CD**
   - Tek komutla global sistem kurulumu için `install.sh` ve `uninstall.sh`.
-  - GitHub Actions CI (`.github/workflows/ci.yml`: syntax, Python 3.10/3.11/3.12 matrisi, Xvfb altında unittest çalıştırma ve paketleme doğrulaması).
+  - GitHub Actions CI (`.github/workflows/ci.yml`: syntax, Ubuntu 22.04 ve 24.04 matrisi, Xvfb altında unittest çalıştırma ve paketleme doğrulaması).
 - [x] **6.3. SourceDock `.deb` Paketi & Dağıtımı**
-  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`sourcedock_1.1.0_all.deb`) inşası.
+  - Modernize edilmiş `packaging/build_deb.sh` ile tek komutla standart Debian paketi (`sourcedock_1.3.0_all.deb`) inşası.
   - Bağımsız masaüstü başlatıcı (`sourcedock.desktop`), masaüstü sağ tık eylemleri (Desktop Actions: Ayrıntılar, Kaldır, Güncellemeler), uygulama detay sayfası (`InstalledAppDetailsDialog`), tam ikon setleri ve MIME ilişkilendirmeleri.
 
+
+---
+
+## 🔒 Aşama 7: Güvenlik, İşlem Kilitleri ve Kararlılık (1.3.0 RC1)
+- [x] **7.1. Boru Hattı Kilitlenmesi (Pipe Deadlock) Koruması**
+  - `sourcedock/core/runner.py` içinde stderr-only ve uzun süren süreçlerde non-blocking `select.select` I/O mekanizması kurularak pipe kilitlenmeleri tamamen engellendi.
+- [x] **7.2. Süreç Çıkış Kodu Senkronizasyonu**
+  - Akışlı süreçlerde çıkış kodunun erken 0 sayılması önlenerek gerçek `returncode` doğrulaması sağlandı.
+- [x] **7.3. Cross-Runner Kilit Koordinasyonu**
+  - Farklı `CommandRunner` örnekleri ve eşzamanlı süreçler arasında çakışmayı önlemek için dosya tabanlı kilit (`flock`) ve işlem bazlı mutex eklendi.
+- [x] **7.4. UI Yaşam Döngüsü ve Callback Güvenliği**
+  - Uzun süren işlemlerde log akışının diyaloglara kesintisiz aktarımı sağlandı.
+  - Gecikmiş `GLib.idle_add` sinyallerinde çifte `finish()` ve kapanmış widget erişimleri koruma altına alındı.
+- [x] **7.5. Kapsamlı Test ve Doğrulama**
+  - 281 birim testinin tamamı Xvfb/Openbox altında başarıyla doğrulandı; X11 1024x768 ve 1366x768 çift çözünürlük kabul testleri tamamlandı.
+
+---
+
+## 🔮 Aşama 8: Gelecek Planları (Gelecek Sürümler)
+- [ ] **8.1. Genişletilmiş Masaüstü Eklentisi**
+  - GNOME Shell 46+ AppMenu eklentisinin farklı masaüstü kabukları ve sürümleri için genişletilmesi.
+- [ ] **8.2. Alternatif Yerel Paketleme**
+  - Fedora/RHEL için bağımsız `.rpm` ve Arch Linux için PKGBUILD paketleme altyapısının hazırlanması.
+- [ ] **8.3. Çevrimdışı Metaveri Önbelleği**
+  - Düşük bant genişliğinde daha hızlı mağaza gezinmesi için yerel AppStream katalog önbelleğinin optimize edilmesi.

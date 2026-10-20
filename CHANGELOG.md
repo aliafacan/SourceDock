@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.3.0 - 2026-10-14 (SourceDock Rebrand)
+## 1.3.0 (Release Candidate 1) - Unreleased
+
+### Security & Transaction Stability
+- **Non-blocking Pipe I/O**: Resolved potential background stream pipe deadlocks using `select.select` for interleaved stdout/stderr draining.
+- **Accurate Exit Status**: Prevented streaming operations from prematurely registering a success code (`0`) on abrupt process termination.
+- **Cross-Runner Concurrency Coordination**: Enforced file-level locking (`flock`) across distinct `CommandRunner` instances alongside global transaction mutexes to prevent race conditions during native package manager operations.
+- **Credential Lifecycle & Redaction**: Strict in-memory credential caching with 15-minute TTL and automatic sanitization of passwords and user home paths in error output and operation logs.
+
+### UI Lifecycle & Responsiveness
+- **Lingering Process Log Streaming**: Maintained stdout/stderr streaming to open dialogs during extended or lingering background draining.
+- **Delayed Callback Guards**: Protected GTK window closing against delayed `GLib.idle_add` invocations, preventing duplicate finish notifications or calls on destroyed widgets.
+- **Exception Scoping**: Resolved Python 3 exception variable unbinding across installer and store views.
+
+### Packaging, Branding & Compatibility
+- **SourceDock Rebrand**: Full rename of the application, repository, desktop metadata, icons, and package from VoltApp to SourceDock.
+- **Backward Compatibility**: Seamless upgrade path via Debian control directives (`Replaces: voltapp`, `Breaks: voltapp (<< 1.3.0)`, `Provides: voltapp`), retaining `voltapp` CLI alias and preserving user settings.
+- **System Verification**: Verified on Zorin OS (real host installation, UI navigation, and `apt` install/remove test lifecycle) and GitHub Actions (Ubuntu 22.04 & 24.04 with 281 tests passing under Xvfb/Openbox).
 
 - Rename the public application, repository content, desktop identity, icon name and Debian package to SourceDock.
 - Keep `voltapp` as a compatibility command and MIME desktop alias during the migration release.

@@ -154,10 +154,16 @@ def add_flatpak_remote(runner, name: str, url: str, user: bool = True) -> tuple[
         cmd.append("--system")
     cmd.extend([clean_name, clean_url])
 
-    result = runner.run(cmd, timeout=30)
-    if result.exit_code == 0:
+    try:
+        result = runner.run(cmd, timeout=30)
+    except Exception as exc:
+        return False, str(exc)
+
+    returncode = getattr(result, "returncode", getattr(result, "exit_code", 1))
+    if returncode == 0:
         return True, ""
-    return False, result.stderr or result.stdout
+    err = getattr(result, "stderr", "") or getattr(result, "stdout", "") or "Failed to add Flatpak remote"
+    return False, err.strip()
 
 
 def remove_flatpak_remote(runner, name: str, user: bool = True) -> tuple[bool, str]:
@@ -175,8 +181,14 @@ def remove_flatpak_remote(runner, name: str, user: bool = True) -> tuple[bool, s
         cmd.append("--system")
     cmd.append(clean_name)
 
-    result = runner.run(cmd, timeout=30)
-    if result.exit_code == 0:
+    try:
+        result = runner.run(cmd, timeout=30)
+    except Exception as exc:
+        return False, str(exc)
+
+    returncode = getattr(result, "returncode", getattr(result, "exit_code", 1))
+    if returncode == 0:
         return True, ""
-    return False, result.stderr or result.stdout
+    err = getattr(result, "stderr", "") or getattr(result, "stdout", "") or "Failed to remove Flatpak remote"
+    return False, err.strip()
 

@@ -106,9 +106,14 @@ class SettingsViewMixin:
         detailed_table_check.set_active(getattr(self.preferences, "detailed_table_default", True))
         form.attach(detailed_table_check, 0, 6, 2, 1)
 
+        show_technical_check = Gtk.CheckButton(label=t(lang, "settings_show_technical_packages"))
+        show_technical_check.set_tooltip_text(t(lang, "settings_show_technical_packages_desc"))
+        show_technical_check.set_active(getattr(self.preferences, "show_technical_packages", False))
+        form.attach(show_technical_check, 0, 7, 2, 1)
+
         sources_button = Gtk.Button(label=t(lang, "settings_sources"))
         sources_button.connect("clicked", self.on_open_sources)
-        form.attach(sources_button, 0, 7, 2, 1)
+        form.attach(sources_button, 0, 8, 2, 1)
 
         # Sistem Entegrasyonu & Varsayılan Paket Yükleyici
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
@@ -170,12 +175,15 @@ class SettingsViewMixin:
                 check_updates_on_start=updates_check.get_active(),
                 notifications_enabled=notifications_check.get_active(),
                 detailed_table_default=detailed_table_check.get_active(),
+                show_technical_packages=show_technical_check.get_active(),
             )
             self.preferences_store.save(self.preferences)
             self._apply_theme()
             self._refresh_texts()
             if hasattr(self, "applications_table_toggle") and self.applications_table_toggle is not None:
                 self.applications_table_toggle.set_active(self.preferences.detailed_table_default)
+            if hasattr(self, "_update_application_list_ui"):
+                self._update_application_list_ui()
             if hasattr(self, "show_toast"):
                 self.show_toast(t(new_lang, "settings_saved"), level="success")
             button = self.store_filter_buttons.get(self.preferences.preferred_source)

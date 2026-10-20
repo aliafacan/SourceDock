@@ -549,5 +549,79 @@ class TestUiWorkflows(unittest.TestCase):
 
 
 
+    def test_show_technical_packages_setting_toggle(self):
+        """Ayarlardaki 'Teknik kaynak ve çalışma zamanı öğelerini göster' seçeneği
+        masaüstü dosyası olmayan Flatpak/Snap/Firmware öğelerini listeye dahil eder."""
+        from sourcedock.core.models import SOURCE_FLATPAK
+
+        normal_app = UnifiedApplication(
+            id="app.regular",
+            name="Regular App",
+            source=SOURCE_FLATPAK,
+            version="1.0",
+            package_name="app.regular",
+            desktop_file="/usr/share/applications/app.regular.desktop",
+        )
+        technical_pkg = UnifiedApplication(
+            id="org.freedesktop.Platform",
+            name="Freedesktop Platform",
+            source=SOURCE_FLATPAK,
+            version="23.08",
+            package_name="org.freedesktop.Platform",
+            desktop_file="",  # Teknik çalışma zamanı (kısayolu yok)
+        )
+
+        self.window.applications = [normal_app, technical_pkg]
+        self.window.applications_loading = False
+        self.window.application_filter_source = "all"
+        self.window.application_filter_category = "__all__"
+        self.window.application_search_text = ""
+
+        # 1. Varsayılan durum: show_technical_packages=False (teknik öğe gizli)
+        self.window.preferences.show_technical_packages = False
+        self.window._render_applications_list()
+        self.assertEqual(len(self.window.filtered_applications), 1)
+        self.assertEqual(self.window.filtered_applications[0].id, "app.regular")
+        summary_text = self.window.applications_summary_label.get_text()
+        self.assertIn("1/2", summary_text)
+        self.assertIn("1", summary_text)  # 1 teknik kaynak öğesi gizli
+        self.assertIsNotNone(self.window.applications_summary_label.get_tooltip_text())
+
+        # 2. Seçenek aktif edildiğinde: show_technical_packages=True (tüm 2 öğe de gösterilir)
+        self.window.preferences.show_technical_packages = True
+        self.window._render_applications_list()
+        self.assertEqual(len(self.window.filtered_applications), 2)
+        summary_text_all = self.window.applications_summary_label.get_text()
+        self.assertIn("2/2", summary_text_all)
+        self.assertNotIn("gizli", summary_text_all)
+        self.assertNotIn("hidden", summary_text_all)
+
+    def test_action_bars_hidden_when_empty_to_prevent_negative_allocation(self) -> None:
+        """Boş action-bar bileşenlerinin gizlenerek negatif CSS gadget tahsis uyarısını önlediğini doğrular."""
+        # Başlangıçta store_action_bar çocukları görünür olmadığı için bar da gizlidir
+        self.assertFalse(self.window.store_action_bar.get_visible())
+
+        # Yükle butonu veya durum etiketi görünür olduğunda action bar görünür olmalı
+        self.window.store_install_btn.set_visible(True)
+        self.assertTrue(self.window.store_action_bar.get_visible())
+
+        self.window.store_install_btn.set_visible(False)
+        self.assertFalse(self.window.store_action_bar.get_visible())
+
+        self.window.store_status.set_visible(True)
+        self.assertTrue(self.window.store_action_bar.get_visible())
+
+        self.window.store_status.set_visible(False)
+        self.assertFalse(self.window.store_action_bar.get_visible())
+
+        # İşlemler sayfası: iptal butonu gizliyken bar gizli, görünürken görünür olmalı
+        self.assertFalse(self.window.operations_action_bar.get_visible())
+        self.window.operations_cancel_btn.set_visible(True)
+        self.assertTrue(self.window.operations_action_bar.get_visible())
+
+        self.window.operations_cancel_btn.set_visible(False)
+        self.assertFalse(self.window.operations_action_bar.get_visible())
+
+
 if __name__ == "__main__":
     unittest.main()

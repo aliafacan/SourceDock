@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import threading
+import time
 from typing import Callable
 
 import gi
@@ -73,6 +74,7 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         self._pulse_timeout_id: int | None = None
         self._is_installing = False
+        self._current_op_id: str | None = None
 
         self.create_desktop_check: Gtk.CheckButton | None = None
         self.copy_to_apps_check: Gtk.CheckButton | None = None
@@ -446,6 +448,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         if not self.trust_check.get_active() or self._is_installing:
             return
         self._is_installing = True
+        self._current_op_id = f"op_pkg_{id(self)}_{int(time.monotonic() * 1000)}"
 
         # UI durumunu güncelle
         self.preview_container.hide()
@@ -477,8 +480,11 @@ class PackageInstallerDialog(Gtk.Dialog):
         reinstall = self.should_reinstall
         delete_after = self.should_delete_installer
 
-        # Runner çıktı dinleyicisini bağla
-        self.registry.runner.set_output_callback(lambda line: GLib.idle_add(self._append_log, line))
+        # Runner çıktı dinleyicisini izole işlem kimliğiyle bağla (P1-01)
+        self.registry.runner.set_output_callback(
+            lambda line: GLib.idle_add(self._append_log, line),
+            op_id=self._current_op_id,
+        )
 
         threading.Thread(
             target=self._worker_install,
@@ -494,6 +500,19 @@ class PackageInstallerDialog(Gtk.Dialog):
         reinstall: bool,
         delete_after: bool,
     ) -> None:
+        deleted = False
+
+        def _cleanup_file_if_requested() -> bool:
+            if delete_after and os.path.exists(self.info.file_path):
+                try:
+                    os.remove(self.info.file_path)
+                    return True
+                except OSError:
+                    return False
+            return False
+
+        if self._current_op_id:
+            self.registry.runner.bind_thread_op(self._current_op_id)
         try:
             self.registry.install_local_package(
                 info=self.info,
@@ -503,24 +522,57 @@ class PackageInstallerDialog(Gtk.Dialog):
                 reinstall=reinstall,
             )
 
-            deleted = False
-            if delete_after and os.path.exists(self.info.file_path):
-                try:
-                    os.remove(self.info.file_path)
-                    deleted = True
-                except OSError:
-                    deleted = False
-
-            self.registry.runner.set_output_callback(None)
-            GLib.idle_add(self._on_install_success, deleted)
+            deleted = _cleanup_file_if_requested()
+            self.registry.runner.set_output_callback(None, op_id=self._current_op_id)
+            GLib.idle_add(lambda: (self._on_install_success(deleted), False)[1])
 
         except AuthRequiredError as auth_err:
-            self.registry.runner.set_output_callback(None)
-            GLib.idle_add(self._prompt_auth_and_retry, auth_err.password_failed)
+            pwd_failed = auth_err.password_failed
+            self.registry.runner.set_output_callback(None, op_id=self._current_op_id)
+            GLib.idle_add(lambda: (self._prompt_auth_and_retry(pwd_failed), False)[1])
         except Exception as exc:
-            self.registry.runner.set_output_callback(None)
-            GLib.idle_add(self._on_install_failure, str(exc))
+            err_msg = str(exc)
+            runner = getattr(self.registry, "runner", None)
+            ctx = runner.get_operation_context(self._current_op_id) if runner and hasattr(runner, "get_operation_context") else None
+            if ctx and getattr(ctx, "lingering", False) is True:
+                def _log_pkg_lingering():
+                    self.progress_status_label.set_text("İşlem arka planda güvenle tamamlanması bekleniyor...")
+                    return False
+                GLib.idle_add(_log_pkg_lingering)
+
+                def _finalize_pkg(retcode: int | None):
+                    self.registry.runner.set_output_callback(None, op_id=self._current_op_id)
+                    if retcode == 0:
+                        del_ok = _cleanup_file_if_requested()
+                        GLib.idle_add(lambda: (self._on_install_success(del_ok), False)[1])
+                    else:
+                        fail_msg = f"{err_msg} (Kod {retcode})"
+                        GLib.idle_add(lambda: (self._on_install_failure(fail_msg), False)[1])
+
+                wait_timeout = getattr(runner, "_lingering_wait_timeout", 1800)
+                completed = ctx.completed_event.wait(timeout=wait_timeout)
+                if completed:
+                    _finalize_pkg(ctx.returncode)
+                    return
+                else:
+                    def _log_pkg_still_running():
+                        self.progress_status_label.set_text(
+                            "İşlem arka planda güvenle çalışmaya devam ediyor..."
+                        )
+                        return False
+                    GLib.idle_add(_log_pkg_still_running)
+
+                    def _watch_pkg():
+                        ctx.completed_event.wait()
+                        _finalize_pkg(ctx.returncode)
+                    threading.Thread(target=_watch_pkg, daemon=True, name=f"watch-pkg-{self._current_op_id}").start()
+                    return
+
+            self.registry.runner.set_output_callback(None, op_id=self._current_op_id)
+            GLib.idle_add(lambda: (self._on_install_failure(err_msg), False)[1])
         finally:
+            if self._current_op_id:
+                self.registry.runner.unbind_thread_op(self._current_op_id)
             self.registry.runner.clear_sudo_password()
 
     def _on_install_success(self, deleted_file: bool) -> None:
@@ -689,7 +741,12 @@ class PackageInstallerDialog(Gtk.Dialog):
 
     def _on_cancel_clicked(self, _btn: Gtk.Button) -> None:
         if self._is_installing:
-            if not self.registry.runner.cancel_current():
+            cancelled = (
+                self.registry.runner.cancel_current(target=self._current_op_id)
+                if self._current_op_id
+                else self.registry.runner.cancel_current()
+            )
+            if not cancelled:
                 self.progress_status_label.set_text(t(self.language, "cancel_critical"))
             self.cancel_btn.set_sensitive(False)
         else:

@@ -108,8 +108,18 @@ class StoreRegistry:
         self.last_search_metrics: dict[str, object] = {}
         self.last_search_source_states: dict[str, str] = {}
 
-    def cancel_current(self) -> bool:
-        return self._stream_runner.cancel_current()
+    @property
+    def runner(self) -> CommandRunner:
+        return self._stream_runner
+
+    def cancel_current(self, target: str | int | None = None) -> bool:
+        return self._stream_runner.cancel_current(target=target)
+
+    def bind_thread_op(self, op_id: str) -> None:
+        self._stream_runner.bind_thread_op(op_id)
+
+    def unbind_thread_op(self, op_id: str | None = None) -> None:
+        self._stream_runner.unbind_thread_op(op_id)
 
     def set_sudo_password(self, password: str) -> None:
         self._sudo_password = password
@@ -122,8 +132,13 @@ class StoreRegistry:
         if message not in self.provider_errors:
             self.provider_errors.append(message)
 
-    def set_output_callback(self, callback: Callable[[str], None] | None) -> None:
+    def set_output_callback(
+        self,
+        callback: Callable[[str], None] | None,
+        op_id: str | None = None,
+    ) -> None:
         self._output_callback = callback
+        self._stream_runner.set_output_callback(callback, op_id=op_id)
 
     def search(
         self,

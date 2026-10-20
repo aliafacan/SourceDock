@@ -1,5 +1,8 @@
 # Roadmap Implementation Report
 
+> [!NOTE]
+> **Historical Report (2026-10-14):** This document records an earlier implementation status. For current 1.3.0 release status, see [README.md](../README.md) and [COMPATIBILITY.md](COMPATIBILITY.md).
+
 Historical report date: 2026-10-14. For the 2026-10-16 source audit, checklist,
 new fixes and current validation, see [Roadmap Completion Report](ROADMAP_COMPLETION_REPORT.md).
 
