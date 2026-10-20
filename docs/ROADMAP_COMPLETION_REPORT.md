@@ -15,7 +15,7 @@ GNOME oturumu ve uzak CI kabulu tamamlanmadigi icin yayin hazirligi kanitlanmis 
 
 ## Checklist Accounting
 
-`archive/archive/SOURCEDOCK_CODEX_ROADMAP_UI.md` is now the task-by-task status source:
+`archive/SOURCEDOCK_CODEX_ROADMAP_UI.md` is now the task-by-task status source:
 
 - 113 checked entries: 109 from the initial pass and four in the continuation.
 - 54 unchecked entries, each with a specific partial, open, blocked or untested note.
@@ -132,7 +132,7 @@ Files changed in this continuation (other pre-existing dirty files were preserve
 - `main.py`, `sourcedock/ui/components/app_details_dialog.py`, `sourcedock/ui/components/progress.py`
 - `sourcedock/core/icons.py`, `tools/test_guard.py`, `tools/run_tests.py`, `tools/ui_performance.py`
 - `tests/test_host_guard.py`, `tests/test_standalone_actions.py`, `tests/test_sources_and_icons.py`
-- `README.md`, `CONTRIBUTING.md`, `tests/README.md`, `archive/archive/SOURCEDOCK_CODEX_ROADMAP_UI.md`, this report
+- `README.md`, `CONTRIBUTING.md`, `tests/README.md`, `archive/SOURCEDOCK_CODEX_ROADMAP_UI.md`, this report
 
 Evidence root: `/tmp/sourcedock-roadmap-followup-20261016/`.
 `final-tests.log` is the complete guarded run; `performance-final/*.json` and
