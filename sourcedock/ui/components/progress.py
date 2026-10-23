@@ -324,6 +324,11 @@ class OperationProgressWindow(Gtk.Window):
         lowered = clean.lower()
         if not clean or lowered.startswith("warning: apt does not have") or lowered.startswith("n: "):
             return ""
+        # Some privileged helpers can echo sudo's authentication probe while
+        # the actual package transaction continues. Keep that diagnostic in
+        # Details, but do not make the live operation look like a failure.
+        if lowered.startswith("sudo:") and ("password" in lowered or "parola" in lowered):
+            return ""
         if "paket listeleri okunuyor" in lowered or "reading package lists" in lowered:
             return t(self.language, "progress_reading_lists")
         if "bağımlılık ağacı" in lowered or "building dependency tree" in lowered:

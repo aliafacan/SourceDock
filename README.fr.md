@@ -18,7 +18,7 @@ SourceDock réunit la recherche, l’installation, la mise à jour et la suppres
 
 ## Captures d’écran
 
-Les images suivantes montrent l’interface actuelle de la version 1.4.5 en français :
+Les images suivantes montrent l’interface actuelle de la version 1.4.6 en français :
 
 ![Applications installées](docs/screenshots/installed-dark-fr-100-1366x768.png)
 ![Boutique et découverte](docs/screenshots/discover-light-fr-100-1366x768.png)
@@ -35,11 +35,11 @@ Les images suivantes montrent l’interface actuelle de la version 1.4.5 en fran
 
 ## Installation
 
-Téléchargez [SourceDock 1.4.5](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.5) et son checksum :
+Téléchargez [SourceDock 1.4.6](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6) et son checksum :
 
 ```bash
-sha256sum -c sourcedock_1.4.5_all.deb.sha256
-sudo apt install ./sourcedock_1.4.5_all.deb
+sha256sum -c sourcedock_1.4.6_all.deb.sha256
+sudo apt install ./sourcedock_1.4.6_all.deb
 sourcedock
 ```
 
