@@ -72,7 +72,13 @@ class ToastNotification(Gtk.Box):
 
         self.get_accessible().set_name(f"{level}: {message}")
 
-    def _on_close_clicked(self) -> None:
+    def _on_close_clicked(self, _button=None) -> None:
+        """Dismiss the toast when GTK emits the button's ``clicked`` signal.
+
+        GTK passes the clicked button to signal handlers.  Keeping the
+        argument optional also preserves the small direct-call API used by
+        tests and other UI helpers.
+        """
         if self.on_close:
             self.on_close()
 

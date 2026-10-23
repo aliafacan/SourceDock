@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import threading
 import time
@@ -14,7 +15,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from sourcedock.constants import APP_ICON_NAME, APP_TITLE, APP_VERSION
+from sourcedock.constants import APP_COMMAND, APP_ICON_NAME, APP_TITLE, APP_VERSION
 from sourcedock.core.models import (
     ApplicationIssue,
     PackageInfo,
@@ -290,14 +291,43 @@ class MainWindow(
         return False
 
     def _on_self_update_installed(self) -> None:
-        self.reload_applications_async()
-        message = t(self.preferences.language, "app_update_restart_required")
-        self._record_notification(message, "success")
-        self.show_toast(
-            message,
-            level="success",
-            timeout=0,
-        )
+        """Replace this process with the newly installed SourceDock build.
+
+        A running Python process keeps the old module files in memory even
+        after dpkg has replaced them.  Re-executing the application is both
+        safer and faster than asking the user to close and start it again:
+        the old window disappears as the current process is replaced, and
+        the new process loads the installed version from scratch.
+        """
+        command = self._self_update_command()
+        if command is None:
+            message = t(self.preferences.language, "app_update_restart_required")
+            self._record_notification(message, "error")
+            self.show_toast(message, level="error", timeout=10)
+            return
+
+        self.hide_toast()
+        self.hide()
+        try:
+            os.execv(command[0], command)
+        except OSError as exc:
+            self.show()
+            message = t(self.preferences.language, "app_update_restart_required")
+            self._record_notification(f"{message}: {exc}", "error")
+            self.show_toast(f"{message}: {exc}", level="error", timeout=10)
+
+    @staticmethod
+    def _self_update_command() -> list[str] | None:
+        """Return the command that should relaunch the current app.
+
+        Source checkouts should reopen their ``main.py`` entry point, while
+        installed builds should use the packaged ``sourcedock`` launcher.
+        """
+        argv0 = os.path.abspath(sys.argv[0]) if sys.argv else ""
+        if argv0.endswith(".py") and os.path.isfile(argv0):
+            return [sys.executable, argv0]
+        executable = shutil.which(APP_COMMAND)
+        return [executable] if executable else None
 
     def _apply_window_icon(self) -> None:
         theme = Gtk.IconTheme.get_default()

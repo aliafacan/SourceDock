@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.4 - 2026-10-23
+
+### Reliability & Self-Update
+
+- Reopen SourceDock automatically with the newly installed build after a successful self-update.
+- Make toast close buttons dismiss the active notification reliably.
+- Ignore malformed third-party `.desktop` files so one broken launcher cannot hide the rest of the installed applications.
+- Added regression coverage for FreeOffice-style desktop entries and self-update behavior.
+
 ## 1.4.3 - 2026-10-23
 
 ### Updates & Notifications

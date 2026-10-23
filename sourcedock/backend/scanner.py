@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from configparser import ConfigParser
+from configparser import ConfigParser, Error as ConfigParserError
 import locale
 import os
 from pathlib import Path
@@ -117,7 +117,7 @@ class DesktopEntryScanner:
         parser.optionxform = str
         try:
             parser.read_string(self.runner.read_text(path))
-        except (OSError, BackendError, ValueError):
+        except (OSError, BackendError, ValueError, ConfigParserError):
             return None
 
         if "Desktop Entry" not in parser:

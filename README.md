@@ -61,14 +61,14 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 
 SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based distributions (Zorin OS, Ubuntu, Debian, Linux Mint, etc.).
 
-1. Download the matching `.deb` package and checksum from the [SourceDock 1.4.3 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.3).
+1. Download the matching `.deb` package and checksum from the [SourceDock 1.4.4 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.4).
 2. Verify the package checksum:
    ```bash
-   sha256sum -c sourcedock_1.4.3_all.deb.sha256
+   sha256sum -c sourcedock_1.4.4_all.deb.sha256
    ```
 3. Install the package via APT:
    ```bash
-   sudo apt install ./sourcedock_1.4.3_all.deb
+   sudo apt install ./sourcedock_1.4.4_all.deb
    ```
 4. Launch SourceDock:
    ```bash
