@@ -499,6 +499,27 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertTrue(dialog._is_installing)
         self.assertEqual(dialog.progress_status_label.get_text(), t("tr", "cancel_critical"))
 
+    def test_installer_auth_retry_starts_a_new_attempt(self):
+        info = LocalPackageInfo("/tmp/test.deb", "deb", "Test", version="1")
+        dialog = PackageInstallerDialog(parent=self.window, info=info, registry=self.registry)
+        self.addCleanup(dialog.destroy)
+        dialog._is_installing = True
+
+        def accept_password(auth_dialog):
+            for child in auth_dialog.get_content_area().get_children():
+                if isinstance(child, Gtk.Entry):
+                    child.set_text("test-password")
+            return Gtk.ResponseType.OK
+
+        with (
+            patch.object(Gtk.Dialog, "run", side_effect=accept_password),
+            patch.object(dialog, "_start_installation") as start,
+        ):
+            dialog._prompt_auth_and_retry()
+
+        self.assertFalse(dialog._is_installing)
+        start.assert_called_once()
+
     def test_installer_success_hides_launch_for_a_library(self):
         info = LocalPackageInfo("/tmp/library.deb", "deb", "example-lib", version="1")
         self.registry.runner.command_exists.return_value = False

@@ -32,6 +32,17 @@ class TestAptInstallationDates(unittest.TestCase):
         self.assertEqual(installed["demo"], "2026-03-01")
         self.assertEqual(updated["demo"], "2026-03-12")
 
+    def test_install_event_with_old_and_new_versions_is_an_upgrade(self):
+        lines = [
+            "2026-04-01 10:00:00 install demo:amd64 <none> 1.0",
+            "2026-04-12 10:00:00 install demo:amd64 1.0 1.1",
+        ]
+
+        installed, updated = _parse_dpkg_history_lines(lines)
+
+        self.assertEqual(installed["demo"], "2026-04-01")
+        self.assertEqual(updated["demo"], "2026-04-12")
+
 
 if __name__ == "__main__":
     unittest.main()
