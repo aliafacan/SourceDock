@@ -16,6 +16,14 @@
 
 SourceDock reúne la búsqueda, instalación, actualización y eliminación de aplicaciones APT, Flatpak, Snap y paquetes locales en una interfaz rápida y unificada. Las consultas se ejecutan de forma asíncrona y los errores de cada proveedor se muestran sin ocultar los resultados disponibles.
 
+## Capturas de pantalla
+
+Las siguientes imágenes muestran la interfaz actual de la versión 1.4.1 (UI en inglés):
+
+![Aplicaciones instaladas](docs/screenshots/installed-dark-en-100-1366x768.png)
+![Tienda y descubrimiento](docs/screenshots/discover-light-en-100-1366x768.png)
+![Centro de actualizaciones](docs/screenshots/updates-dark-en-100-1366x768.png)
+
 ## Funciones principales
 
 - Vistas unificadas para aplicaciones instaladas, paquetes, actualizaciones y tienda.
