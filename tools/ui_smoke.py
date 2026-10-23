@@ -368,7 +368,11 @@ def main():
     parser.add_argument("--root-fit", action="store_true", help="Test only the actual X11 root size and enforce outer/control bounds")
     parser.add_argument("--expected-root", help="Require an exact physical X11 root, e.g. 1024x768")
     parser.add_argument("--themes", nargs="+", choices=("dark", "light", "system"))
-    parser.add_argument("--languages", nargs="+", choices=("tr", "en"))
+    parser.add_argument(
+        "--languages",
+        nargs="+",
+        choices=("tr", "en", "de", "es", "pt_BR", "fr"),
+    )
     parser.add_argument("--scales", nargs="+", choices=("90", "100", "110", "125"))
     parser.add_argument("--package")
     arguments = parser.parse_args()

@@ -18,11 +18,11 @@ O SourceDock reúne a busca, instalação, atualização e remoção de aplicati
 
 ## Capturas de tela
 
-As imagens abaixo mostram a interface atual da versão 1.4.1 (interface em inglês):
+As imagens abaixo mostram a interface atual da versão 1.4.1 em português do Brasil:
 
-![Aplicativos instalados](docs/screenshots/installed-dark-en-100-1366x768.png)
-![Loja e descoberta](docs/screenshots/discover-light-en-100-1366x768.png)
-![Central de atualizações](docs/screenshots/updates-dark-en-100-1366x768.png)
+![Aplicativos instalados](docs/screenshots/installed-dark-pt_BR-100-1366x768.png)
+![Loja e descoberta](docs/screenshots/discover-light-pt_BR-100-1366x768.png)
+![Central de atualizações](docs/screenshots/updates-dark-pt_BR-100-1366x768.png)
 
 ## Recursos
 
