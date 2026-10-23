@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.5 - 2026-10-23
+
+### Snap Installation Reliability
+
+- Wait for an active Snap transaction when snapd reports `change in progress` instead of showing a false installation failure.
+- Detect whether the requested Snap was installed while the other transaction was running, then retry once when necessary.
+- Show a live waiting message during the Snap transaction handoff and add regression coverage for the conflict path.
+
 ## 1.4.4 - 2026-10-23
 
 ### Reliability & Self-Update

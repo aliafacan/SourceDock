@@ -18,7 +18,7 @@ O SourceDock reúne a busca, instalação, atualização e remoção de aplicati
 
 ## Capturas de tela
 
-As imagens abaixo mostram a interface atual da versão 1.4.4 em português do Brasil:
+As imagens abaixo mostram a interface atual da versão 1.4.5 em português do Brasil:
 
 ![Aplicativos instalados](docs/screenshots/installed-dark-pt_BR-100-1366x768.png)
 ![Loja e descoberta](docs/screenshots/discover-light-pt_BR-100-1366x768.png)
@@ -35,11 +35,11 @@ As imagens abaixo mostram a interface atual da versão 1.4.4 em português do Br
 
 ## Instalação
 
-Baixe o [SourceDock 1.4.4](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.4) e o checksum:
+Baixe o [SourceDock 1.4.5](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.5) e o checksum:
 
 ```bash
-sha256sum -c sourcedock_1.4.4_all.deb.sha256
-sudo apt install ./sourcedock_1.4.4_all.deb
+sha256sum -c sourcedock_1.4.5_all.deb.sha256
+sudo apt install ./sourcedock_1.4.5_all.deb
 sourcedock
 ```
 
