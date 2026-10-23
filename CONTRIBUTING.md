@@ -64,19 +64,21 @@ sourcedock/
 │   └── window.py          # MainWindow (tüm mixin'leri birleştiren ana pencere)
 │
 ├── constants.py           # Uygulama sabitleri
-├── i18n.py                # Türkçe ve İngilizce tam dil sözlüğü
+├── locales/               # Altı dil için JSON çeviri katalogları
+├── i18n.py                # Katalog yükleme ve uyumluluk yardımcıları
 ├── preferences.py         # JSON tabanlı kullanıcı tercihleri
 └── theme.py               # Modern GTK CSS renk ve stil motoru
 ```
 
 ---
 
-## 🌍 2. Çift Dilli Yerelleştirme (i18n) Zorunluluğu
+## 🌍 2. Çok Dilli Yerelleştirme (i18n) Zorunluluğu
 
 Kullanıcı arayüzünde görünen **hiçbir metin koda doğrudan (hardcoded) yazılmamalıdır**.
-- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) hem `tr` hem de `en` dillerinde [`sourcedock/i18n.py`](sourcedock/i18n.py) dosyasına eklenmelidir.
+- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) desteklenen altı katalogda (`tr`, `en`, `de`, `es`, `pt_BR`, `fr`) [`sourcedock/locales/`](sourcedock/locales/) altında tanımlanmalıdır.
 - Arayüzde `t(lang, "anahtar_adi")` fonksiyonu kullanılmalıdır.
 - Ayarlar penceresinden dil değiştirildiğinde arayüzün anında güncellenebilmesi için dinamik yenileme (`_refresh_texts`) metoduna dahil edilmelidir.
+- Yer tutucular İngilizce referans katalogla aynı kalmalıdır. Değişiklikten sonra `python3 tools/translation_catalog.py --check` ve `tests/test_i18n_integrity.py` çalıştırılmalıdır (ayrıntılar için [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md)).
 
 ---
 
@@ -207,19 +209,21 @@ sourcedock/
 │   └── window.py          # MainWindow combining all view mixins
 │
 ├── constants.py           # Application constants
-├── i18n.py                # Complete English and Turkish translation catalog
+├── locales/               # Six-language JSON translation catalogues
+├── i18n.py                # Catalogue loading and compatibility helpers
 ├── preferences.py         # JSON-backed configuration storage
 └── theme.py               # Modern GTK CSS styling engine
 ```
 
 ---
 
-## 🌍 2. Bilingual Localization (i18n) Requirement
+## 🌍 2. Multilingual Localization (i18n) Requirement
 
 **Zero Hardcoded Strings:**
-- Every new label, button text, error message, or tooltip must be defined in both `en` and `tr` within [`sourcedock/i18n.py`](sourcedock/i18n.py).
+- Every new label, button text, error message, or tooltip must be defined in all six supported catalogues (`tr`, `en`, `de`, `es`, `pt_BR`, `fr`) under [`sourcedock/locales/`](sourcedock/locales/).
 - Use `t(lang, "key_name")` in UI components.
 - Ensure all text elements are registered in `_refresh_texts()` so language changes apply instantly without requiring an application restart.
+- Keep placeholders identical to the English reference catalogue. Run `python3 tools/translation_catalog.py --check` and `tests/test_i18n_integrity.py` after changes; see [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the full workflow.
 
 ---
 

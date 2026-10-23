@@ -38,7 +38,7 @@ that helper, not permit arbitrary shell execution. GUI code remains unprivileged
 Read-only proof of the simulation boundary:
 
 ```bash
-apt-get --simulate -o Debug::NoLocking=true install -- ./packaging/sourcedock_1.4.0_all.deb
+apt-get --simulate -o Debug::NoLocking=true install -- ./packaging/sourcedock_1.4.1_all.deb
 ```
 
 `backend/previews.py` implements that command and tests assert that it never calls
@@ -58,7 +58,7 @@ The review now includes a small, auditable PoC under `packaging/polkit/`:
   argv list. It never uses a shell and never re-executes sudo.
 
 `packaging/build_deb.sh` intentionally does **not** install either file, so the
-active `1.4.0` behavior is unchanged. `tests/test_polkit_helper.py` pins the
+active `1.4.1` behavior is unchanged. `tests/test_polkit_helper.py` pins the
 security properties. Enabling this path still requires an independent review, a
 D-Bus-activated variant for the custom action, and per-distribution acceptance;
 that part remains open.
