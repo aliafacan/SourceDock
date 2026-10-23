@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.3 - 2026-10-23
+
+### Updates & Notifications
+
+- Added an explicit “Show all updates” action after filtering by an update summary card.
+- Improved update group headers, spacing and group-level selection states.
+- Aligned the sidebar release-check control with the displayed application version.
+- Fixed transient notifications so the close button removes the active toast immediately and cancels its timeout.
+
 ## 1.4.2 - 2026-10-23
 
 ### Localization Quality

@@ -1,4 +1,4 @@
-name: Draft Release
+name: Publish Release
 on:
   push:
     tags: ['v*']
@@ -34,10 +34,10 @@ jobs:
           version=$(/usr/bin/python3 -c 'from sourcedock.constants import APP_VERSION; print(APP_VERSION)')
           SOURCEDOCK_TEST_DEB="$GITHUB_WORKSPACE/dist/sourcedock_${version}_all.deb" \
             xvfb-run -a bash -c 'openbox >/tmp/sourcedock-test-wm.log 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
-      - name: Stage Draft Release
+      - name: Publish Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/*.deb dist/*.sha256 --draft --generate-notes --title "SourceDock $RELEASE_TAG"
+          gh release create "$RELEASE_TAG" dist/*.deb dist/*.sha256 --generate-notes --title "SourceDock $RELEASE_TAG"
