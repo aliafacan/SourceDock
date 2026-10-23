@@ -61,14 +61,14 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 
 SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based distributions (Zorin OS, Ubuntu, Debian, Linux Mint, etc.).
 
-1. Download the latest `.deb` package and checksum from the [GitHub Releases](https://github.com/aliafacan/SourceDock/releases) page.
+1. Download the matching `.deb` package and checksum from the [SourceDock 1.4.1 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.1).
 2. Verify the package checksum:
    ```bash
-   sha256sum -c sourcedock_1.4.0_all.deb.sha256
+   sha256sum -c sourcedock_1.4.1_all.deb.sha256
    ```
 3. Install the package via APT:
    ```bash
-   sudo apt install ./sourcedock_1.4.0_all.deb
+   sudo apt install ./sourcedock_1.4.1_all.deb
    ```
 4. Launch SourceDock:
    ```bash
@@ -100,7 +100,7 @@ The `.deb` package installs the GNOME desktop right-click integration (`sourcedo
 | :--- | :---: | :--- |
 | **Zorin OS 18.1** | **Verified** | Real workstation testing: clean `.deb` installation, live desktop navigation, and actual APT package install/remove cycles. |
 | **Zorin OS 17.x** | **Untested** | Core stack compatible with Ubuntu 22.04 base; covered by automated CI test suite. |
-| **Ubuntu 22.04 & 24.04** | **CI PASS** | Verified in automated CI: 281/281 unit tests passing under Xvfb/Openbox, Ruff clean, compileall clean, and `.deb` package build. |
+| **Ubuntu 22.04 & 24.04** | **CI PASS** | Verified in automated CI: 287/287 unit tests passing under Xvfb/Openbox, Ruff clean, compileall clean, and `.deb` package build. |
 | **Debian 12** | **Compatible** | Compatible dependencies via `.deb` package (Python 3.11+ and GTK 3); live hardware testing pending. |
 | **Debian 11** | **Unsupported** | Ships with Python 3.9 by default; SourceDock strictly requires Python >= 3.10. |
 | **Fedora / openSUSE / Arch** | **Experimental** | Backend parser and execution abstractions verified via mocked test suites; native packaging (.rpm / PKGBUILD) not yet provided. |
@@ -135,7 +135,7 @@ python3 main.py /path/to/package.deb
 ```
 
 ### Running the Test Suite
-The full guarded test suite (281 tests) runs headless under an Xvfb display and Openbox window manager:
+The full guarded test suite (287 tests) runs headless under an Xvfb display and Openbox window manager:
 ```bash
 xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```

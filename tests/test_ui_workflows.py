@@ -90,14 +90,14 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertEqual(self.window.header_search.get_position(), 2)
         self.assertEqual(self.window.store_search_entry.get_text(), "fire")
 
-    def test_discover_query_keeps_visible_header_in_sync(self):
+    def test_discover_query_uses_visible_header_as_source_of_truth(self):
         self.window.pages.set_current_page(1)
-        self.window.store_search_entry.set_text("firefox")
-        self.window._on_store_search_changed(self.window.store_search_entry)
-        self.assertEqual(self.window.header_search.get_text(), "firefox")
-        self.window.store_search_entry.set_text("")
-        self.window._on_store_search_changed(self.window.store_search_entry)
-        self.assertEqual(self.window.header_search.get_text(), "")
+        self.window.header_search.set_text("firefox")
+        self.window._on_global_search_changed(self.window.header_search)
+        self.assertEqual(self.window.store_search_entry.get_text(), "firefox")
+        self.window.header_search.set_text("")
+        self.window._on_global_search_changed(self.window.header_search)
+        self.assertEqual(self.window.store_search_entry.get_text(), "")
 
     def test_discover_typing_waits_for_enter_without_debounce(self):
         self.window.pages.set_current_page(1)
@@ -110,9 +110,9 @@ class TestUiWorkflows(unittest.TestCase):
 
     def test_page_search_state_is_scoped_and_restored(self):
         self.window.pages.set_current_page(1)
-        self.window.store_search_entry.set_text("firefox")
-        self.window._on_store_search_changed(self.window.store_search_entry)
-        self.assertEqual(self.window.header_search.get_text(), "firefox")
+        self.window.header_search.set_text("firefox")
+        self.window._on_global_search_changed(self.window.header_search)
+        self.assertEqual(self.window.store_search_entry.get_text(), "firefox")
 
         self.window.pages.set_current_page(0)
         self.assertEqual(self.window.header_search.get_text(), "")
@@ -291,7 +291,10 @@ class TestUiWorkflows(unittest.TestCase):
         }
         self.window._finish_store_search([result], None)
         status = self.window.store_status.get_text()
-        self.assertEqual(status.count("yanıt vermiyor"), 2)
+        self.assertIn("Yanıt alınamadı: APT, Flatpak", status)
+        self.assertEqual(status.count("Yanıt alınamadı:"), 1)
+        self.assertNotIn("APT: timeout", status)
+        self.assertIn("doğrulanamadı", self.window._display_store_source(result))
 
     def test_discovery_card_click_opens_details(self):
         result = StoreResult("Editor", "editor", "Description", SOURCE_APT, "1", "native")
