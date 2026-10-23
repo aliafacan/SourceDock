@@ -131,8 +131,14 @@ class ToastHost(Gtk.Overlay):
         return toast
 
     def hide_toast(self) -> None:
+        """Dismiss the current toast and remove it from the revealer."""
         self._cancel_timeout()
         self._revealer.set_reveal_child(False)
+        toast = self._current
+        self._current = None
+        if toast is not None:
+            self._revealer.remove(toast)
+            toast.destroy()
 
     def _cancel_timeout(self) -> None:
         if self._timeout_id:
@@ -141,5 +147,5 @@ class ToastHost(Gtk.Overlay):
 
     def _on_timeout(self) -> bool:
         self._timeout_id = 0
-        self._revealer.set_reveal_child(False)
+        self.hide_toast()
         return False
