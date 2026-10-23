@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import json
-import locale
 import os
 from pathlib import Path
 from sourcedock.core.json_store import write_json
+from sourcedock.i18n import SUPPORTED_LANGUAGES, detect_system_language
 
 
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "sourcedock")
@@ -17,7 +17,6 @@ OLDER_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "zorin-app-m
 CONFIG_PATH = os.path.join(CONFIG_DIR, "settings.json")
 LEGACY_CONFIG_PATH = os.path.join(LEGACY_CONFIG_DIR, "settings.json")
 OLDER_CONFIG_PATH = os.path.join(OLDER_CONFIG_DIR, "settings.json")
-SUPPORTED_LANGUAGES = {"tr", "en"}
 SUPPORTED_THEMES = {"system", "dark", "light"}
 SUPPORTED_SCALES = {"90", "100", "110", "125"}
 
@@ -86,7 +85,4 @@ class PreferencesStore:
         write_json(Path(CONFIG_PATH), asdict(preferences))
 
     def _default_language(self) -> str:
-        system_locale, _ = locale.getlocale()
-        if system_locale and system_locale.lower().startswith("tr"):
-            return "tr"
-        return "en"
+        return detect_system_language()

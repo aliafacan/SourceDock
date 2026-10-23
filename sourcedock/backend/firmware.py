@@ -24,7 +24,12 @@ class FirmwareProvider:
     def is_available(self) -> bool:
         return self.runner.command_exists("fwupdmgr")
 
-    def list_applications(self) -> list[UnifiedApplication]:
+    def list_applications(self, *, include_updates: bool = True) -> list[UnifiedApplication]:
+        # Firmware has no useful installed-application inventory. Its only
+        # meaningful representation is pending updates, so keep fwupd off the
+        # fast installed-app critical path.
+        if not include_updates:
+            return []
         if not self.is_available():
             return []
 

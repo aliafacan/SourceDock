@@ -88,7 +88,7 @@ class FlatpakProvider:
         self.runner = runner
         self.scanner = scanner
 
-    def list_applications(self) -> list[UnifiedApplication]:
+    def list_applications(self, *, include_updates: bool = True) -> list[UnifiedApplication]:
         if not self.runner.command_exists("flatpak"):
             return []
 
@@ -105,7 +105,7 @@ class FlatpakProvider:
             if result.returncode != 0:
                 return []
 
-        update_ids = self._update_ids()
+        update_ids = self._update_ids() if include_updates else set()
         desktop_entries = {
             Path(entry.path).stem: entry for entry in self.scanner.list_entries(_flatpak_desktop_dirs())
         }

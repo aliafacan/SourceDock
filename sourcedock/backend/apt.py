@@ -19,6 +19,7 @@ from sourcedock.core.models import (
 )
 from sourcedock.core.runner import CommandRunner
 from sourcedock.backend.base_native import BaseNativeProvider
+from sourcedock.core.errors import BackendError
 from sourcedock.backend.scanner import (
     DesktopEntryScanner,
     _clean_exec_command,
@@ -46,7 +47,7 @@ class AptProvider(BaseNativeProvider):
     def is_available(self) -> bool:
         return self.runner.command_exists("dpkg-query") or self.runner.command_exists("apt")
 
-    def list_applications(self) -> list[UnifiedApplication]:
+    def list_applications(self, *, include_updates: bool = True) -> list[UnifiedApplication]:
         if not self.runner.command_exists("dpkg-query"):
             return []
 
@@ -60,13 +61,35 @@ class AptProvider(BaseNativeProvider):
         if not desktop_entries:
             return []
 
-        owners = self._owning_packages([entry.path for entry in desktop_entries])
+        try:
+            owners = self._owning_packages([entry.path for entry in desktop_entries])
+        except (BackendError, OSError):
+            return []
         if not owners:
             return []
 
-        package_meta = self._package_metadata(sorted(set(owners.values())))
-        upgradable = self._upgradable_packages()
-        installed_dates, last_updated_dates = self._collect_package_dates(sorted(set(owners.values())))
+        packages = sorted(set(owners.values()))
+        try:
+            package_meta = self._package_metadata(packages)
+        except (BackendError, OSError):
+            package_meta = {}
+        if include_updates:
+            try:
+                upgradable = self._upgradable_packages()
+            except (BackendError, OSError):
+                upgradable = set()
+        else:
+            upgradable = set()
+        # Dpkg history and the stat fan-out are secondary metadata. They are
+        # intentionally skipped by the fast installed-app inventory and are
+        # populated by the regular update/details paths when needed.
+        if include_updates:
+            try:
+                installed_dates, last_updated_dates = self._collect_package_dates(packages)
+            except (BackendError, OSError):
+                installed_dates, last_updated_dates = {}, {}
+        else:
+            installed_dates, last_updated_dates = {}, {}
         listed_packages: set[str] = set()
         applications: list[UnifiedApplication] = []
         for entry in desktop_entries:

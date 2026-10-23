@@ -53,7 +53,7 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 - **Standalone Package Installer**: Preview `.deb` packages before installation, checking description, architecture, file size, dependencies, and origin.
 - **Safe Transaction Execution**: Non-blocking asynchronous command runner equipped with `flock`-based file locks, timeout bounds, and sensitive credential masking.
 - **Transparent Operation History**: Bounded, inspectable transaction logs with user-controlled export and clearing.
-- **Desktop Personalization**: Full Dark, Light, and System theme modes, 90%–125% user interface scaling, and dual English / Turkish localization.
+- **Desktop Personalization**: Full Dark, Light, and System theme modes, 90%–125% user interface scaling, and six-language localization (TR/EN/DE/ES/PT-BR/FR).
 
 ---
 
@@ -64,18 +64,18 @@ SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based
 1. Download the latest `.deb` package and checksum from the [GitHub Releases](https://github.com/aliafacan/SourceDock/releases) page.
 2. Verify the package checksum:
    ```bash
-   sha256sum -c sourcedock_1.3.0_all.deb.sha256
+   sha256sum -c sourcedock_1.4.0_all.deb.sha256
    ```
 3. Install the package via APT:
    ```bash
-   sudo apt install ./sourcedock_1.3.0_all.deb
+   sudo apt install ./sourcedock_1.4.0_all.deb
    ```
 4. Launch SourceDock:
    ```bash
    sourcedock
    ```
 
-*(Note: The `voltapp` command is maintained as a backward-compatibility alias during the 1.3.0 release).*
+*(Note: The `voltapp` command remains available as a backward-compatibility alias.)*
 
 ### GNOME Shell Desktop Integration (Optional)
 
