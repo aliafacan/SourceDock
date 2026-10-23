@@ -18,11 +18,11 @@ SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen P
 
 ## Screenshots
 
-Die folgenden Bilder zeigen die aktuelle 1.4.1-Oberfläche (englische UI):
+Die folgenden Bilder zeigen die aktuelle 1.4.1-Oberfläche auf Deutsch:
 
-![Installierte Anwendungen](docs/screenshots/installed-dark-en-100-1366x768.png)
-![Store und Entdecken](docs/screenshots/discover-light-en-100-1366x768.png)
-![Update-Zentrale](docs/screenshots/updates-dark-en-100-1366x768.png)
+![Installierte Anwendungen](docs/screenshots/installed-dark-de-100-1366x768.png)
+![Store und Entdecken](docs/screenshots/discover-light-de-100-1366x768.png)
+![Update-Zentrale](docs/screenshots/updates-dark-de-100-1366x768.png)
 
 ## Funktionen
 

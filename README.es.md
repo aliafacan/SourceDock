@@ -18,11 +18,11 @@ SourceDock reúne la búsqueda, instalación, actualización y eliminación de a
 
 ## Capturas de pantalla
 
-Las siguientes imágenes muestran la interfaz actual de la versión 1.4.1 (UI en inglés):
+Las siguientes imágenes muestran la interfaz actual de la versión 1.4.1 en español:
 
-![Aplicaciones instaladas](docs/screenshots/installed-dark-en-100-1366x768.png)
-![Tienda y descubrimiento](docs/screenshots/discover-light-en-100-1366x768.png)
-![Centro de actualizaciones](docs/screenshots/updates-dark-en-100-1366x768.png)
+![Aplicaciones instaladas](docs/screenshots/installed-dark-es-100-1366x768.png)
+![Tienda y descubrimiento](docs/screenshots/discover-light-es-100-1366x768.png)
+![Centro de actualizaciones](docs/screenshots/updates-dark-es-100-1366x768.png)
 
 ## Funciones principales
 
