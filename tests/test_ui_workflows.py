@@ -111,6 +111,7 @@ class TestUiWorkflows(unittest.TestCase):
     def test_self_update_reexecutes_the_installed_launcher(self):
         with (
             patch("sourcedock.ui.window.shutil.which", return_value="/usr/bin/sourcedock"),
+            patch("sourcedock.ui.window.sys.argv", ["/usr/bin/sourcedock"]),
             patch("sourcedock.ui.window.os.execv") as execv,
         ):
             self.window._on_self_update_installed()
