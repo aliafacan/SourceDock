@@ -5,7 +5,7 @@ It distinguishes clearly between unit tests using mocked runners, CI automated p
 
 | Environment | Status | Evidence | Remaining |
 | --- | --- | --- | --- |
-| **Zorin OS 18.1** (GNOME 46, Python 3.12, GTK 3) | **Tested: Real Host Package Lifecycle** | Clean 1.3.0 `.deb` installation, live desktop startup, real APT `sl` package install/remove cycle verified in `dpkg.log` and `history.json`. | Full long-term stress testing; complex multi-dependency upgrades |
+| **Zorin OS 18.1** (GNOME 46, Python 3.12, GTK 3) | **Tested: Real Host Package Lifecycle** | Clean Debian package installation, live desktop startup, real APT `sl` package install/remove cycle verified in `dpkg.log` and `history.json`. | Full long-term stress testing; complex multi-dependency upgrades |
 | **Zorin OS 17.x** | **Untested on Real Hardware** | Shares Ubuntu 22.04 base; covered by automated CI test suite. | Real hardware installation verification |
 | **Ubuntu 22.04 & 24.04** | **CI PASS** | GitHub Actions CI: 281/281 tests passed under Xvfb + Openbox, Ruff clean, compileall clean, `.deb` build verified. | Disposable VM acceptance for real un-mocked package transactions |
 | **Debian 12 (Bookworm)** | **Compatible (`.deb`)** | Shares APT backend and Python 3.11 / GTK 3 dependencies. | Clean installation and package transaction testing |

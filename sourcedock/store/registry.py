@@ -10,7 +10,9 @@ import shutil
 import subprocess
 import threading
 import time
+from pathlib import Path
 from dataclasses import replace
+from dataclasses import asdict
 import re
 
 from sourcedock.core.errors import AuthRequiredError, BackendError, SnapClassicRequiredError
@@ -83,8 +85,15 @@ def _looks_like_desktop_package(result: StoreResult, allow_transitional: bool = 
 
 
 class StoreRegistry:
-    PROVIDER_TIMEOUT_SECONDS = 5.0
+    # Remote store queries are independent. Flatpak may need longer than the
+    # native package indexes while refreshing its remote metadata, so allow a
+    # full provider window without delaying fast partial results.
+    PROVIDER_TIMEOUT_SECONDS = 30.0
+    SNAP_SEARCH_TIMEOUT_SECONDS = 2.0
     PARTIAL_CACHE_TTL_SECONDS = 15.0
+    SEARCH_CACHE_TTL_SECONDS = 15 * 60
+    SEARCH_PARTIAL_CACHE_TTL_SECONDS = 60
+    SEARCH_CACHE_MAX_ENTRIES = 24
 
     """Mağazalardan (Flatpak, Snap, APT, DNF, Pacman, Zypper) arama ve kurulum işlemlerini yürüten sınıf."""
 
@@ -101,12 +110,149 @@ class StoreRegistry:
         self.missing_sources = []
         self._metadata = None
         self._search_cache: dict[tuple[str, tuple[str, ...]], list[StoreResult]] = {}
+        self._search_cache_saved_at: dict[tuple[str, tuple[str, ...]], float] = {}
+        self._search_cache_complete: dict[tuple[str, tuple[str, ...]], bool] = {}
         self._partial_search_cache: dict[
             tuple[str, tuple[str, ...]],
             tuple[float, list[StoreResult], list[str], dict[str, object], dict[str, str]],
         ] = {}
         self.last_search_metrics: dict[str, object] = {}
         self.last_search_source_states: dict[str, str] = {}
+        cache_home = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+        self._search_cache_path = os.path.join(cache_home, "sourcedock", "store-search.json")
+        self._load_persistent_search_cache()
+
+    @staticmethod
+    def _cache_key_data(cache_key: tuple[str, tuple[str, ...]]) -> tuple[str, list[str]]:
+        query, sources = cache_key
+        return query, list(sources)
+
+    def _load_persistent_search_cache(self) -> None:
+        """Restore only fresh, complete, non-sensitive search results."""
+        cache_path = getattr(self, "_search_cache_path", None)
+        if not cache_path:
+            return
+        try:
+            import json
+
+            with open(cache_path, encoding="utf-8") as cache_file:
+                payload = json.load(cache_file)
+            if payload.get("version") != 1 or not isinstance(payload.get("entries"), list):
+                return
+            now = time.time()
+            allowed = set(StoreResult.__dataclass_fields__)
+            for entry in payload["entries"][-self.SEARCH_CACHE_MAX_ENTRIES :]:
+                saved_at = float(entry.get("saved_at", 0))
+                query = str(entry.get("query", "")).strip().casefold()
+                sources = tuple(sorted(str(source) for source in entry.get("sources", [])))
+                raw_results = entry.get("results", [])
+                complete = bool(entry.get("complete", True))
+                ttl = self.SEARCH_CACHE_TTL_SECONDS if complete else self.SEARCH_PARTIAL_CACHE_TTL_SECONDS
+                if (
+                    not query
+                    or not sources
+                    or now - saved_at > ttl
+                    or not isinstance(raw_results, list)
+                ):
+                    continue
+                results = [
+                    StoreResult(**{key: value for key, value in item.items() if key in allowed})
+                    for item in raw_results
+                    if isinstance(item, dict) and item.get("app_id") and item.get("source")
+                ]
+                if results:
+                    cache_key = (query, sources)
+                    states = entry.get("source_states", {})
+                    source_states = {
+                        source: str(states.get(source, "cached")) for source in sources
+                    }
+                    if complete:
+                        self._search_cache[cache_key] = results
+                        self._search_cache_saved_at[cache_key] = saved_at
+                        self._search_cache_complete[cache_key] = True
+                        if not hasattr(self, "_search_cache_source_states"):
+                            self._search_cache_source_states = {}
+                        self._search_cache_source_states[cache_key] = source_states
+                    else:
+                        self._partial_search_cache[cache_key] = (
+                            time.monotonic() + max(0, ttl - (now - saved_at)),
+                            results,
+                            [],
+                            {"cache_hit": True, "partial_cache": True, "source_states": source_states},
+                            source_states,
+                        )
+        except (OSError, ValueError, TypeError, KeyError):
+            return
+
+    def _persist_search_cache(self) -> None:
+        cache_path = getattr(self, "_search_cache_path", None)
+        if not cache_path:
+            return
+        try:
+            from sourcedock.core.json_store import write_json
+
+            entries = []
+            for (query, sources), results in list(self._search_cache.items())[-self.SEARCH_CACHE_MAX_ENTRIES :]:
+                cache_key = (query, sources)
+                entries.append(
+                    {
+                        "saved_at": self._search_cache_saved_at.get(cache_key, time.time()),
+                        "query": query,
+                        "sources": list(sources),
+                        "complete": True,
+                        "source_states": getattr(self, "_search_cache_source_states", {}).get(cache_key, {}),
+                        "results": [asdict(result) for result in results],
+                    }
+                )
+            for (query, sources), partial in list(self._partial_search_cache.items())[-self.SEARCH_CACHE_MAX_ENTRIES :]:
+                expires_at, results, _errors, _metrics, source_states = partial
+                saved_at = time.time() - max(0, self.PARTIAL_CACHE_TTL_SECONDS - (expires_at - time.monotonic()))
+                entries.append(
+                    {
+                        "saved_at": saved_at,
+                        "query": query,
+                        "sources": list(sources),
+                        "complete": False,
+                        "source_states": dict(source_states),
+                        "results": [asdict(result) for result in results],
+                    }
+                )
+            write_json(Path(cache_path), {"version": 1, "entries": entries[-self.SEARCH_CACHE_MAX_ENTRIES :]})
+        except (OSError, TypeError, ValueError):
+            return
+
+    def invalidate_search_cache(self, sources: set[str] | None = None) -> None:
+        """Drop cached queries affected by a package mutation."""
+        if not sources:
+            self._search_cache.clear()
+        else:
+            for key, results in list(self._search_cache.items()):
+                if any(result.source in sources for result in results) or any(
+                    source in sources for source in key[1]
+                ):
+                    self._search_cache.pop(key, None)
+        if hasattr(self, "_search_cache_source_states"):
+            self._search_cache_source_states = {
+                key: value for key, value in self._search_cache_source_states.items() if key in self._search_cache
+            }
+        if hasattr(self, "_search_cache_saved_at"):
+            self._search_cache_saved_at = {
+                key: value for key, value in self._search_cache_saved_at.items() if key in self._search_cache
+            }
+        if hasattr(self, "_search_cache_complete"):
+            self._search_cache_complete = {
+                key: value for key, value in self._search_cache_complete.items() if key in self._search_cache
+            }
+        if hasattr(self, "_partial_search_cache"):
+            if not sources:
+                self._partial_search_cache.clear()
+            else:
+                for key, partial in list(self._partial_search_cache.items()):
+                    if any(result.source in sources for result in partial[1]) or any(
+                        source in sources for source in key[1]
+                    ):
+                        self._partial_search_cache.pop(key, None)
+        self._persist_search_cache()
 
     @property
     def runner(self) -> CommandRunner:
@@ -157,16 +303,21 @@ class StoreRegistry:
         cached = self._search_cache.get(cache_key)
         if cached is not None:
             source_states = getattr(self, "_search_cache_source_states", {}).get(cache_key)
+            cache_complete = getattr(self, "_search_cache_complete", {}).get(cache_key, True)
             if source_states is None:
                 source_states = {result.source: "cached" for result in cached}
             else:
-                source_states = {source: "cached" for source in source_states}
+                source_states = {
+                    source: state if state == "unavailable" else "cached"
+                    for source, state in source_states.items()
+                }
             self.last_search_source_states = dict(source_states)
             self.last_search_metrics = {
                 "cache_hit": True,
                 "total_ms": 0.0,
                 "sources": {},
                 "source_states": dict(source_states),
+                "partial_cache": not cache_complete,
             }
             self.provider_errors = []
             self.missing_sources = []
@@ -337,16 +488,29 @@ class StoreRegistry:
         # Displaying partial results is useful, but an errored provider response
         # must not be stored as a successful cache hit.
         if not self.provider_errors:
-            if len(self._search_cache) >= 12:
+            if len(self._search_cache) >= self.SEARCH_CACHE_MAX_ENTRIES:
                 self._search_cache.pop(next(iter(self._search_cache)))
             self._search_cache[cache_key] = list(enriched)
+            if not hasattr(self, "_search_cache_saved_at"):
+                self._search_cache_saved_at = {}
+            if not hasattr(self, "_search_cache_complete"):
+                self._search_cache_complete = {}
+            self._search_cache_saved_at[cache_key] = time.time()
+            self._search_cache_complete[cache_key] = True
             if not hasattr(self, "_search_cache_source_states"):
                 self._search_cache_source_states = {}
             self._search_cache_source_states[cache_key] = {
                 source: "live" for source in source_states
             }
             self._partial_search_cache.pop(cache_key, None)
+            self._persist_search_cache()
         elif enriched:
+            if not hasattr(self, "_search_cache_saved_at"):
+                self._search_cache_saved_at = {}
+            if not hasattr(self, "_search_cache_complete"):
+                self._search_cache_complete = {}
+            if not hasattr(self, "_search_cache_source_states"):
+                self._search_cache_source_states = {}
             self._partial_search_cache[cache_key] = (
                 time.monotonic() + self.PARTIAL_CACHE_TTL_SECONDS,
                 list(enriched),
@@ -354,6 +518,7 @@ class StoreRegistry:
                 dict(self.last_search_metrics),
                 dict(source_states),
             )
+            self._persist_search_cache()
         if on_partial:
             on_partial(list(enriched), True)
         return enriched
@@ -412,8 +577,9 @@ class StoreRegistry:
                 [
                     "flatpak",
                     "search",
-                    query,
                     "--columns=name,application,description,version,remote,download-size",
+                    "--",
+                    query,
                 ],
                 timeout=30,
             )
@@ -422,7 +588,13 @@ class StoreRegistry:
                 raw = result_with_size
             else:
                 raw = self._run(
-                    ["flatpak", "search", query, "--columns=name,application,description,version,remote"],
+                    [
+                        "flatpak",
+                        "search",
+                        "--columns=name,application,description,version,remote",
+                        "--",
+                        query,
+                    ],
                     timeout=30,
                 )
 
@@ -469,7 +641,7 @@ class StoreRegistry:
         try:
             # Snap Store is optional; a slow remote search must not block the
             # local/Flatpak results already published to the UI.
-            result = self._run(["snap", "find", query], timeout=5)
+            result = self._run(["snap", "find", query], timeout=self.SNAP_SEARCH_TIMEOUT_SECONDS)
             if result.returncode != 0:
                 raise BackendError(result.stderr or result.stdout or "Snap search failed.")
             items: list[StoreResult] = []
@@ -584,6 +756,7 @@ class StoreRegistry:
             self._install_native(result)
         else:
             raise BackendError(f"Bilinmeyen kaynak: {result.source}")
+        self.invalidate_search_cache({result.source})
 
     def _install_native(self, result: StoreResult) -> None:
         if result.source == SOURCE_APT:

@@ -133,7 +133,7 @@ for spec in 1024x768 1366x768; do
     "${CLEAN_ENV[@]}" xprop -root _NET_WORKAREA _NET_SUPPORTING_WM_CHECK >"$output/workarea.txt"
 
     package_args=()
-    package="${SOURCEDOCK_TEST_PACKAGE:-$ROOT/packaging/sourcedock_1.3.0_all.deb}"
+    package="${SOURCEDOCK_TEST_PACKAGE:-$ROOT/packaging/sourcedock_1.4.0_all.deb}"
     if [ -f "$package" ]; then package_args=(--package "$package"); fi
     "${CLEAN_ENV[@]}" setsid python3 "$ROOT/tools/ui_smoke.py" \
         --real-data --matrix --root-fit --expected-root "$spec" --output "$output" \

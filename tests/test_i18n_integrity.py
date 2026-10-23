@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import unittest
 
-from sourcedock.i18n import TRANSLATIONS
+from sourcedock.i18n import SUPPORTED_LANGUAGES, TRANSLATIONS, detect_system_language
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "sourcedock"
@@ -36,21 +36,37 @@ class TestTranslationTables(unittest.TestCase):
         self.assertEqual(en - tr, set(), "keys missing from Turkish")
 
     def test_every_key_has_a_non_empty_value_in_both_languages(self):
-        for language in ("tr", "en"):
+        for language in SUPPORTED_LANGUAGES:
             for key, value in TRANSLATIONS[language].items():
                 with self.subTest(language=language, key=key):
                     self.assertIsInstance(value, str)
                     self.assertTrue(value.strip(), f"{language}:{key} is empty")
 
     def test_format_placeholders_match_across_languages(self):
-        tr = TRANSLATIONS["tr"]
-        for key, tr_value in tr.items():
-            en_value = TRANSLATIONS["en"].get(key, "")
-            with self.subTest(key=key):
+        for language, values in TRANSLATIONS.items():
+            for key, value in values.items():
+                en_value = TRANSLATIONS["en"].get(key, "")
+                with self.subTest(language=language, key=key):
+                    self.assertEqual(
+                        set(re.findall(r"{(\w+)", value)),
+                        set(re.findall(r"{(\w+)", en_value)),
+                        f"placeholder mismatch for {language}:{key}",
+                    )
+
+    def test_all_supported_locales_are_loaded(self):
+        self.assertEqual(set(SUPPORTED_LANGUAGES), set(TRANSLATIONS))
+        self.assertGreaterEqual(len(SUPPORTED_LANGUAGES), 6)
+
+    def test_system_locale_mapping(self):
+        cases = {
+            "tr_TR.UTF-8": "tr", "en_GB.UTF-8": "en", "de_AT.UTF-8": "de",
+            "es_MX.UTF-8": "es", "pt_BR.UTF-8": "pt_BR", "fr_CA.UTF-8": "fr",
+            "pt_PT.UTF-8": "en",
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
                 self.assertEqual(
-                    set(re.findall(r"{(\w+)", tr_value)),
-                    set(re.findall(r"{(\w+)", en_value)),
-                    f"placeholder mismatch for {key}",
+                    detect_system_language({"LANG": value}), expected
                 )
 
     def test_translation_tables_have_no_duplicate_keys(self):
@@ -109,7 +125,7 @@ class TestTranslationCatalogExport(unittest.TestCase):
 
         rows = [line for line in render_csv().splitlines() if line]
         self.assertEqual(rows[0], "key,language,text")
-        self.assertEqual(len(rows) - 1, 2 * len(TRANSLATIONS["en"]))
+        self.assertEqual(len(rows) - 1, len(TRANSLATIONS) * len(TRANSLATIONS["en"]))
 
     def test_catalog_check_reports_no_problems(self):
         from tools.translation_catalog import check

@@ -62,6 +62,7 @@ class MainWindow(
 
         # Installed apps state
         self.applications: list[UnifiedApplication] = []
+        self.application_update_only_items: list[UnifiedApplication] = []
         self.application_issues: list[ApplicationIssue] = []
         self.application_provider_errors: list[str] = []
         self.application_provider_notices: list[str] = []
@@ -69,6 +70,10 @@ class MainWindow(
         self.application_filter_category = "__all__"
         self.application_search_text = ""
         self.applications_loading = False
+        self.application_updates_loading = False
+        self.application_updates_scanned = False
+        self._application_update_scan_token = 0
+        self._application_initial_load_needs_updates = False
         self.applications_busy = False
         self._cached_sudo_password: str | None = None
         self._cached_sudo_timestamp: float = 0.0
@@ -81,6 +86,8 @@ class MainWindow(
         self.store_filter_source = "all"
         self.store_busy = False
         self._store_search_generation = 0
+        # Kept as a compatibility marker for extensions/tests; no debounce
+        # source is scheduled anymore.
         self._store_search_timeout_id = 0
         self.store_search_metrics: dict[str, object] = {}
         self.application_load_metrics: dict[str, object] = {}

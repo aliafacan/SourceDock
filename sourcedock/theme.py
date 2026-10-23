@@ -94,6 +94,9 @@ label, window box, dialog box {{ color: @text; }}
 .state-title {{ font-size: 14pt; font-weight: bold; }}
 .page-title {{ font-size: 16pt; font-weight: bold; }}
 .summary-card {{ background: @surface; border: 1px solid @border; border-radius: 10px; }}
+.summary-card-active {{ background: alpha(@focus, 0.16); border-radius: 10px; }}
+.summary-card-active .summary-card {{ border-color: @focus; }}
+.updates-group-row {{ background: @surface; }}
 .summary-count {{ font-size: 17pt; font-weight: bold; }}
 .card-action {{ color: @focus; font-weight: bold; }}
 headerbar, .titlebar {{ background: @surface; color: @text; border-bottom: 1px solid @border; box-shadow: none; }}

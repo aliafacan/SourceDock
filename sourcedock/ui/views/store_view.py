@@ -27,7 +27,7 @@ from sourcedock.core.models import (
     StoreResult,
     is_native_source,
 )
-from sourcedock.i18n import source_name, t, translate_provider_error
+from sourcedock.i18n import source_name, t
 from sourcedock.theme import PALETTES, resolve_theme
 from sourcedock.ui.components.dialogs import AppDetailDialog, show_snap_classic_dialog
 from sourcedock.ui.components.progress import OperationProgressWindow
@@ -62,7 +62,6 @@ class StoreViewMixin:
 
         self.store_search_entry = Gtk.SearchEntry()
         self.store_search_entry.set_hexpand(True)
-        self.store_search_entry.connect("search-changed", self._on_store_search_changed)
         self.store_search_entry.connect("activate", self.on_store_search)
         self.store_search_entry.set_no_show_all(True)
         self.store_search_entry.hide()
@@ -238,15 +237,7 @@ class StoreViewMixin:
         icon_button(
             self.store_layout_toggle, "view-list-symbolic", t(self.preferences.language, "table_details")
         )
-        self.store_layout_toggle.connect(
-            "toggled",
-            lambda button: self.store_view_stack.set_visible_child_name(
-                "table" if button.get_active() else "cards"
-            ),
-        )
-        self.store_layout_toggle.connect(
-            "toggled", lambda button: self.store_install_btn.set_visible(button.get_active())
-        )
+        self.store_layout_toggle.connect("toggled", self._on_store_layout_toggled)
         search_row.pack_end(self.store_layout_toggle, False, False, 0)
 
         store_action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -291,32 +282,16 @@ class StoreViewMixin:
         self.on_store_search()
 
     def _on_store_search_changed(self, _entry: Gtk.SearchEntry) -> None:
-        """Debounce live discovery search so typing never starts one process per key."""
+        """Handle legacy/local entry changes without starting a remote search."""
         if getattr(self, "_suppress_store_search_changed", False) or getattr(
             self, "_syncing_global_search", False
         ):
             return
         query = self.store_search_entry.get_text().strip()
-        # The header search is the visible source of truth on Discover. Keep
-        # programmatic captures and the hidden page entry on the same query.
-        if self.header_search.get_text() != query:
-            header_cursor = self.header_search.get_position()
-            self._syncing_global_search = True
-            try:
-                self.header_search.set_text(query)
-            finally:
-                self._syncing_global_search = False
-            self.header_search.set_position(min(header_cursor, len(query)))
         category_queries = {"office", "editor", "browser", "graphics", "system"}
         if query not in category_queries:
             for button, _key in self.store_category_buttons:
                 button.set_active(False)
-        if self._store_search_timeout_id:
-            try:
-                GLib.source_remove(self._store_search_timeout_id)
-            except (TypeError, ValueError):
-                pass
-            self._store_search_timeout_id = 0
         if not query:
             self._store_search_generation += 1
             self.store_busy = False
@@ -328,11 +303,9 @@ class StoreViewMixin:
             )
             self._set_store_status(t(self.preferences.language, "store_empty"), "#666666")
             return
-        # Remote discovery is explicitly submitted with Enter. Starting a
-        # provider request for every partially typed word makes the header
-        # entry fight GTK's cursor position and creates stale partial results.
-        # Keep the local empty-state reset above, but leave non-empty text idle
-        # until the user submits it.
+        # Search is deliberately submitted with Enter (or the Search button).
+        # Keeping this field passive prevents a request per keystroke and
+        # avoids slow provider callbacks racing with GTK text input.
 
     def on_store_filter_toggled(self, button: Gtk.ToggleButton, source: str) -> None:
         if not hasattr(self, "store_results_store") or self.store_results_store is None:
@@ -358,12 +331,6 @@ class StoreViewMixin:
         query = self.header_search.get_text().strip() or self.store_search_entry.get_text().strip()
         if not query:
             return
-        if self._store_search_timeout_id:
-            try:
-                GLib.source_remove(self._store_search_timeout_id)
-            except (TypeError, ValueError):
-                pass
-            self._store_search_timeout_id = 0
         self._store_search_generation += 1
         generation = self._store_search_generation
         self.store_busy = True
@@ -446,18 +413,12 @@ class StoreViewMixin:
         provenance = self._store_provenance_status()
         self._set_store_status(msg + (f"\n{provenance}" if provenance else ""), "#666666")
         if getattr(self.store_registry, "provider_errors", []):
-            errors = []
-            seen_errors = set()
-            for error in self.store_registry.provider_errors:
-                translated = translate_provider_error(self.preferences.language, error)
-                key = translated.casefold()
-                if key in seen_errors:
-                    continue
-                seen_errors.add(key)
-                errors.append(translated)
+            # Results are still useful when one optional source is slow or
+            # unavailable. Keep the detail in the source-state summary instead
+            # of dumping one alarming red line per provider.
             self._set_store_status(
-                msg + (f"\n{provenance}" if provenance else "") + "\n" + "\n".join(errors),
-                "red",
+                msg + (f"\n{provenance}" if provenance else ""),
+                "#b07a2a",
             )
         return False
 
@@ -762,9 +723,12 @@ class StoreViewMixin:
     def _render_store_results(self, results: list[StoreResult]) -> None:
         if not hasattr(self, "store_results_store") or self.store_results_store is None:
             return
+        is_table = self.store_layout_toggle.get_active() if hasattr(self, "store_layout_toggle") else False
+        self.store_view_stack.set_visible_child_name("table" if is_table else "cards")
         self.store_results_store.clear()
-        for child in self.store_cards.get_children():
-            self.store_cards.remove(child)
+        if not is_table:
+            for child in self.store_cards.get_children():
+                self.store_cards.remove(child)
         filtered = [
             r
             for r in results
@@ -779,52 +743,61 @@ class StoreViewMixin:
         groups = self._group_store_results(filtered, query=self.store_search_entry.get_text())
         source_states = getattr(self.store_registry, "last_search_source_states", {})
         for primary, children in groups:
-            card_pixbuf = self._get_store_pixbuf(primary, 48)
-            self.store_cards.add(
-                AppCard(
-                    primary,
-                    card_pixbuf,
-                    self._store_result_is_installed(primary),
-                    self._open_store_detail_dialog,
-                    self.preferences.language,
-                    children,
-                    source_states,
+            if not is_table:
+                card_pixbuf = self._get_store_pixbuf(primary, 48)
+                self.store_cards.add(
+                    AppCard(
+                        primary,
+                        card_pixbuf,
+                        self._store_result_is_installed(primary),
+                        self._open_store_detail_dialog,
+                        self.preferences.language,
+                        children,
+                        source_states,
+                    )
                 )
-            )
-            p_pixbuf = self._get_store_pixbuf(primary, 32)
-            name_label = primary.name
-            if children:
-                name_label = f"{primary.name}  (+{len(children)})"
+            else:
+                p_pixbuf = self._get_store_pixbuf(primary, 32)
+                name_label = primary.name
+                if children:
+                    name_label = f"{primary.name}  (+{len(children)})"
 
-            p_iter = self.store_results_store.append(
-                None,
-                [
-                    p_pixbuf,
-                    name_label,
-                    self._display_store_source(primary),
-                    primary.description,
-                    primary.version,
-                    primary.remote,
-                    primary.download_size_str,
-                    primary,
-                ],
-            )
-            for child in children:
-                c_pixbuf = self._get_store_pixbuf(child, 32)
-                self.store_results_store.append(
-                    p_iter,
+                p_iter = self.store_results_store.append(
+                    None,
                     [
-                        c_pixbuf,
-                        child.name,
-                        self._display_store_source(child),
-                        child.description,
-                        child.version,
-                        child.remote,
-                        child.download_size_str,
-                        child,
+                        p_pixbuf,
+                        name_label,
+                        self._display_store_source(primary),
+                        primary.description,
+                        primary.version,
+                        primary.remote,
+                        primary.download_size_str,
+                        primary,
                     ],
                 )
-        self.store_cards.show_all()
+                for child in children:
+                    c_pixbuf = self._get_store_pixbuf(child, 32)
+                    self.store_results_store.append(
+                        p_iter,
+                        [
+                            c_pixbuf,
+                            child.name,
+                            self._display_store_source(child),
+                            child.description,
+                            child.version,
+                            child.remote,
+                            child.download_size_str,
+                            child,
+                        ],
+                    )
+        if not is_table:
+            self.store_cards.show_all()
+
+    def _on_store_layout_toggled(self, button: Gtk.ToggleButton) -> None:
+        self.store_view_stack.set_visible_child_name("table" if button.get_active() else "cards")
+        self.store_install_btn.set_visible(button.get_active())
+        if self.store_results:
+            self._render_store_results(self.store_results)
 
     def _scale_pixbuf_safe(self, pb: GdkPixbuf.Pixbuf | None, size: int = 48) -> GdkPixbuf.Pixbuf | None:
         if pb is None:
