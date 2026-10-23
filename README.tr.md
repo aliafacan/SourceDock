@@ -53,7 +53,7 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 - **Müstakil Paket Kurucu**: Yerel `.deb` paketlerini kurmadan önce açıklama, mimari, dosya boyutu, bağımlılıklar ve kaynak açısından önizleme imkânı.
 - **Güvenli İşlem Yürütme**: Dosya kilitleri (`flock`), zaman aşımı sınırları ve parola/kullanıcı yolu redaksiyonu ile donatılmış asenkron komut çalıştırıcısı.
 - **Şeffaf İşlem Geçmişi**: Kullanıcı denetiminde dışa aktarılabilen ve temizlenebilen kayıt defteri.
-- **Masaüstü Kişiselleştirme**: Sistem, Açık ve Koyu tema seçenekleri; %90–%125 arayüz ölçekleme desteği ve tam Türkçe / İngilizce yerelleştirme.
+- **Masaüstü Kişiselleştirme**: Sistem, Açık ve Koyu tema seçenekleri; %90–%125 arayüz ölçekleme desteği ve altı dilde yerelleştirme (TR/EN/DE/ES/PT-BR/FR).
 
 ---
 
@@ -64,18 +64,18 @@ SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint 
 1. En güncel `.deb` paketini ve sağlama özetini [GitHub Releases](https://github.com/aliafacan/SourceDock/releases) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
-   sha256sum -c sourcedock_1.3.0_all.deb.sha256
+   sha256sum -c sourcedock_1.4.0_all.deb.sha256
    ```
 3. Paketi APT ile kurun:
    ```bash
-   sudo apt install ./sourcedock_1.3.0_all.deb
+   sudo apt install ./sourcedock_1.4.0_all.deb
    ```
 4. Uygulamayı başlatın:
    ```bash
    sourcedock
    ```
 
-*(Not: `voltapp` komutu 1.3.0 sürüm geçişi boyunca geriye dönük uyumluluk için alias olarak korunmaktadır).*
+*(Not: `voltapp` komutu geriye dönük uyumluluk için alias olarak korunmaktadır.)*
 
 ### GNOME Shell Masaüstü Entegrasyonu (İsteğe Bağlı)
 

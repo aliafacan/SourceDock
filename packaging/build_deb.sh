@@ -41,6 +41,7 @@ cp "$PROJECT_DIR/main.py" "$DEB_ROOT/usr/lib/$PACKAGE/"
 
 # sourcedock/ paket modülleri
 cp -r "$PROJECT_DIR/sourcedock" "$DEB_ROOT/usr/lib/$PACKAGE/"
+test "$(find "$DEB_ROOT/usr/lib/$PACKAGE/sourcedock/locales" -maxdepth 1 -name '*.json' | wc -l)" -ge 6
 find "$DEB_ROOT/usr/lib/$PACKAGE" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find "$DEB_ROOT/usr/lib/$PACKAGE" -type f -name "*.pyc" -delete 2>/dev/null || true
 
@@ -135,7 +136,7 @@ Description: Linux application and package manager
  SourceDock is a modern, modular, and distro-agnostic Linux software management
  tool. It unifies APT/DNF/Pacman/Zypper native packages, Flatpak, Snap,
  AppImage, and portable software with standalone mini-installer preview,
- smart version detection, and dual-language (TR/EN) support.
+ smart version detection, and six-language support (TR/EN/DE/ES/PT-BR/FR).
 EOF
 
 # 6. DEBIAN/postinst

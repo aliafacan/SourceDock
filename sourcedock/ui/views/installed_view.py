@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 import os
 from pathlib import Path
 import threading
@@ -551,6 +552,8 @@ class InstalledViewMixin:
         )
         button.set_tooltip_text(t(self.preferences.language, "tooltip_installed_layout"))
         button.get_accessible().set_name(t(self.preferences.language, "tooltip_installed_layout"))
+        if getattr(self, "applications", None):
+            self._render_applications_list()
 
     def on_applications_search_changed(self, entry: Gtk.SearchEntry) -> None:
         self.application_search_text = entry.get_text().strip()
@@ -565,6 +568,14 @@ class InstalledViewMixin:
             if item_source != source:
                 item_button.set_active(False)
         self.application_filter_source = source
+        if (
+            source == "updates"
+            and not self.applications_loading
+            and not self.application_updates_scanned
+        ):
+            self._load_update_status_for_installed()
+            self._render_applications_list()
+            return
         self._render_applications_list()
 
     def on_reload_applications(self, *_args) -> None:
@@ -642,7 +653,9 @@ class InstalledViewMixin:
         )
 
     def on_update_all_applications(self, _button: Gtk.Button) -> None:
-        updateable = [item for item in self.applications if item.update_available]
+        updateable = [
+            item for item in self._application_items_with_update_status() if item.update_available
+        ]
         if not updateable:
             return
         if any(app.source == SOURCE_FIRMWARE for app in updateable) and not self._confirm_firmware_update():
@@ -996,7 +1009,15 @@ class InstalledViewMixin:
     def reload_applications_async(self) -> None:
         if self.applications_loading:
             return
+        invalidate = getattr(self.application_registry, "invalidate_application_cache", None)
+        if callable(invalidate):
+            invalidate()
         self.applications_loading = True
+        self._application_update_scan_token += 1
+        self.application_updates_loading = False
+        self.application_updates_scanned = False
+        self._application_initial_load_needs_updates = True
+        self.application_update_only_items = []
         self._application_load_started_at = time.perf_counter()
         self.application_load_metrics = {
             "first_snapshot_ms": None,
@@ -1015,12 +1036,126 @@ class InstalledViewMixin:
         progressive_loader = getattr(self.application_registry, "load_progressive", None)
         try:
             if callable(progressive_loader):
-                progressive_loader(publish)
+                progressive_loader(publish, include_updates=False)
             else:
                 GLib.idle_add(self._finish_applications_load, self.application_registry.load(), True)
         except Exception as exc:
             failed = ApplicationSnapshot([], provider_errors=[str(exc)])
             GLib.idle_add(self._finish_applications_load, failed, True)
+
+    def _load_update_status_for_installed(self) -> None:
+        """Load update metadata only when the user asks for that filter."""
+        if self.application_updates_loading or self.application_updates_scanned:
+            return
+
+        self._application_update_scan_token += 1
+        scan_token = self._application_update_scan_token
+        self.application_updates_loading = True
+        self._render_applications_list()
+        self.installed_state.show_state(
+            t(self.preferences.language, "updates_loading"), loading=True
+        )
+        self._set_applications_status(t(self.preferences.language, "updates_loading"), "#666666")
+        current_applications = list(self.applications)
+
+        def worker() -> None:
+            try:
+                snapshot = self.application_registry.load(include_updates=True)
+            except Exception as exc:
+                snapshot = ApplicationSnapshot(current_applications, provider_errors=[str(exc)])
+            GLib.idle_add(self._finish_update_status_for_installed, snapshot, scan_token)
+
+        threading.Thread(target=worker, daemon=True, name="installed-update-status").start()
+
+    def _finish_update_status_for_installed(
+        self, snapshot: ApplicationSnapshot, scan_token: int | None = None
+    ) -> bool:
+        if scan_token is not None and scan_token != self._application_update_scan_token:
+            return False
+        self.application_updates_loading = False
+        self.application_updates_scanned = True
+        current_by_package = {
+            (app.source, app.package_name)
+            for app in self.applications
+            if app.package_name
+        }
+        current_by_fallback = {
+            (app.source, app.install_path or app.id)
+            for app in self.applications
+            if not app.package_name
+        }
+        update_status = {
+            (app.source, app.package_name): app
+            for app in snapshot.applications
+            if app.package_name
+        }
+        fallback_status = {
+            (app.source, app.install_path or app.id): app
+            for app in snapshot.applications
+            if not app.package_name
+        }
+        matched_update_ids: set[str] = set()
+        merged_applications: list[UnifiedApplication] = []
+        for application in self.applications:
+            status = (
+                update_status.get((application.source, application.package_name))
+                if application.package_name
+                else fallback_status.get((application.source, application.install_path or application.id))
+            )
+            if status is None:
+                merged_applications.append(application)
+                continue
+            merged_applications.append(
+                replace(
+                    application,
+                    update_available=status.update_available,
+                    update_note=status.update_note,
+                )
+            )
+            matched_update_ids.add(status.id)
+
+        self.application_update_only_items = []
+        for candidate in snapshot.applications:
+            if not candidate.update_available or candidate.id in matched_update_ids:
+                continue
+            if candidate.package_name and (candidate.source, candidate.package_name) in current_by_package:
+                continue
+            if not candidate.package_name and (candidate.source, candidate.install_path or candidate.id) in current_by_fallback:
+                continue
+            self.application_update_only_items.append(candidate)
+        self.applications = merged_applications
+        self.application_issues = snapshot.issues
+        self.application_provider_errors = snapshot.provider_errors
+        self.application_provider_notices = snapshot.provider_notices
+        self.installed_package_ids = {
+            f"{app.source}:{app.package_name}" for app in self.applications if app.package_name
+        }
+        self.installed_package_ids.update(
+            f"{app.source}:{app.package_name}"
+            for app in self.application_update_only_items
+            if app.package_name
+        )
+        self._update_category_combo()
+        self._render_applications_list()
+        self._render_application_diagnostics()
+
+        if hasattr(self, "updates_model"):
+            from sourcedock.backend.updates import build_update_catalog
+
+            self.update_items = build_update_catalog(
+                self._application_items_with_update_status(),
+                self.packages,
+                self.application_registry.native_provider.source,
+            )
+            self._refresh_update_count()
+
+        update_count = sum(
+            1 for item in self._application_items_with_update_status() if item.update_available
+        )
+        self.applications_update_all_btn.set_sensitive(update_count > 0)
+        status_key = "applications_load_partial" if self.application_provider_errors else "applications_loaded"
+        self._set_applications_status(t(self.preferences.language, status_key), "#666666")
+        return False
 
     def _finish_applications_load(self, snapshot: ApplicationSnapshot, complete: bool = True) -> bool:
         if not hasattr(self, "_application_load_started_at"):
@@ -1038,6 +1173,7 @@ class InstalledViewMixin:
                 (time.perf_counter() - self._application_load_started_at) * 1000, 1
             )
         self.applications = snapshot.applications
+        self.application_update_only_items = []
         self.application_issues = snapshot.issues
         self.application_provider_errors = snapshot.provider_errors
         self.application_provider_notices = snapshot.provider_notices
@@ -1050,7 +1186,11 @@ class InstalledViewMixin:
         self._update_category_combo()
         self._render_applications_list()
         self._render_application_diagnostics()
-        if self.applications:
+        if self.application_filter_source == "updates" and self.applications_loading:
+            self.installed_state.show_state(
+                t(self.preferences.language, "updates_loading"), loading=True
+            )
+        elif self.applications:
             self.installed_state.show_content()
         elif complete:
             self.installed_state.show_state(
@@ -1080,6 +1220,13 @@ class InstalledViewMixin:
             if not selected_paths:
                 status_msg = t(self.preferences.language, "applications_select_hint")
         self._set_applications_status(status_msg, "#666666")
+        if (
+            complete
+            and self._application_initial_load_needs_updates
+            and not self.application_updates_scanned
+        ):
+            self._application_initial_load_needs_updates = False
+            self._load_update_status_for_installed()
         return False
 
     def _run_application_task(
@@ -1255,6 +1402,15 @@ class InstalledViewMixin:
         self._set_application_controls_sensitive(True)
         self._set_applications_status(message, "#1f7a1f" if success else "red")
         if refresh_after:
+            invalidate = getattr(self.application_registry, "invalidate_application_cache", None)
+            if callable(invalidate):
+                try:
+                    invalidate(clear_persisted=True)
+                except TypeError:
+                    invalidate()
+            store_invalidate = getattr(getattr(self, "store_registry", None), "invalidate_search_cache", None)
+            if callable(store_invalidate):
+                store_invalidate()
             self.reload_applications_async()
             if self.pages.get_current_page() == 2:
                 self.reload_packages_async()
@@ -1346,7 +1502,13 @@ class InstalledViewMixin:
                     app,
                 ]
             )
-        if hasattr(self, "applications_cards") and self.applications_cards is not None:
+        # Only build widgets for the active representation. The other view is
+        # populated lazily when the user switches to it.
+        is_grid = (
+            hasattr(self, "applications_view_stack")
+            and self.applications_view_stack.get_visible_child_name() == "cards"
+        )
+        if is_grid and hasattr(self, "applications_cards") and self.applications_cards is not None:
             for child in self.applications_cards.get_children():
                 self.applications_cards.remove(child)
             for app in filtered:
@@ -1381,7 +1543,7 @@ class InstalledViewMixin:
 
         GLib.idle_add(_restore_scroll_and_selection)
 
-        total = len(self.applications)
+        total = len(self._application_items_with_update_status())
 
         shown = len(filtered)
         show_technical = getattr(self.preferences, "show_technical_packages", False)
@@ -1394,16 +1556,33 @@ class InstalledViewMixin:
             else 0
         )
         summary_key = "applications_count_summary_hidden" if hidden else "applications_count_summary"
-        self.applications_summary_label.set_text(
-            t(self.preferences.language, summary_key, count=shown, total=total, hidden=hidden)
+        scanning_applications = self.applications_loading
+        scanning_updates = (
+            self.application_filter_source == "updates" and self.application_updates_loading
         )
-        if hidden:
+        if scanning_applications:
+            self.applications_summary_label.set_text(
+                t(self.preferences.language, "applications_loading")
+            )
+        elif scanning_updates:
+            self.applications_summary_label.set_text(
+                t(self.preferences.language, "updates_loading")
+            )
+        else:
+            self.applications_summary_label.set_text(
+                t(self.preferences.language, summary_key, count=shown, total=total, hidden=hidden)
+            )
+        if hidden and not scanning_updates:
             self.applications_summary_label.set_tooltip_text(
                 t(self.preferences.language, "tooltip_installed_summary_hidden")
             )
         else:
             self.applications_summary_label.set_tooltip_text(None)
-        if not self.applications_loading:
+        if self.application_updates_loading and self.application_filter_source == "updates":
+            self.installed_state.show_state(
+                t(self.preferences.language, "updates_loading"), loading=True
+            )
+        elif not self.applications_loading:
             if filtered:
                 self.installed_state.show_content()
             else:
@@ -1417,6 +1596,11 @@ class InstalledViewMixin:
                         t(self.preferences.language, "installed_search_empty_body"),
                         retry_callback=self._clear_application_search,
                         retry_label=t(self.preferences.language, "clear_search"),
+                    )
+                elif self.application_filter_source == "updates":
+                    self.installed_state.show_state(
+                        t(self.preferences.language, "updates_empty"),
+                        t(self.preferences.language, "updates_empty_body"),
                     )
                 else:
                     self.installed_state.show_state(t(self.preferences.language, "installed_empty"))
@@ -1497,22 +1681,48 @@ class InstalledViewMixin:
             self.applications_diagnostics_list.remove(child)
 
         lang = self.preferences.language
-        all_notes = [
-            ("dialog-warning-symbolic", translate_provider_error(lang, err))
-            for err in self.application_provider_errors
-        ]
+        all_notes = []
+        timeout_sources = []
+        for error in self.application_provider_errors:
+            source, _, detail = error.partition(":")
+            if "timeout" in detail.casefold():
+                timeout_sources.append(source_name(lang, source.strip().lower()))
+            else:
+                all_notes.append(("dialog-warning-symbolic", translate_provider_error(lang, error)))
+        if timeout_sources:
+            unique_sources = list(dict.fromkeys(timeout_sources))
+            all_notes.append(
+                (
+                    "dialog-warning-symbolic",
+                    f"{', '.join(unique_sources)}: {t(lang, 'provider_timeout', source='').lstrip()}",
+                )
+            )
         all_notes.extend(
             ("dialog-information-symbolic", translate_provider_notice(lang, notice))
-            for notice in self.application_provider_notices
+            for notice in dict.fromkeys(self.application_provider_notices)
         )
         detail_keys = {
             "No icon is set.": "diagnostics_missing_icon",
             "Desktop launcher has no command.": "diagnostics_missing_command",
             "Linked AppImage file is missing.": "diagnostics_missing_appimage",
         }
+        missing_appimages = []
         for issue in self.application_issues:
+            if issue.detail == "Linked AppImage file is missing.":
+                missing_appimages.append(issue.title)
+                continue
             detail = t(lang, detail_keys[issue.detail]) if issue.detail in detail_keys else issue.detail
             all_notes.append(("dialog-information-symbolic", f"{issue.title}: {detail}"))
+        if missing_appimages:
+            names = ", ".join(missing_appimages[:3])
+            if len(missing_appimages) > 3:
+                names += f" (+{len(missing_appimages) - 3})"
+            all_notes.append(
+                (
+                    "dialog-information-symbolic",
+                    f"{names}: {t(lang, 'diagnostics_missing_appimage')}",
+                )
+            )
 
         if not all_notes:
             self.applications_diagnostics_label.set_text(t(lang, "diagnostics_empty"))
@@ -1535,6 +1745,10 @@ class InstalledViewMixin:
             self.applications_diagnostics_list.add(row)
         self.applications_diagnostics_list.show_all()
 
+    def _application_items_with_update_status(self) -> list[UnifiedApplication]:
+        """Return the base inventory plus update-only technical entries."""
+        return [*self.applications, *self.application_update_only_items]
+
     def _filtered_application_items(self) -> list[UnifiedApplication]:
         source = self.application_filter_source
         cat = self.application_filter_category
@@ -1542,7 +1756,11 @@ class InstalledViewMixin:
 
         results = []
         show_technical = getattr(self.preferences, "show_technical_packages", False)
-        for app in self.applications:
+        if source == "updates" or (source == "all" and show_technical):
+            applications = self._application_items_with_update_status()
+        else:
+            applications = self.applications
+        for app in applications:
             if (
                 source == "all"
                 and not show_technical

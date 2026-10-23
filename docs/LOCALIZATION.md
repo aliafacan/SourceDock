@@ -1,19 +1,16 @@
 # Localization And Translation Contributions
 
-SourceDock ships Turkish (TR) and English (EN) at runtime. Strings live in
-`sourcedock/i18n.py` in two tables that the module merges at import time:
-
-- `TRANSLATIONS["tr"]` / `TRANSLATIONS["en"]` for the historical keys.
-- `_UI_STRINGS`, a `{key: (turkish, english)}` table for newer keys.
-
-Keeping both tables in one module means the application has no runtime gettext
-dependency: `sourcedock.i18n.t(language, key, **kwargs)` simply looks the text up
-and applies `str.format` placeholders.
+SourceDock ships Turkish, English, German, Spanish, Brazilian Portuguese and
+French at runtime. Each catalogue is an independently editable UTF-8 JSON file
+under `sourcedock/locales/`. The compatibility mapping
+`sourcedock.i18n.TRANSLATIONS` is loaded from those files and keeps old imports
+working. The `t(language, key, **kwargs)` helper applies safe English fallback
+and `str.format` placeholders without a runtime gettext dependency.
 
 ## Contract
 
-- Every key MUST exist in both languages with a non-empty value.
-- Placeholders (`{name}`, `{count}`, ...) MUST match between TR and EN.
+- Every key MUST exist in all supported languages with a non-empty value.
+- Placeholders (`{name}`, `{count}`, ...) MUST match the English reference.
 - A key MUST NOT be defined twice in the same table (the later value silently
   wins today, which hides mistakes).
 - UI code MUST resolve text through `t(...)`. Do not hardcode display strings.
@@ -31,23 +28,24 @@ python3 tools/translation_catalog.py --check
 ```
 
 `--export po` writes `sourcedock.pot` (a gettext template whose `msgid` is the
-stable key and whose comments carry the current EN/TR text) and
+stable key and whose comments carry the current text for every language) and
 `sourcedock.csv` (`key,language,text`) into the target directory. `--check`
 validates parity and emptiness and exits non-zero on a problem.
 
 The generated files are review inputs. Merge translated text back into the
-appropriate table in `sourcedock/i18n.py`; the runtime stays dependency-free.
+appropriate JSON catalogue; the runtime stays dependency-free.
 
 ## Weblate / hosted flow (proposal)
 
 1. Point the hosted tool at `sourcedock.pot` produced by `--export`.
 2. Treat the symbolic key as the unit of translation (`msgctxt`-style). English is
    the reference language and is never merged from the hosted tool blindly.
-3. Open a pull request that only edits `sourcedock/i18n.py` for the affected
+3. Open a pull request that only edits the affected JSON catalogue for the
    language. The integrity test and the GTK smoke run must pass.
 
 ## Adding a new language (proposal)
 
-The runtime currently resolves `tr` and falls back to `en`. Adding a third
-language requires a new table plus locale detection and screenshot review; that
-work is intentionally not folded into the current dictionaries.
+Adding a language only requires adding a valid `<language>.json` file to
+`sourcedock/locales/`; the runtime registry, settings selector and catalogue
+tool discover it automatically. Add a display name to `LANGUAGE_NAMES` when the
+code is not one of the standard six codes.

@@ -48,7 +48,7 @@ def measure_application_load(registry: ApplicationRegistry) -> tuple[float, int,
         if snapshot.applications and first_meaningful is None:
             first_meaningful = (time.perf_counter() - started) * 1000
 
-    snapshot = registry.load_progressive(observe)
+    snapshot = registry.load_progressive(observe, include_updates=False)
     return (
         (time.perf_counter() - started) * 1000,
         len(snapshot.applications),
@@ -57,12 +57,19 @@ def measure_application_load(registry: ApplicationRegistry) -> tuple[float, int,
     )
 
 
-def measure_store_search(registry: StoreRegistry) -> tuple[float, int, dict, dict]:
+def measure_store_search(registry: StoreRegistry) -> tuple[float, int, dict, dict, float | None]:
     started = time.perf_counter()
+    first_result_ms = None
+
+    def observe(results, _complete):
+        nonlocal first_result_ms
+        if results and first_result_ms is None:
+            first_result_ms = (time.perf_counter() - started) * 1000
+
     try:
-        results = registry.search("firefox")
+        results = registry.search("firefox", on_partial=observe)
     except Exception as exc:
-        return (time.perf_counter() - started) * 1000, 0, {"error": str(exc)}, {}
+        return (time.perf_counter() - started) * 1000, 0, {"error": str(exc)}, {}, first_result_ms
     search_elapsed_ms = (time.perf_counter() - started) * 1000
     icon_started = time.perf_counter()
     icon_count = 0
@@ -83,6 +90,7 @@ def measure_store_search(registry: StoreRegistry) -> tuple[float, int, dict, dic
         len(results),
         dict(registry.last_search_metrics),
         icon_metrics,
+        first_result_ms,
     )
 
 
@@ -125,26 +133,30 @@ def main() -> None:
     store_counts = []
     store_cold_metrics = []
     store_cold_icon_metrics = []
+    store_cold_first = []
     store_hot_metrics = []
     store_hot_icon_metrics = []
+    store_hot_first = []
     for index in range(iterations):
         started = time.perf_counter()
         registry = StoreRegistry()
-        elapsed, count, metrics, icon_metrics = measure_store_search(registry)
+        elapsed, count, metrics, icon_metrics, first_result_ms = measure_store_search(registry)
         store_cold.append((time.perf_counter() - started) * 1000)
         store_counts.append(count)
         store_cold_metrics.append(metrics)
         store_cold_icon_metrics.append(icon_metrics)
+        store_cold_first.append(first_result_ms)
         print(f"store cold {index + 1}/{iterations}: {store_cold[-1]:.1f} ms ({count} results)", flush=True)
 
     hot_store_registry = StoreRegistry()
     measure_store_search(hot_store_registry)
     for index in range(iterations):
-        elapsed, count, metrics, icon_metrics = measure_store_search(hot_store_registry)
+        elapsed, count, metrics, icon_metrics, first_result_ms = measure_store_search(hot_store_registry)
         store_hot.append(elapsed)
         store_counts.append(count)
         store_hot_metrics.append(metrics)
         store_hot_icon_metrics.append(icon_metrics)
+        store_hot_first.append(first_result_ms)
         print(f"store hot {index + 1}/{iterations}: {elapsed:.1f} ms ({count} results)", flush=True)
 
     result = {
@@ -158,6 +170,10 @@ def main() -> None:
         },
         "application_provider_metrics": {"cold": app_cold_metrics, "hot": app_hot_metrics},
         "store_search_ms": {"cold": summary(store_cold), "hot": summary(store_hot)},
+        "store_first_result_ms": {
+            "cold": summary([value for value in store_cold_first if value is not None]),
+            "hot": summary([value for value in store_hot_first if value is not None]),
+        },
         "store_cold_provider_metrics": store_cold_metrics,
         "store_hot_provider_metrics": store_hot_metrics,
         "store_cold_icon_metrics": store_cold_icon_metrics,

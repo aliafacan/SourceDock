@@ -205,7 +205,15 @@ class PackagesViewMixin:
         if error:
             self._set_packages_status(error, "red")
             return False
-        self.packages = packages
+        # The Installed view owns graphical applications. Keep this package
+        # inventory focused on system/CLI and library packages instead of
+        # duplicating every desktop application here.
+        ui_package_names = {
+            app.package_name
+            for app in self.applications
+            if app.package_name and app.source == self.application_registry.native_provider.source
+        }
+        self.packages = [package for package in packages if package.name not in ui_package_names]
         self._render_packages_list()
         upgradable_count = sum(1 for p in packages if p.update_available)
         msg = t(self.preferences.language, "packages_count_summary", count=len(packages))

@@ -12,6 +12,7 @@ from sourcedock.core.models import (
     UnifiedApplication,
 )
 from sourcedock.core.runner import CommandRunner
+from sourcedock.core.errors import BackendError
 from sourcedock.backend.scanner import (
     DesktopEntryScanner,
     _first_category,
@@ -30,12 +31,13 @@ class SnapProvider:
     """Sistemdeki Snap paketlerini yöneten ve listeleyen sağlayıcı."""
 
     source = SOURCE_SNAP
+    LIST_TIMEOUT_SECONDS = 2
 
     def __init__(self, runner: CommandRunner, scanner: DesktopEntryScanner):
         self.runner = runner
         self.scanner = scanner
 
-    def list_applications(self) -> list[UnifiedApplication]:
+    def list_applications(self, *, include_updates: bool = True) -> list[UnifiedApplication]:
         if not self.runner.command_exists("snap"):
             return []
 
@@ -43,7 +45,15 @@ class SnapProvider:
         if not snaps:
             return []
 
-        update_names = self._update_names()
+        # Update discovery is optional for the installed-app list.  A stalled
+        # snapd refresh query must never hide every installed Snap.
+        if include_updates:
+            try:
+                update_names = self._update_names()
+            except (BackendError, OSError):
+                update_names = set()
+        else:
+            update_names = set()
         applications: list[UnifiedApplication] = []
         for entry in self.scanner.list_entries(
             ["/var/lib/snapd/desktop/applications", os.path.expanduser("~/.local/share/applications")]
@@ -156,7 +166,7 @@ class SnapProvider:
     def _snap_metadata(self) -> dict[str, str]:
         # Listing is read-only and must not hold the progressive application
         # scan open for the default command timeout.
-        result = self.runner.run(["snap", "list"], timeout=5)
+        result = self.runner.run(["snap", "list"], timeout=self.LIST_TIMEOUT_SECONDS)
         if result.returncode != 0:
             return {}
         snaps: dict[str, str] = {}

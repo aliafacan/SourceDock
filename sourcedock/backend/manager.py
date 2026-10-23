@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import asdict
 from pathlib import Path
 import re
 import shutil
+import threading
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import time
@@ -103,7 +105,13 @@ class ApplicationRegistry:
         return msg if msg else fallback
 
 
-    PROVIDER_TIMEOUT_SECONDS = 5.0
+    # Provider commands have their own short command-level timeouts, but a
+    # cold Flatpak metadata scan can legitimately take several seconds.  The
+    # old five-second aggregate deadline routinely returned only AppImage and
+    # firmware results and made the application list look incomplete.
+    PROVIDER_TIMEOUT_SECONDS = 30.0
+    APPLICATION_CACHE_TTL_SECONDS = 20.0
+    PERSISTED_CACHE_TTL_SECONDS = 6 * 60 * 60
 
     def __init__(self, distro_info: DistroInfo | None = None, runner: CommandRunner | None = None):
         self.runner = runner or CommandRunner()
@@ -111,6 +119,12 @@ class ApplicationRegistry:
         self.distro = distro_info or detect_distro(self.runner)
         self.applications: list[UnifiedApplication] = []
         self.last_provider_metrics: dict[str, object] = {}
+        self._application_cache: ApplicationSnapshot | None = None
+        self._application_cache_at = 0.0
+        self._application_cache_includes_updates = True
+        self._application_cache_lock = threading.RLock()
+        cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+        self._persisted_application_cache_path = cache_home / "sourcedock" / "installed-applications.json"
 
         self._native_providers: dict[str, BaseNativeProvider] = {
             SOURCE_APT: AptProvider(self.runner, self.scanner),
@@ -147,6 +161,57 @@ class ApplicationRegistry:
     def set_sudo_password(self, password: str) -> None:
         self.runner.set_sudo_password(password)
 
+    def invalidate_application_cache(self, *, clear_persisted: bool = False) -> None:
+        """Force the next read-only application load to query providers."""
+        with self._application_cache_lock:
+            self._application_cache = None
+            self._application_cache_at = 0.0
+        if clear_persisted:
+            try:
+                self._persisted_application_cache_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _read_persisted_application_cache(self) -> ApplicationSnapshot | None:
+        """Load a short-lived last-known inventory for instant first paint."""
+        cache_path = getattr(self, "_persisted_application_cache_path", None)
+        if cache_path is None:
+            return None
+        try:
+            raw = json.loads(cache_path.read_text(encoding="utf-8"))
+            saved_at = float(raw.get("saved_at", 0))
+            entries = raw.get("applications", [])
+            if time.time() - saved_at > self.PERSISTED_CACHE_TTL_SECONDS or not isinstance(entries, list):
+                return None
+            allowed = set(UnifiedApplication.__dataclass_fields__)
+            applications = []
+            for entry in entries:
+                if not isinstance(entry, dict) or not entry.get("id") or not entry.get("name"):
+                    continue
+                values = {key: value for key, value in entry.items() if key in allowed}
+                applications.append(UnifiedApplication(**values))
+            if not applications:
+                return None
+            return self._build_snapshot(applications, [])
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return None
+
+    def _write_persisted_application_cache(self, snapshot: ApplicationSnapshot) -> None:
+        cache_path = getattr(self, "_persisted_application_cache_path", None)
+        if cache_path is None:
+            return
+        try:
+            from sourcedock.core.json_store import write_json
+
+            write_json(
+                cache_path,
+                {"saved_at": time.time(), "applications": [asdict(app) for app in snapshot.applications]},
+            )
+        except (OSError, TypeError, ValueError):
+            # The disk cache is an optimisation; a read-only or full cache
+            # directory must never make application discovery fail.
+            return
+
     def refresh_update_cache(self) -> None:
         if self.native_provider.is_available():
             cmd = self.native_provider.refresh_cache_command()
@@ -180,10 +245,25 @@ class ApplicationRegistry:
         except Exception:
             pass
 
-    def _load_provider(self, provider):
+    def _load_provider(self, provider, include_updates: bool = True):
         started_at = time.perf_counter()
         try:
-            found = provider.list_applications()
+            if provider.source in {
+                SOURCE_APT,
+                SOURCE_FLATPAK,
+                SOURCE_SNAP,
+                SOURCE_FIRMWARE,
+            }:
+                try:
+                    found = provider.list_applications(include_updates=include_updates)
+                except TypeError as exc:
+                    # Keep lightweight third-party/test providers compatible
+                    # with the optional keyword introduced for staged scans.
+                    if "include_updates" not in str(exc):
+                        raise
+                    found = provider.list_applications()
+            else:
+                found = provider.list_applications()
             return provider, found, None, (time.perf_counter() - started_at) * 1000
         except BackendError as exc:
             return provider, [], f"{provider.source}: {exc}", (time.perf_counter() - started_at) * 1000
@@ -194,6 +274,8 @@ class ApplicationRegistry:
         self,
         on_result: Callable[[list[UnifiedApplication], list[str]], None] | None = None,
         timeout_seconds: float | None = None,
+        include_updates: bool = True,
+        on_provider_result: Callable[[str, list[UnifiedApplication], str | None], None] | None = None,
     ) -> tuple[list[UnifiedApplication], list[str]]:
         """Collect independent read-only scans without waiting on a stalled provider.
 
@@ -208,7 +290,8 @@ class ApplicationRegistry:
         timeout = self.PROVIDER_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
         executor = ThreadPoolExecutor(max_workers=max(1, min(6, len(self.providers))))
         future_to_provider = {
-            executor.submit(self._load_provider, provider): provider for provider in self.providers
+            executor.submit(self._load_provider, provider, include_updates): provider
+            for provider in self.providers
         }
         pending = set(future_to_provider)
         started_at = time.perf_counter()
@@ -231,6 +314,8 @@ class ApplicationRegistry:
                     applications.extend(found)
                     if error:
                         provider_errors.append(error)
+                    if on_provider_result:
+                        on_provider_result(source, found, error)
                     if on_result:
                         on_result(applications, provider_errors)
 
@@ -240,11 +325,16 @@ class ApplicationRegistry:
                     provider = future_to_provider[future]
                     timed_out.append(provider.source)
                     provider_metrics[provider.source] = elapsed_ms
-                    provider_errors.append(
+                    error = (
                         f"{provider.source}: timeout after {timeout:g}s"
                         if timeout is not None
                         else f"{provider.source}: timeout"
                     )
+                    provider_errors.append(error)
+                    if on_provider_result:
+                        on_provider_result(provider.source, [], error)
+                    if on_result:
+                        on_result(applications, provider_errors)
                     future.cancel()
         finally:
             # Do not make the UI thread wait for a provider that ignored its own
@@ -281,33 +371,102 @@ class ApplicationRegistry:
             provider_notices=notices,
         )
 
-    def load(self, provider_timeout_seconds: float | None = None) -> ApplicationSnapshot:
+    def load(
+        self,
+        provider_timeout_seconds: float | None = None,
+        *,
+        include_updates: bool = True,
+    ) -> ApplicationSnapshot:
+        with self._application_cache_lock:
+            cached = self._application_cache
+            cache_age = time.monotonic() - self._application_cache_at
+        if (
+            cached is not None
+            and provider_timeout_seconds is None
+            and (
+                not include_updates
+                or getattr(self, "_application_cache_includes_updates", True)
+            )
+            and cache_age <= self.APPLICATION_CACHE_TTL_SECONDS
+        ):
+            self.applications = cached.applications
+            return cached
         applications, provider_errors = self._collect_provider_results(
-            timeout_seconds=provider_timeout_seconds
+            timeout_seconds=provider_timeout_seconds,
+            include_updates=include_updates,
         )
-        return self._build_snapshot(applications, provider_errors)
+        snapshot = self._build_snapshot(applications, provider_errors)
+        if not provider_errors:
+            with self._application_cache_lock:
+                self._application_cache = snapshot
+                self._application_cache_at = time.monotonic()
+                self._application_cache_includes_updates = include_updates
+            self._write_persisted_application_cache(snapshot)
+        return snapshot
 
     def load_progressive(
         self,
         on_snapshot: Callable[[ApplicationSnapshot, bool], None],
         provider_timeout_seconds: float | None = None,
+        *,
+        include_updates: bool = True,
     ) -> ApplicationSnapshot:
         """Load providers concurrently and publish each completed snapshot."""
         applications: list[UnifiedApplication] = []
         provider_errors: list[str] = []
 
-        def publish(current_applications: list[UnifiedApplication], current_errors: list[str]) -> None:
-            applications[:] = current_applications
+        persisted = self._read_persisted_application_cache()
+        applications_by_source: dict[str, list[UnifiedApplication]] = {}
+        if persisted is not None:
+            # Show the last known inventory immediately. Fresh provider results
+            # replace only their own source below, so a slow or unavailable
+            # source does not make the whole cached list disappear.
+            for application in persisted.applications:
+                applications_by_source.setdefault(application.source, []).append(application)
+            on_snapshot(persisted, False)
+
+        def publish(_current_applications: list[UnifiedApplication], current_errors: list[str]) -> None:
             provider_errors[:] = current_errors
-            on_snapshot(self._build_snapshot(applications, provider_errors, include_hidden=False), False)
+            applications[:] = [
+                application
+                for source_applications in applications_by_source.values()
+                for application in source_applications
+            ]
+            on_snapshot(
+                self._build_snapshot(applications, provider_errors, include_hidden=False), False
+            )
+
+        def publish_provider_result(
+            source: str, found: list[UnifiedApplication], error: str | None
+        ) -> None:
+            # A failed source keeps its last known entries as a useful fallback;
+            # a successful empty result deliberately removes that source.
+            if error is None or source not in applications_by_source:
+                applications_by_source[source] = list(found)
 
         collected_applications, collected_errors = self._collect_provider_results(
-            on_result=publish, timeout_seconds=provider_timeout_seconds
+            on_result=publish,
+            timeout_seconds=provider_timeout_seconds,
+            include_updates=include_updates,
+            on_provider_result=publish_provider_result,
         )
-        applications[:] = collected_applications
+        if not applications_by_source:
+            applications[:] = collected_applications
+        else:
+            applications[:] = [
+                application
+                for source_applications in applications_by_source.values()
+                for application in source_applications
+            ]
         provider_errors[:] = collected_errors
 
         snapshot = self._build_snapshot(applications, provider_errors)
+        if not provider_errors:
+            with self._application_cache_lock:
+                self._application_cache = snapshot
+                self._application_cache_at = time.monotonic()
+                self._application_cache_includes_updates = include_updates
+            self._write_persisted_application_cache(snapshot)
         on_snapshot(snapshot, True)
         return snapshot
 

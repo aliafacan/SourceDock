@@ -8,7 +8,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from sourcedock.i18n import t
+from sourcedock.i18n import SUPPORTED_LANGUAGES, t
 from sourcedock.preferences import AppPreferences
 from sourcedock.backend.mime_integration import is_default_package_handler, set_as_default_package_handler
 from sourcedock.ui.components.common import prepare_dialog, set_status
@@ -59,8 +59,8 @@ class SettingsViewMixin:
 
         language_combo = Gtk.ComboBoxText()
         language_combo.set_tooltip_text(t(lang, "tooltip_settings_language"))
-        language_combo.append("tr", t(lang, "language_tr"))
-        language_combo.append("en", t(lang, "language_en"))
+        for language_code, language_name in SUPPORTED_LANGUAGES.items():
+            language_combo.append(language_code, language_name)
         language_combo.set_active_id(self.preferences.language)
 
         theme_combo = Gtk.ComboBoxText()
