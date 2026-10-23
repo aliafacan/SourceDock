@@ -265,13 +265,23 @@ class ShellViewMixin:
             # explicitly and keep one search request per header change.
             handler = {
                 0: self.on_applications_search_changed,
-                1: self._on_store_search_changed,
                 2: self._on_packages_search_changed,
             }.get(page)
             if handler is not None:
                 handler(target)
         if cursor_position is not None:
-            entry.set_position(min(cursor_position, len(entry.get_text())))
+            position = min(cursor_position, len(entry.get_text()))
+            entry.set_position(position)
+
+            # GTK may apply the SearchEntry's internal update after the
+            # signal handler returns and reset the cursor to the beginning.
+            # Restore it once more at the end of the main-loop turn.
+            def restore_cursor():
+                if entry.get_text() == self.header_search.get_text():
+                    entry.set_position(min(position, len(entry.get_text())))
+                return False
+
+            GLib.idle_add(restore_cursor)
 
     def _on_global_search_activate(self, _entry):
         if self.pages.get_current_page() not in (0, 1, 2):

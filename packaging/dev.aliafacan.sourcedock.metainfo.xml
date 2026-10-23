@@ -18,6 +18,13 @@
   <categories><category>System</category><category>PackageManager</category></categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.0" date="2026-10-23" type="development">
+      <description>
+        <p>Added German, Spanish, Brazilian Portuguese and French localization alongside Turkish and English.</p>
+        <p>Improved installed-application and store responsiveness with staged provider scans, persistent caches and clearer partial-source diagnostics.</p>
+        <p>Refined update filtering, source-aware application loading, search behavior and provider timeout handling.</p>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-10-14" type="development">
       <description><p>SourceDock rebrand with compatibility aliases, responsive navigation, unified updates and safer local package handling.</p></description>
     </release>

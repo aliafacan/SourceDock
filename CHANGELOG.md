@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0 - 2026-10-23
+
+### Localization
+- Add German, Spanish, Brazilian Portuguese and French catalogues alongside Turkish and English.
+- Move runtime translations to six parity-checked JSON catalogues with English fallback and placeholder validation.
+
+### Performance & Reliability
+- Add staged installed-application discovery, persistent inventory caching and source-aware partial results.
+- Keep last-known source entries when an optional provider times out, with clearer diagnostics instead of losing the whole list.
+- Add store search caching, provider status reporting and responsive first-result rendering.
+
+### UI & Updates
+- Make update filters load update metadata on demand while keeping the complete installed inventory stable.
+- Improve update group selection, source filtering, installed-app layouts and search interactions.
+- Fix provider response races, stale update results and incorrect installed-application totals.
+
 ## 1.3.0 (Release Candidate 1) - Unreleased
 
 ### Security & Transaction Stability

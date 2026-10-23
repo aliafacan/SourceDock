@@ -3,6 +3,8 @@ import unittest
 from threading import Event
 import sys
 import subprocess
+from pathlib import Path
+import tempfile
 
 from sourcedock.backend.manager import ApplicationRegistry
 from sourcedock.core.errors import BackendError
@@ -197,6 +199,61 @@ class TestProviderTimeouts(unittest.TestCase):
         self.assertEqual(calls, ["firefox", "firefox"])
         self.assertEqual(registry.last_search_source_states[SOURCE_SNAP], "live")
         self.assertFalse(registry.last_search_metrics.get("partial_cache", False))
+
+    def test_store_partial_cache_survives_restart_without_becoming_full_cache(self):
+        result = StoreResult("Editor", "editor", "A useful editor", SOURCE_APT, "1", "apt")
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "sourcedock" / "store-search.json"
+            key = ("editor", (SOURCE_APT, SOURCE_SNAP))
+
+            writer = StoreRegistry.__new__(StoreRegistry)
+            writer._search_cache = {}
+            writer._search_cache_saved_at = {}
+            writer._search_cache_complete = {}
+            writer._partial_search_cache = {
+                key: (
+                    time.monotonic() + 30,
+                    [result],
+                    [],
+                    {},
+                    {SOURCE_APT: "live", SOURCE_SNAP: "unavailable"},
+                )
+            }
+            writer._search_cache_path = str(cache_path)
+            writer._persist_search_cache()
+
+            restored = StoreRegistry.__new__(StoreRegistry)
+            restored._search_cache = {}
+            restored._search_cache_saved_at = {}
+            restored._search_cache_complete = {}
+            restored._partial_search_cache = {}
+            restored._search_cache_path = str(cache_path)
+            restored._load_persistent_search_cache()
+            restored.provider_errors = []
+            restored.missing_sources = []
+            restored.last_search_metrics = {}
+            restored.last_search_source_states = {}
+            restored._metadata = {}
+
+            results = restored.search("editor", sources={SOURCE_APT, SOURCE_SNAP})
+            self.assertEqual([item.name for item in results], ["Editor"])
+            self.assertNotIn(key, restored._search_cache)
+            self.assertEqual(restored.last_search_source_states[SOURCE_SNAP], "unavailable")
+
+    def test_store_corrupt_disk_cache_is_ignored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "sourcedock" / "store-search.json"
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text("{not-json", encoding="utf-8")
+            registry = StoreRegistry.__new__(StoreRegistry)
+            registry._search_cache = {}
+            registry._search_cache_saved_at = {}
+            registry._search_cache_complete = {}
+            registry._partial_search_cache = {}
+            registry._search_cache_path = str(cache_path)
+            registry._load_persistent_search_cache()
+            self.assertFalse(registry._search_cache)
+            self.assertFalse(registry._partial_search_cache)
 
     def test_exact_apt_transitional_application_remains_visible(self):
         registry = StoreRegistry.__new__(StoreRegistry)

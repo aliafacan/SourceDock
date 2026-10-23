@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Export the SourceDock string catalog for translators.
 
-SourceDock keeps its strings in ``sourcedock/i18n.py`` so the application has
-no runtime gettext dependency. This tool turns that table into translator- and
+SourceDock keeps its strings in UTF-8 JSON files under ``sourcedock/locales``
+so the application has no runtime gettext dependency. This tool turns that table into translator- and
 Weblate-friendly formats without changing the runtime:
 
 * ``sourcedock.pot`` - a gettext template where ``msgid`` is the stable string
@@ -25,7 +25,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from sourcedock.i18n import TRANSLATIONS  # noqa: E402
+from sourcedock.i18n import TRANSLATIONS, format_placeholders  # noqa: E402
 
 POT_HEADER = (
     "# SourceDock translation template.\n"
@@ -44,12 +44,13 @@ def _escape(text: str) -> str:
 
 
 def render_pot() -> str:
-    tr = TRANSLATIONS["tr"]
     en = TRANSLATIONS["en"]
     lines = [POT_HEADER]
     for key in sorted(en):
         lines.append(f"\n#. english: {_escape(en[key])}")
-        lines.append(f"#. turkish: {_escape(tr.get(key, ''))}")
+        for language, values in TRANSLATIONS.items():
+            if language != "en":
+                lines.append(f"#. {language}: {_escape(values.get(key, ''))}")
         lines.append(f'msgid "{_escape(key)}"')
         lines.append('msgstr ""')
     lines.append("")
@@ -62,7 +63,7 @@ def render_csv() -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(["key", "language", "text"])
-    for language in ("tr", "en"):
+    for language in TRANSLATIONS:
         for key in sorted(TRANSLATIONS[language]):
             # Keep one physical row per key/language so spreadsheet tools and
             # the integrity test can count records; escape embedded newlines.
@@ -82,15 +83,19 @@ def export(destination: Path) -> list[Path]:
 
 def check() -> list[str]:
     problems = []
-    tr, en = set(TRANSLATIONS["tr"]), set(TRANSLATIONS["en"])
-    if tr - en:
-        problems.append(f"missing English keys: {sorted(tr - en)}")
-    if en - tr:
-        problems.append(f"missing Turkish keys: {sorted(en - tr)}")
-    for language in ("tr", "en"):
-        for key, value in TRANSLATIONS[language].items():
+    en = set(TRANSLATIONS["en"])
+    for language, values in TRANSLATIONS.items():
+        missing = en - set(values)
+        extra = set(values) - en
+        if missing:
+            problems.append(f"missing {language} keys: {sorted(missing)}")
+        if extra:
+            problems.append(f"extra {language} keys: {sorted(extra)}")
+        for key, value in values.items():
             if not value.strip():
                 problems.append(f"empty {language} value for {key}")
+            if format_placeholders(value) != format_placeholders(TRANSLATIONS["en"].get(key, "")):
+                problems.append(f"placeholder mismatch for {language}:{key}")
     return problems
 
 
@@ -108,7 +113,7 @@ def main() -> int:
             for problem in problems:
                 print(problem, file=sys.stderr)
             return 1
-        print(f"catalog OK: {len(TRANSLATIONS['en'])} keys, TR/EN parity")
+        print(f"catalog OK: {len(TRANSLATIONS['en'])} keys, {len(TRANSLATIONS)} languages")
     if not args.export and not args.check:
         parser.print_help()
     return 0

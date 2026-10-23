@@ -24,6 +24,7 @@ class UpdatesViewMixin:
         self.updates_loading = False
         self._updates_status_messages = []
         self._updates_status_error = None
+        self.updates_active_group = None
         intro = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.updates_page_title = Gtk.Label(xalign=0)
         self.updates_page_title.get_style_context().add_class("page-title")
@@ -37,6 +38,7 @@ class UpdatesViewMixin:
         self.updates_summary_cards = Gtk.Box(spacing=8)
         self.updates_summary_cards.set_homogeneous(True)
         self.updates_stat_labels = {}
+        self.updates_stat_buttons = {}
         for group, icon, title_key in (
             ("applications", "application-x-executable-symbolic", "updates_stat_applications"),
             ("system", "package-x-generic-symbolic", "updates_stat_system"),
@@ -60,7 +62,15 @@ class UpdatesViewMixin:
             count.get_style_context().add_class("summary-count")
             card.pack_start(count, False, False, 0)
             frame.add(card)
-            self.updates_summary_cards.pack_start(frame, True, True, 0)
+            button = Gtk.Button()
+            button.set_relief(Gtk.ReliefStyle.NONE)
+            button.set_can_focus(True)
+            button.get_style_context().add_class("flat")
+            button.set_tooltip_text(t(self.preferences.language, title_key))
+            button.add(frame)
+            button.connect("clicked", self._on_update_group_card_clicked, group)
+            self.updates_summary_cards.pack_start(button, True, True, 0)
+            self.updates_stat_buttons[group] = button
             self.updates_stat_labels[group] = (title, count, title_key)
         container.pack_start(self.updates_summary_cards, False, False, 0)
 
@@ -93,9 +103,7 @@ class UpdatesViewMixin:
         column = Gtk.TreeViewColumn("", toggle, active=0)
         column.set_cell_data_func(
             toggle,
-            lambda _column, cell, model, iterator, _data: cell.set_property(
-                "visible", model.get_value(iterator, 5) is not None
-            ),
+            self._update_toggle_cell_data,
         )
         self.updates_tree.append_column(column)
         self.updates_columns = []
@@ -117,9 +125,7 @@ class UpdatesViewMixin:
                 column.add_attribute(icon_renderer, "pixbuf", 6)
                 column.set_cell_data_func(
                     icon_renderer,
-                    lambda _column, cell, model, iterator, _data: cell.set_property(
-                        "visible", model.get_value(iterator, 5) is not None
-                    ),
+                    self._update_icon_cell_data,
                 )
                 column.pack_start(renderer, True)
                 column.add_attribute(renderer, "text", index)
@@ -204,9 +210,18 @@ class UpdatesViewMixin:
         self.updates_select_all_btn.set_label(t(lang, "updates_select_all"))
         self.updates_apply_btn.set_label(t(lang, "updates_apply"))
         self._set_updates_status_details_button()
-        self.updates_summary.set_text(t(lang, "updates_count", count=len(self.update_items)))
+        visible_count = sum(
+            item.group == self.updates_active_group
+            for item in self.update_items
+        ) if self.updates_active_group else len(self.update_items)
+        self.updates_summary.set_text(t(lang, "updates_count", count=visible_count))
         for title, _count, title_key in self.updates_stat_labels.values():
             title.set_text(t(lang, title_key))
+        for group, button in self.updates_stat_buttons.items():
+            button.set_tooltip_text(t(lang, self.updates_stat_labels[group][2]))
+            button.get_style_context().remove_class("summary-card-active")
+            if self.updates_active_group == group:
+                button.get_style_context().add_class("summary-card-active")
         for column, key in self.updates_columns:
             column.set_title(t(lang, key))
             if column.get_widget() is not None:
@@ -219,6 +234,41 @@ class UpdatesViewMixin:
             self.updates_status_details.set_visible(expanded)
             self._set_updates_status_details_button()
 
+    def _on_update_group_card_clicked(self, _button, group):
+        """Filter the list to a summary category; clicking it again clears it."""
+        self.updates_active_group = None if self.updates_active_group == group else group
+        self._render_updates_model()
+        self._refresh_updates_texts()
+
+    def _render_updates_model(self):
+        """Render only the active category while keeping summary totals intact."""
+        self.updates_model.clear()
+        visible_items = [
+            item for item in self.update_items
+            if self.updates_active_group is None or item.group == self.updates_active_group
+        ]
+        lang = self.preferences.language
+        groups = {}
+        for item in visible_items:
+            if item.group not in groups:
+                group_count = sum(candidate.group == item.group for candidate in visible_items)
+                groups[item.group] = self.updates_model.append(
+                    None,
+                    [False, f"{t(lang, f'updates_group_{item.group}')}  ·  {group_count}", "", "", "", None, None],
+                )
+            app = item.application
+            self.updates_model.append(
+                groups[item.group],
+                [
+                    False, app.name, source_name(lang, app.source), app.version or "-",
+                    item.new_version or t(lang, "version_no_update"), item, self._get_update_pixbuf(app),
+                ],
+            )
+        self.updates_tree.expand_all()
+        self.updates_apply_btn.set_sensitive(False)
+        self.updates_select_all_btn.set_active(False)
+        self._refresh_selection_summary()
+
     def _update_name_cell_data(self, _column, cell, model, iterator, _data):
         is_group = model.get_value(iterator, 5) is None
         cell.set_property("weight", 700 if is_group else 400)
@@ -226,12 +276,47 @@ class UpdatesViewMixin:
             palette = PALETTES[resolve_theme(self.preferences.theme)]
             cell.set_property("foreground-set", True)
             cell.set_property("foreground", palette["warning"])
+            cell.set_property("background-set", True)
+            cell.set_property("background", palette["surface"])
         else:
             cell.set_property("foreground-set", False)
+            cell.set_property("background-set", False)
+
+    def _update_toggle_cell_data(self, _column, cell, model, iterator, _data):
+        item = model.get_value(iterator, 5)
+        if item is not None:
+            cell.set_property("visible", True)
+            cell.set_property("activatable", bool(item.application.update_supported))
+            cell.set_property("inconsistent", False)
+            return
+        children = model.iter_children(iterator)
+        states = []
+        while children is not None:
+            child_item = model.get_value(children, 5)
+            if child_item is not None and child_item.application.update_supported:
+                states.append(bool(model.get_value(children, 0)))
+            children = model.iter_next(children)
+        cell.set_property("visible", True)
+        cell.set_property("activatable", bool(states))
+        cell.set_property("active", bool(states) and all(states))
+        cell.set_property("inconsistent", bool(states) and not all(states))
 
     def _update_detail_cell_data(self, _column, cell, model, iterator, _data):
-        cell.set_property("visible", model.get_value(iterator, 5) is not None)
-        cell.set_property("foreground-set", False)
+        is_group = model.get_value(iterator, 5) is None
+        cell.set_property("visible", True)
+        if is_group:
+            palette = PALETTES[resolve_theme(self.preferences.theme)]
+            cell.set_property("foreground-set", True)
+            cell.set_property("foreground", palette["muted"])
+            cell.set_property("background-set", True)
+            cell.set_property("background", palette["surface"])
+        else:
+            cell.set_property("foreground-set", False)
+            cell.set_property("background-set", False)
+
+    def _update_icon_cell_data(self, _column, cell, model, iterator, _data):
+        is_group = model.get_value(iterator, 5) is None
+        cell.set_property("visible", not is_group)
 
     def _on_updates_query_tooltip(self, treeview, x, y, _keyboard_mode, tooltip):
         hit = treeview.get_path_at_pos(int(x), int(y))
@@ -257,7 +342,11 @@ class UpdatesViewMixin:
         self.updates_selection_summary.set_text(
             t(self.preferences.language, "updates_selected_count", count=selected)
         )
-        selectable = sum(item.application.update_supported for item in self.update_items)
+        selectable = sum(
+            item.application.update_supported
+            and (self.updates_active_group is None or item.group == self.updates_active_group)
+            for item in self.update_items
+        )
         self._syncing_updates_selection = True
         try:
             self.updates_select_all_btn.set_active(bool(selectable and selected == selectable))
@@ -365,41 +454,8 @@ class UpdatesViewMixin:
         self.updates_loading = False
         self.updates_refresh_btn.set_sensitive(True)
         self.update_items = items
-        self.updates_model.clear()
         lang = self.preferences.language
-        groups = {}
-        for item in items:
-            if item.group not in groups:
-                group_count = sum(candidate.group == item.group for candidate in items)
-                groups[item.group] = self.updates_model.append(
-                    None,
-                    [
-                        False,
-                        f"{t(lang, f'updates_group_{item.group}')}  ·  {group_count}",
-                        "",
-                        "",
-                        "",
-                        None,
-                        None,
-                    ],
-                )
-            app = item.application
-            display_new_version = item.new_version or t(lang, "version_no_update")
-            self.updates_model.append(
-                groups[item.group],
-                [
-                    False,
-                    app.name,
-                    source_name(lang, app.source),
-                    app.version or "-",
-                    display_new_version,
-                    item,
-                    self._get_update_pixbuf(app),
-                ],
-            )
-        self.updates_tree.expand_all()
-        self.updates_apply_btn.set_sensitive(False)
-        self.updates_select_all_btn.set_active(False)
+        self._render_updates_model()
         for group, (_title, count_label, _title_key) in self.updates_stat_labels.items():
             count_label.set_text(str(sum(item.group == group for item in items)))
         if error:
@@ -447,7 +503,18 @@ class UpdatesViewMixin:
     def _on_update_toggled(self, _cell, path):
         iterator = self.updates_model.get_iter(path)
         item = self.updates_model.get_value(iterator, 5)
-        if item is not None and item.application.update_supported:
+        if item is None:
+            children = self.updates_model.iter_children(iterator)
+            selectable = []
+            while children is not None:
+                child_item = self.updates_model.get_value(children, 5)
+                if child_item is not None and child_item.application.update_supported:
+                    selectable.append(children)
+                children = self.updates_model.iter_next(children)
+            target = not selectable or not all(self.updates_model.get_value(child, 0) for child in selectable)
+            for child in selectable:
+                self.updates_model.set_value(child, 0, target)
+        elif item.application.update_supported:
             self.updates_model.set_value(iterator, 0, not self.updates_model.get_value(iterator, 0))
         self.updates_apply_btn.set_sensitive(bool(self._selected_updates()))
         self._refresh_selection_summary()
@@ -462,9 +529,23 @@ class UpdatesViewMixin:
         return Gdk.EVENT_STOP
 
     def _on_updates_button_press(self, tree, event):
+        hit = tree.get_path_at_pos(int(event.x), int(event.y))
+        if event.button == 1 and hit:
+            path = hit[0]
+            if hit[1] is tree.get_column(0):
+                return False
+            iterator = self.updates_model.get_iter(path)
+            item = self.updates_model.get_value(iterator, 5) if iterator is not None else None
+            if item is not None and item.application.update_supported:
+                tree.get_selection().select_path(path)
+                self._on_update_toggled(None, path.to_string())
+                return True
+            if item is None and iterator is not None:
+                self._on_update_toggled(None, path.to_string())
+                return True
+            return False
         if event.button != 3:
             return False
-        hit = tree.get_path_at_pos(int(event.x), int(event.y))
         if not hit:
             return False
         tree.get_selection().select_path(hit[0])

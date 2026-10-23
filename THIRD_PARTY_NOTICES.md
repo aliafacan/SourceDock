@@ -45,5 +45,5 @@ distribution; SourceDock does not redistribute them.
 The Debian package includes project attribution and the full GPL text in
 `/usr/share/doc/sourcedock/copyright`, a separate unmodified `LICENSE`, and this
 `THIRD_PARTY_NOTICES.md` file. This inventory reflects the imported modules and
-invoked tools at source-version 1.3.0; it is a maintained summary, not a legal
+invoked tools at source-version 1.4.0; it is a maintained summary, not a legal
 audit, and does not cover the artwork of applications displayed by the store.
