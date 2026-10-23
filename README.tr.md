@@ -100,7 +100,7 @@ SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint 
 | :--- | :---: | :--- |
 | **Zorin OS 18.1** | **Doğrulandı** | Gerçek kullanıcı ortamı testi: Temiz `.deb` kurulumu, canlı masaüstü kullanımı ve gerçek APT paketi kurma/kaldırma döngüsü. |
 | **Zorin OS 17.x** | **Test Edilmedi** | Çekirdek yığın Ubuntu 22.04 ile uyumludur; otomatik CI test takımı kapsamındadır. |
-| **Ubuntu 22.04 & 24.04** | **CI PASS** | Otomatik CI doğrulaması: Xvfb/Openbox altında 293/293 test, Ruff ve compileall temiz, `.deb` paket inşası başarılı. |
+| **Ubuntu 22.04 & 24.04** | **CI PASS** | Otomatik CI doğrulaması: Xvfb/Openbox altında 295/295 test, Ruff ve compileall temiz, `.deb` paket inşası başarılı. |
 | **Debian 12** | **Uyumlu** | `.deb` paketi üzerinden bağımlılıklar uyumludur (Python 3.11+ ve GTK 3); canlı donanım testi beklemededir. |
 | **Debian 11** | **Desteklenmiyor** | Varsayılan olarak Python 3.9 ile gelir; SourceDock kesin olarak Python >= 3.10 gerektirir. |
 | **Fedora / openSUSE / Arch** | **Deneysel** | Ayrıştırıcı ve yürütme katmanı birim testlerle doğrulandı; yerel paketleme (.rpm / PKGBUILD) henüz sunulmamaktadır. |
@@ -135,7 +135,7 @@ python3 main.py /dosya/yolu/paket.deb
 ```
 
 ### Test Takımını Çalıştırma
-Korumalı tam test takımı (293 test), Xvfb ekranı ve Openbox pencere yöneticisi altında çalıştırılır:
+Korumalı tam test takımı (295 test), Xvfb ekranı ve Openbox pencere yöneticisi altında çalıştırılır:
 ```bash
 xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```

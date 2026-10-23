@@ -1962,8 +1962,9 @@ class InstalledViewMixin:
         else:
             dialog.destroy()
 
-    def prompt_and_install_file(self, filename: str) -> None:
+    def prompt_and_install_file(self, filename: str, on_finished: Callable[[], None] | None = None) -> None:
         lang = self.preferences.language
+        finish_callback = on_finished or self.reload_applications_async
         loading = Gtk.Dialog(
             title=t(lang, "package_inspecting"), transient_for=self, modal=True, destroy_with_parent=True
         )
@@ -1994,7 +1995,7 @@ class InstalledViewMixin:
                     language=lang,
                     pkg_status=status,
                     registry=registry,
-                    on_finished=self.reload_applications_async,
+                    on_finished=finish_callback,
                 )
                 dialog.show_all()
             return False

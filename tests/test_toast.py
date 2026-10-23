@@ -34,6 +34,18 @@ class TestToastComponents(unittest.TestCase):
         toast._on_close_clicked()
         self.assertEqual(closed, [True])
 
+        action_calls = []
+        action_toast = ToastNotification(
+            "Update available",
+            action_label="Update",
+            on_action=lambda: action_calls.append(True),
+            on_close=lambda: closed.append(True),
+            language="en",
+        )
+        action_toast._on_action_clicked(None)
+        self.assertEqual(action_calls, [True])
+        self.assertEqual(closed, [True, True])
+
     def test_toast_notification_levels(self):
         for level in ("info", "warning", "danger", "error", "success"):
             toast = ToastNotification("Msg", level=level, language="en")

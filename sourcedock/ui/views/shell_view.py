@@ -290,10 +290,23 @@ class ShellViewMixin:
         if self.pages.get_current_page() == 1:
             self.on_store_search()
 
-    def show_toast(self, message: str, level: str = "info", timeout: int = 4):
+    def show_toast(
+        self,
+        message: str,
+        level: str = "info",
+        timeout: int = 4,
+        action_label: str | None = None,
+        on_action=None,
+    ):
         """Display a non-blocking transient toast notification."""
         if hasattr(self, "toast_host") and self.toast_host is not None:
-            return self.toast_host.show_toast(message, level=level, timeout=timeout)
+            return self.toast_host.show_toast(
+                message,
+                level=level,
+                timeout=timeout,
+                action_label=action_label,
+                on_action=on_action,
+            )
         return None
 
     def hide_toast(self) -> None:
