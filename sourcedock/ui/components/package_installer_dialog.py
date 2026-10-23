@@ -467,7 +467,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.progress_status_label.set_text(t(self.language, "progress_preparing"))
         self.progress_bar.set_fraction(0.0)
         self.log_buffer.set_text("")
-        self.progress_container.show()
+        self.progress_container.set_no_show_all(False)
+        self.progress_container.show_all()
 
         # Pulse timer başlat
         self._stop_pulse()
@@ -589,7 +590,10 @@ class PackageInstallerDialog(Gtk.Dialog):
         else:
             self.result_detail_label.hide()
 
-        self.result_container.show()
+        self.result_container.set_no_show_all(False)
+        self.result_container.show_all()
+        if not deleted_file:
+            self.result_detail_label.hide()
         self.cancel_btn.hide()
         can_launch = self.info.format in ("appimage", "archive", "flatpak", "flatpakref")
         if self.info.format in ("deb", "rpm"):
@@ -615,7 +619,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.result_detail_label.set_text(clean_err)
         self.result_detail_label.show()
 
-        self.result_container.show()
+        self.result_container.set_no_show_all(False)
+        self.result_container.show_all()
         self.log_expander.set_expanded(True)
 
         self.cancel_btn.hide()
@@ -675,8 +680,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.log_view.scroll_to_iter(self.log_buffer.get_end_iter(), 0.0, False, 0.0, 0.0)
 
         trimmed = line.strip()
-        if trimmed and not trimmed.startswith("Reading") and not trimmed.startswith("Building"):
-            if len(trimmed) < 60:
+        if trimmed:
+            if len(trimmed) < 80:
                 self.progress_status_label.set_text(trimmed)
 
     def _on_pulse_tick(self) -> bool:
@@ -729,6 +734,8 @@ class PackageInstallerDialog(Gtk.Dialog):
         return False
 
     def _on_retry_clicked(self, _btn: Gtk.Button) -> None:
+        self.result_container.hide()
+        self.result_container.set_no_show_all(True)
         self._start_installation()
 
     def _on_launch_clicked(self, _btn: Gtk.Button) -> None:
