@@ -18,6 +18,12 @@
   <categories><category>System</category><category>PackageManager</category></categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.3" date="2026-10-23" type="stable">
+      <description>
+        <p>Polished the Updates view with reliable group filtering, visible return-to-all controls and clearer group selection headers.</p>
+        <p>Fixed sidebar update-check alignment and made transient notifications dismiss completely when the close button is pressed.</p>
+      </description>
+    </release>
     <release version="1.4.2" date="2026-10-23" type="stable">
       <description>
         <p>Improved translation quality across German, Spanish, Brazilian Portuguese and French, with reviewed security messages and localized UI screenshots.</p>
