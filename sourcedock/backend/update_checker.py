@@ -175,10 +175,17 @@ def download_release_package(
     temporary_path = package_path.with_suffix(package_path.suffix + ".part")
     package_data = _download_bytes(opener, release.deb_url, timeout=timeout, limit=MAX_DOWNLOAD_BYTES)
     checksum_data = _download_bytes(opener, release.checksum_url, timeout=timeout, limit=64 * 1024)
-    match = re.search(rb"\b([0-9a-fA-F]{64})\b", checksum_data)
-    if match is None:
+    try:
+        checksum_text = checksum_data.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Release checksum is missing or invalid") from exc
+    checksum_lines = [line.strip() for line in checksum_text.splitlines() if line.strip()]
+    if len(checksum_lines) != 1:
         raise ValueError("Release checksum is missing or invalid")
-    actual_checksum = hashlib.sha256(package_data).hexdigest().encode("ascii")
+    match = re.fullmatch(r"([0-9a-fA-F]{64})\s+\*?([^\s]+)", checksum_lines[0])
+    if match is None or Path(match.group(2)).name != package_path.name:
+        raise ValueError("Release checksum is missing or invalid")
+    actual_checksum = hashlib.sha256(package_data).hexdigest()
     if not hmac.compare_digest(actual_checksum.lower(), match.group(1).lower()):
         raise ValueError("Release checksum verification failed")
 

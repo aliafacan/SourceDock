@@ -25,12 +25,17 @@ if a lookup has no entry or a dynamic `f"prefix_{x}"` family is missing.
 ```bash
 python3 tools/translation_catalog.py --export po
 python3 tools/translation_catalog.py --check
+python3 tools/translation_catalog.py --audit
 ```
 
 `--export po` writes `sourcedock.pot` (a gettext template whose `msgid` is the
 stable key and whose comments carry the current text for every language) and
 `sourcedock.csv` (`key,language,text`) into the target directory. `--check`
 validates parity and emptiness and exits non-zero on a problem.
+`--audit` prints explainable candidates for unchanged English text, mixed-language
+phrases, duplicate JSON keys, placeholder/markup problems and security-sensitive
+messages. It is intentionally heuristic: technical product names and natural
+language quality still require human review.
 
 The generated files are review inputs. Merge translated text back into the
 appropriate JSON catalogue; the runtime stays dependency-free.

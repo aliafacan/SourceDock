@@ -7,7 +7,7 @@ APP_COMMAND = "sourcedock"
 APP_DESKTOP_ID = "sourcedock.desktop"
 APP_PACKAGE_NAME = "sourcedock"
 APP_ID = "dev.aliafacan.sourcedock"
-APP_VERSION = "1.4.1"
+APP_VERSION = "1.4.2"
 
 # Kept for a one-release migration from the former public identity.
 LEGACY_APP_COMMAND = "voltapp"

@@ -18,14 +18,63 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import html
 import csv
+import json
 from pathlib import Path
+import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from sourcedock.i18n import TRANSLATIONS, format_placeholders  # noqa: E402
+
+LANGUAGE_LABELS = {
+    "de": "Deutsch",
+    "es": "Español",
+    "fr": "Français",
+    "pt_BR": "Português (Brasil)",
+    "tr": "Türkçe",
+}
+TECHNICAL_VALUES = {
+    "APT", "AppImage", "DNF", "DPKG", "Flatpak", "Flathub", "GTK", "GitHub",
+    "Linux", "Pacman", "RPM", "Snap", "SourceDock", "Zypper", "—", "…",
+}
+ENGLISH_WORDS = re.compile(
+    r"\b(?:the|and|or|to|is|are|was|were|with|from|for|this|that|in|on|of|a|an|"
+    r"your|you|can|will|not|no|has|have|be|do|does|did|when|into|after|before|"
+    r"available|required|failed|success|successful|install|installed|update|"
+    r"updating|remove|removing|application|applications|package|packages|source|"
+    r"sources|system|user|selected|list|show|shown|search|details|current|new|"
+    r"version|complete|completed|manager|please|only|more|view|open|close|"
+    r"run|running|start|started|support|supports|checking|loading|ready|"
+    r"permission|permissions|password|history|clear|export|retry|cancel|"
+    r"warning|error|results|result|available|settings|theme|language|scale)\b",
+    re.IGNORECASE,
+)
+SECURITY_KEYS = {
+    "store_snap_classic_message",
+    "appimage_add_failed",
+    "applications_apt_locked",
+    "applications_dpkg_interrupted",
+    "applications_password_message",
+    "cancel_critical",
+    "details_remove_confirm_text",
+    "details_remove_purge_check",
+    "firmware_confirm_body",
+    "help_installer_smart_desc",
+    "package_inspect_failed",
+    "package_installer_update_hint",
+    "progress_auth_needed",
+    "remove_sensitive_confirm",
+    "remove_sensitive_warning",
+    "security_appimage_body",
+    "security_flatpak",
+    "security_local_body",
+    "security_signature_local",
+    "security_trust_confirmation",
+}
 
 POT_HEADER = (
     "# SourceDock translation template.\n"
@@ -99,10 +148,105 @@ def check() -> list[str]:
     return problems
 
 
+def _load_catalog(path: Path) -> tuple[dict[str, str], list[str]]:
+    duplicates: list[str] = []
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                duplicates.append(key)
+            result[key] = value
+        return result
+
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=pairs), duplicates
+
+
+def _is_technical_match(key: str, value: str) -> bool:
+    if value in TECHNICAL_VALUES:
+        return True
+    if key.startswith(("applications_source_", "store_source_")):
+        return True
+    if re.fullmatch(r"(?:%\d+ \([A-Za-z ]+\)|[A-Z0-9_./+-]+|[A-Za-z]+\.\w+)", value):
+        return value in TECHNICAL_VALUES or key.endswith(("_source", "_value"))
+    return False
+
+
+def _markup_error(value: str) -> str | None:
+    # Validate HTML entities independently; Pango accepts a small HTML-like subset.
+    try:
+        html.unescape(value)
+    except Exception as exc:  # pragma: no cover - defensive around stdlib behavior
+        return str(exc)
+    tags = re.findall(r"</?([A-Za-z][A-Za-z0-9]*)\b[^>]*>", value)
+    if tags.count("b") % 2 or tags.count("i") % 2 or tags.count("u") % 2:
+        return "unbalanced markup tags"
+    if value.count("<") != value.count(">"):
+        return "unbalanced angle brackets"
+    return None
+
+
+def audit() -> dict[str, dict[str, object]]:
+    """Return explainable translation-quality findings without changing runtime data."""
+    locale_dir = ROOT / "sourcedock" / "locales"
+    catalogs = {}
+    duplicate_keys = {}
+    for path in sorted(locale_dir.glob("*.json")):
+        catalogs[path.stem], duplicate_keys[path.stem] = _load_catalog(path)
+    english = catalogs["en"]
+    report = {}
+    for language, values in catalogs.items():
+        if language == "en":
+            continue
+        english_matches = []
+        mixed_language = []
+        security_findings = []
+        for key, value in values.items():
+            if value == english.get(key) and not _is_technical_match(key, value):
+                english_matches.append({"key": key, "value": value})
+            if value != english.get(key) and ENGLISH_WORDS.search(value):
+                mixed_language.append({"key": key, "value": value})
+            if key in SECURITY_KEYS and (
+                value == english.get(key) or ENGLISH_WORDS.search(value)
+            ):
+                security_findings.append({"key": key, "value": value})
+        report[language] = {
+            "label": LANGUAGE_LABELS.get(language, language),
+            "missing": sorted(set(english) - set(values)),
+            "extra": sorted(set(values) - set(english)),
+            "empty": sorted(key for key, value in values.items() if not str(value).strip()),
+            "placeholder_mismatch": sorted(
+                key for key, value in values.items()
+                if format_placeholders(value) != format_placeholders(english.get(key, ""))
+            ),
+            "markup_errors": sorted(
+                {key: _markup_error(value) for key, value in values.items() if _markup_error(value)}
+            ),
+            "duplicate_keys": sorted(set(duplicate_keys.get(language, []))),
+            "english_matches": english_matches,
+            "mixed_language": mixed_language,
+            "security_findings": security_findings,
+        }
+    return report
+
+
+def print_audit() -> None:
+    report = audit()
+    print("SourceDock translation audit (heuristic; human review is still required)")
+    for language, result in report.items():
+        print(f"\n{result['label']} ({language})")
+        print(f"  same as English: {len(result['english_matches'])}")
+        print(f"  mixed-language candidates: {len(result['mixed_language'])}")
+        print(f"  security candidates: {len(result['security_findings'])}")
+        for item in result["mixed_language"][:12]:
+            print(f"    - {item['key']}: {item['value']}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--export", metavar="DIR", help="Write the template and CSV into DIR")
     parser.add_argument("--check", action="store_true", help="Check parity and emptiness")
+    parser.add_argument("--audit", action="store_true", help="Report likely untranslated or mixed-language text")
     args = parser.parse_args()
     if args.export:
         for path in export(Path(args.export)):
@@ -114,7 +258,9 @@ def main() -> int:
                 print(problem, file=sys.stderr)
             return 1
         print(f"catalog OK: {len(TRANSLATIONS['en'])} keys, {len(TRANSLATIONS)} languages")
-    if not args.export and not args.check:
+    if args.audit:
+        print_audit()
+    if not args.export and not args.check and not args.audit:
         parser.print_help()
     return 0
 
