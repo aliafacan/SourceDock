@@ -2,6 +2,7 @@
   "add_appimage_btn": "Ekle",
   "add_appimage_title": "AppImage Ekle",
   "app_title": "SourceDock",
+  "app_update_available": "Yeni SourceDock sürümü mevcut: v{version}",
   "appimage_add_failed": "AppImage eklenemedi",
   "appimage_added": "AppImage eklendi",
   "appimage_files": "AppImage Dosyaları (*.AppImage)",

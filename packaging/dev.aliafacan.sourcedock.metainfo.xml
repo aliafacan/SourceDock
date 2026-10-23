@@ -21,7 +21,7 @@
     <release version="1.4.1" date="2026-10-23" type="stable">
       <description>
         <p>Fixed Store search state handling so visible user input remains stable while provider results load.</p>
-        <p>Added clearer per-source provider status reporting and refreshed Ubuntu CI verification for 287 tests.</p>
+        <p>Added clearer per-source provider status reporting, periodic release checks and refreshed Ubuntu CI verification for 293 tests.</p>
       </description>
     </release>
     <release version="1.4.0" date="2026-10-23" type="development">

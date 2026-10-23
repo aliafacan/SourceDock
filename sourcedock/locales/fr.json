@@ -2,6 +2,7 @@
   "add_appimage_btn": "Add",
   "add_appimage_title": "Add AppImage",
   "app_title": "SourceDock",
+  "app_update_available": "Une nouvelle version de SourceDock est disponible : v{version}",
   "appimage_add_failed": "Échec to add AppImage",
   "appimage_added": "AppImage added",
   "appimage_files": "AppImage Fichiers (*.AppImage)",
