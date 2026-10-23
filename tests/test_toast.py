@@ -62,6 +62,12 @@ class TestToastComponents(unittest.TestCase):
 
         host.hide_toast()
         self.assertFalse(host._revealer.get_reveal_child())
+        self.assertIsNone(host._current)
+
+        toast = host.show_toast("Close me", timeout=0)
+        toast._on_close_clicked()
+        self.assertFalse(host._revealer.get_reveal_child())
+        self.assertIsNone(host._current)
 
     def test_toast_host_replaces_previous(self):
         child = Gtk.Label(label="Content")
