@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 import gi
 
@@ -13,7 +14,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from sourcedock.constants import APP_ICON_NAME, APP_TITLE
+from sourcedock.constants import APP_ICON_NAME, APP_TITLE, APP_VERSION
 from sourcedock.core.models import (
     ApplicationIssue,
     PackageInfo,
@@ -21,6 +22,7 @@ from sourcedock.core.models import (
     UnifiedApplication,
 )
 from sourcedock.backend.manager import ApplicationRegistry
+from sourcedock.backend.update_checker import ReleaseInfo, check_latest_release
 from sourcedock.store.registry import StoreRegistry
 from sourcedock.i18n import t
 from sourcedock.preferences import PreferencesStore
@@ -56,6 +58,11 @@ class MainWindow(
         self.preferences_store = preferences_store
         self.preferences = preferences_store.load()
         super().__init__(title=APP_TITLE)
+        self._release_check_destroyed = False
+        self._release_check_initial_timer_id = 0
+        self._release_check_periodic_timer_id = 0
+        self._release_check_in_flight = False
+        self._notified_release_version = ""
 
         self.application_registry = ApplicationRegistry()
         self.store_registry = StoreRegistry()
@@ -133,6 +140,62 @@ class MainWindow(
             preferred.set_active(True)
         if self.preferences.check_updates_on_start:
             self._reload_updates_async()
+        if os.environ.get("SOURCEDOCK_DISABLE_RELEASE_CHECK") != "1":
+            self._start_release_check()
+
+    def _start_release_check(self) -> None:
+        """Check GitHub after startup, then repeat without blocking the UI."""
+
+        self._release_check_initial_timer_id = GLib.timeout_add_seconds(
+            20, self._run_initial_release_check
+        )
+
+    def _run_initial_release_check(self) -> bool:
+        self._release_check_initial_timer_id = 0
+        if self._release_check_destroyed:
+            return False
+        self._run_release_check()
+        self._release_check_periodic_timer_id = GLib.timeout_add_seconds(
+            6 * 60 * 60, self._run_periodic_release_check
+        )
+        return False
+
+    def _run_periodic_release_check(self) -> bool:
+        if self._release_check_destroyed:
+            self._release_check_periodic_timer_id = 0
+            return False
+        self._run_release_check()
+        return True
+
+    def _run_release_check(self) -> None:
+        if self._release_check_destroyed or self._release_check_in_flight:
+            return
+        self._release_check_in_flight = True
+
+        def worker() -> None:
+            try:
+                release = check_latest_release(APP_VERSION)
+            except Exception:
+                release = None
+            GLib.idle_add(self._finish_release_check, release)
+
+        threading.Thread(target=worker, daemon=True, name="release-check").start()
+
+    def _finish_release_check(self, release: ReleaseInfo | None) -> bool:
+        self._release_check_in_flight = False
+        if self._release_check_destroyed or release is None:
+            return False
+        if release.version == self._notified_release_version:
+            return False
+        if not self.preferences.notifications_enabled:
+            return False
+        self._notified_release_version = release.version
+        self.show_toast(
+            t(self.preferences.language, "app_update_available", version=release.version),
+            level="info",
+            timeout=10,
+        )
+        return False
 
     def _apply_window_icon(self) -> None:
         theme = Gtk.IconTheme.get_default()
@@ -574,6 +637,15 @@ class MainWindow(
             self.store_registry.clear_sudo_password()
 
     def _on_window_destroy(self, *_args) -> None:
+        self._release_check_destroyed = True
+        for attr in ("_release_check_initial_timer_id", "_release_check_periodic_timer_id"):
+            source_id = getattr(self, attr, 0)
+            if source_id:
+                try:
+                    GLib.source_remove(source_id)
+                except (TypeError, ValueError):
+                    pass
+                setattr(self, attr, 0)
         self.clear_cached_sudo_password()
         Gtk.main_quit()
 

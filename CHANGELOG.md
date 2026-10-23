@@ -8,7 +8,9 @@
 - Verify provider failures through the new per-source status summary and unavailable source labels without duplicating raw timeout errors.
 
 ### Documentation & Verification
-- Update the Ubuntu 22.04/24.04 CI evidence to the current 287-test suite.
+- Add a periodic, non-blocking GitHub Releases check with a localized update notification.
+- Use the latest current APT installation date after a package is removed and installed again.
+- Update the Ubuntu 22.04/24.04 CI evidence to the current 293-test suite.
 - Align installation instructions and package references with the 1.4.1 GitHub release assets.
 
 ## 1.4.0 - 2026-10-23
@@ -43,7 +45,7 @@
 ### Packaging, Branding & Compatibility
 - **SourceDock Rebrand**: Full rename of the application, repository, desktop metadata, icons, and Debian package from VoltApp to SourceDock.
 - **Backward Compatibility**: Seamless upgrade path via Debian control directives (`Replaces: voltapp`, `Breaks: voltapp (<< 1.3.0)`, `Provides: voltapp`), retaining `voltapp` CLI alias and preserving user settings. (Note: End-to-end upgrade verification from an existing VoltApp installation remains pending disposable VM testing).
-- **System Verification**: Verified on Zorin OS 18.1 (real host installation, UI navigation, and `apt` install/remove test lifecycle); the current Ubuntu 22.04 & 24.04 CI matrix runs 287 tests under Xvfb/Openbox.
+- **System Verification**: Verified on Zorin OS 18.1 (real host installation, UI navigation, and `apt` install/remove test lifecycle); the current Ubuntu 22.04 & 24.04 CI matrix runs 293 tests under Xvfb/Openbox.
 
 ## 1.2.0 - 2026-10-14 (Prepared Locally)
 
