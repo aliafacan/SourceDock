@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.6 - 2026-10-23
+
+### Installation Progress Clarity
+
+- Keep transient `sudo` authentication diagnostics in the expandable details log without presenting them as a live installation failure.
+- Preserve the real final command result so genuine authentication failures still open the password retry flow.
+
 ## 1.4.5 - 2026-10-23
 
 ### Snap Installation Reliability
