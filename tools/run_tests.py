@@ -28,6 +28,7 @@ def main() -> int:
         root = Path(directory)
         os.environ["GSETTINGS_BACKEND"] = "memory"
         os.environ["NO_AT_BRIDGE"] = "1"
+        os.environ["SOURCEDOCK_DISABLE_RELEASE_CHECK"] = "1"
         os.environ["TMPDIR"] = directory
         tempfile.tempdir = directory
         for variable, name in (
