@@ -18,7 +18,7 @@ SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen P
 
 ## Screenshots
 
-Die folgenden Bilder zeigen die aktuelle 1.4.3-Oberfläche auf Deutsch:
+Die folgenden Bilder zeigen die aktuelle 1.4.4-Oberfläche auf Deutsch:
 
 ![Installierte Anwendungen](docs/screenshots/installed-dark-de-100-1366x768.png)
 ![Store und Entdecken](docs/screenshots/discover-light-de-100-1366x768.png)
@@ -35,11 +35,11 @@ Die folgenden Bilder zeigen die aktuelle 1.4.3-Oberfläche auf Deutsch:
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.3](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.3). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 1.4.4](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.4). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.3_all.deb.sha256
-sudo apt install ./sourcedock_1.4.3_all.deb
+sha256sum -c sourcedock_1.4.4_all.deb.sha256
+sudo apt install ./sourcedock_1.4.4_all.deb
 sourcedock
 ```
 

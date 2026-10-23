@@ -31,7 +31,8 @@ class TestToastComponents(unittest.TestCase):
         self.assertIn("toast-success", toast.get_style_context().list_classes())
         self.assertEqual(toast.get_accessible().get_name(), "success: Operation finished")
 
-        toast._on_close_clicked()
+        # GTK passes the clicked button to signal callbacks.
+        toast._on_close_clicked(None)
         self.assertEqual(closed, [True])
 
         action_calls = []
@@ -65,7 +66,7 @@ class TestToastComponents(unittest.TestCase):
         self.assertIsNone(host._current)
 
         toast = host.show_toast("Close me", timeout=0)
-        toast._on_close_clicked()
+        toast._on_close_clicked(None)
         self.assertFalse(host._revealer.get_reveal_child())
         self.assertIsNone(host._current)
 

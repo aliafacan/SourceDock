@@ -108,6 +108,16 @@ class TestUiWorkflows(unittest.TestCase):
             self.window._on_global_search_activate(self.window.header_search)
         submit.assert_called_once()
 
+    def test_self_update_reexecutes_the_installed_launcher(self):
+        with (
+            patch("sourcedock.ui.window.shutil.which", return_value="/usr/bin/sourcedock"),
+            patch("sourcedock.ui.window.os.execv") as execv,
+        ):
+            self.window._on_self_update_installed()
+
+        execv.assert_called_once_with("/usr/bin/sourcedock", ["/usr/bin/sourcedock"])
+        self.assertFalse(self.window.get_visible())
+
     def test_page_search_state_is_scoped_and_restored(self):
         self.window.pages.set_current_page(1)
         self.window.header_search.set_text("firefox")
