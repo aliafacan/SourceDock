@@ -626,6 +626,7 @@
   "updates_reboot_required": "The system requires a restart.",
   "updates_select_all": "Alle auswählen",
   "updates_selected_count": "{count} ausgewählt",
+  "updates_show_all": "Alle Updates anzeigen",
   "updates_stat_applications": "Anwendungen",
   "updates_stat_firmware": "Firmware",
   "updates_stat_runtimes": "Laufzeitumgebungen",
