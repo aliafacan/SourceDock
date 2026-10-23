@@ -119,7 +119,7 @@
   - Uzun süren işlemlerde log akışının diyaloglara kesintisiz aktarımı sağlandı.
   - Gecikmiş `GLib.idle_add` sinyallerinde çifte `finish()` ve kapanmış widget erişimleri koruma altına alındı.
 - [x] **7.5. Kapsamlı Test ve Doğrulama**
-  - 293 birim testinin tamamı Xvfb/Openbox altında başarıyla doğrulandı; X11 1024x768 ve 1366x768 çift çözünürlük kabul testleri tamamlandı.
+  - 295 birim testinin tamamı Xvfb/Openbox altında başarıyla doğrulandı; X11 1024x768 ve 1366x768 çift çözünürlük kabul testleri tamamlandı.
 
 ---
 

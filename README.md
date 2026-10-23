@@ -100,7 +100,7 @@ The `.deb` package installs the GNOME desktop right-click integration (`sourcedo
 | :--- | :---: | :--- |
 | **Zorin OS 18.1** | **Verified** | Real workstation testing: clean `.deb` installation, live desktop navigation, and actual APT package install/remove cycles. |
 | **Zorin OS 17.x** | **Untested** | Core stack compatible with Ubuntu 22.04 base; covered by automated CI test suite. |
-| **Ubuntu 22.04 & 24.04** | **CI PASS** | Verified in automated CI: 293/293 unit tests passing under Xvfb/Openbox, Ruff clean, compileall clean, and `.deb` package build. |
+| **Ubuntu 22.04 & 24.04** | **CI PASS** | Verified in automated CI: 295/295 unit tests passing under Xvfb/Openbox, Ruff clean, compileall clean, and `.deb` package build. |
 | **Debian 12** | **Compatible** | Compatible dependencies via `.deb` package (Python 3.11+ and GTK 3); live hardware testing pending. |
 | **Debian 11** | **Unsupported** | Ships with Python 3.9 by default; SourceDock strictly requires Python >= 3.10. |
 | **Fedora / openSUSE / Arch** | **Experimental** | Backend parser and execution abstractions verified via mocked test suites; native packaging (.rpm / PKGBUILD) not yet provided. |
@@ -135,7 +135,7 @@ python3 main.py /path/to/package.deb
 ```
 
 ### Running the Test Suite
-The full guarded test suite (293 tests) runs headless under an Xvfb display and Openbox window manager:
+The full guarded test suite (295 tests) runs headless under an Xvfb display and Openbox window manager:
 ```bash
 xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```

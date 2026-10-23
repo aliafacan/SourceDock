@@ -22,7 +22,11 @@ from sourcedock.core.models import (
     UnifiedApplication,
 )
 from sourcedock.backend.manager import ApplicationRegistry
-from sourcedock.backend.update_checker import ReleaseInfo, check_latest_release
+from sourcedock.backend.update_checker import (
+    ReleaseInfo,
+    check_latest_release,
+    download_release_package,
+)
 from sourcedock.store.registry import StoreRegistry
 from sourcedock.i18n import t
 from sourcedock.preferences import PreferencesStore
@@ -63,6 +67,7 @@ class MainWindow(
         self._release_check_periodic_timer_id = 0
         self._release_check_in_flight = False
         self._notified_release_version = ""
+        self._release_update_in_progress = False
 
         self.application_registry = ApplicationRegistry()
         self.store_registry = StoreRegistry()
@@ -194,8 +199,59 @@ class MainWindow(
             t(self.preferences.language, "app_update_available", version=release.version),
             level="info",
             timeout=10,
+            action_label=(
+                t(self.preferences.language, "app_update_action")
+                if release.deb_url and release.checksum_url
+                else None
+            ),
+            on_action=(lambda: self._start_release_download(release))
+            if release.deb_url and release.checksum_url
+            else None,
         )
         return False
+
+    def _start_release_download(self, release: ReleaseInfo) -> None:
+        """Download a verified DEB, then hand it to the normal installer UI."""
+
+        if self._release_update_in_progress or not release.deb_url or not release.checksum_url:
+            return
+        self._release_update_in_progress = True
+        self.show_toast(
+            t(self.preferences.language, "app_update_downloading"),
+            level="info",
+            timeout=0,
+        )
+
+        def worker() -> None:
+            try:
+                package_path = download_release_package(release)
+            except Exception as exc:
+                GLib.idle_add(self._finish_release_download, None, str(exc))
+            else:
+                GLib.idle_add(self._finish_release_download, package_path, None)
+
+        threading.Thread(target=worker, daemon=True, name="release-download").start()
+
+    def _finish_release_download(self, package_path: str | None, error: str | None) -> bool:
+        self._release_update_in_progress = False
+        if self._release_check_destroyed:
+            return False
+        if error or not package_path:
+            message = t(self.preferences.language, "app_update_download_failed")
+            if error:
+                message = f"{message}: {error}"
+            self.show_toast(message, level="error", timeout=10)
+            return False
+        self.prompt_and_install_file(package_path, on_finished=self._on_self_update_installed)
+        return False
+
+    def _on_self_update_installed(self) -> None:
+        self.reload_applications_async()
+        self.show_toast(
+            t(self.preferences.language, "app_update_restart_required"),
+            level="success",
+            timeout=0,
+        )
 
     def _apply_window_icon(self) -> None:
         theme = Gtk.IconTheme.get_default()
