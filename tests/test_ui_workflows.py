@@ -529,14 +529,9 @@ class TestUiWorkflows(unittest.TestCase):
         self.addCleanup(dialog.destroy)
         dialog._is_installing = True
 
-        def accept_password(auth_dialog):
-            for child in auth_dialog.get_content_area().get_children():
-                if isinstance(child, Gtk.Entry):
-                    child.set_text("test-password")
-            return Gtk.ResponseType.OK
-
         with (
-            patch.object(Gtk.Dialog, "run", side_effect=accept_password),
+            patch.object(Gtk.Dialog, "run", return_value=Gtk.ResponseType.OK),
+            patch.object(Gtk.Entry, "get_text", return_value="test-password"),
             patch.object(dialog, "_start_installation") as start,
         ):
             dialog._prompt_auth_and_retry()
