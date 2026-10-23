@@ -358,6 +358,30 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertEqual(self.window.updates_tree.get_grid_lines(), Gtk.TreeViewGridLines.NONE)
         self.assertFalse(self.window.updates_toggle_renderer.get_property("radio"))
 
+    def test_update_summary_filter_can_return_to_all_groups(self):
+        self.window._finish_updates_load(self._updates(), [], None)
+        self.assertEqual(self.window.updates_model.iter_n_children(None), 4)
+
+        self.window.updates_stat_buttons["applications"].clicked()
+        self.assertEqual(self.window.updates_active_group, "applications")
+        self.assertEqual(self.window.updates_model.iter_n_children(None), 1)
+        self.assertTrue(self.window.updates_show_all_btn.get_sensitive())
+
+        self.window.updates_show_all_btn.clicked()
+        self.assertIsNone(self.window.updates_active_group)
+        self.assertEqual(self.window.updates_model.iter_n_children(None), 4)
+        self.assertFalse(self.window.updates_show_all_btn.get_visible())
+
+    def test_update_group_toggle_selects_only_supported_children(self):
+        self.window._finish_updates_load(self._updates(), [], None)
+        group_iterator = self.window.updates_model.get_iter("0")
+        self.assertIsNone(self.window.updates_model.get_value(group_iterator, 5))
+
+        self.window._on_update_toggled(None, "0")
+        self.assertEqual(len(self.window._selected_updates()), 1)
+        child_iterator = self.window.updates_model.iter_children(group_iterator)
+        self.assertTrue(self.window.updates_model.get_value(child_iterator, 0))
+
     def test_bulk_remove_is_enabled_only_for_removable_selection(self):
         app = UnifiedApplication("apt:editor", "Editor", SOURCE_APT, package_name="editor")
         self.window.applications = [app]

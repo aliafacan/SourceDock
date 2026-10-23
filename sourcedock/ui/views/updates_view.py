@@ -15,7 +15,7 @@ from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.i18n import source_name, t, translate_provider_error, translate_provider_notice
 from sourcedock.ui.components.dialogs import show_firmware_confirmation
 from sourcedock.theme import PALETTES, resolve_theme
-from sourcedock.ui.components.common import ContentState, icon_button, style_tree_view
+from sourcedock.ui.components.common import ContentState, icon_button, icon_text_button, style_tree_view
 
 
 class UpdatesViewMixin:
@@ -77,6 +77,11 @@ class UpdatesViewMixin:
         toolbar = Gtk.Box(spacing=8)
         self.updates_summary = Gtk.Label(xalign=0)
         toolbar.pack_start(self.updates_summary, True, True, 0)
+        self.updates_show_all_btn = Gtk.Button()
+        self.updates_show_all_btn.set_no_show_all(True)
+        self.updates_show_all_btn.get_style_context().add_class("secondary-action")
+        self.updates_show_all_btn.connect("clicked", self._on_clear_update_group_filter)
+        toolbar.pack_end(self.updates_show_all_btn, False, False, 0)
         self.updates_refresh_btn = Gtk.Button()
         self.updates_refresh_btn.connect("clicked", lambda _button: self._reload_updates_async())
         toolbar.pack_end(self.updates_refresh_btn, False, False, 0)
@@ -207,6 +212,15 @@ class UpdatesViewMixin:
         self.updates_page_title.set_text(t(lang, "updates_page_title"))
         self.updates_page_subtitle.set_text(t(lang, "updates_page_subtitle"))
         icon_button(self.updates_refresh_btn, "view-refresh-symbolic", t(lang, "updates_check"))
+        icon_text_button(
+            self.updates_show_all_btn,
+            "view-list-symbolic",
+            t(lang, "updates_show_all"),
+            t(lang, "updates_show_all"),
+        )
+        has_group_filter = self.updates_active_group is not None
+        self.updates_show_all_btn.set_sensitive(has_group_filter)
+        self.updates_show_all_btn.set_visible(has_group_filter)
         self.updates_select_all_btn.set_label(t(lang, "updates_select_all"))
         self.updates_apply_btn.set_label(t(lang, "updates_apply"))
         self._set_updates_status_details_button()
@@ -237,6 +251,14 @@ class UpdatesViewMixin:
     def _on_update_group_card_clicked(self, _button, group):
         """Filter the list to a summary category; clicking it again clears it."""
         self.updates_active_group = None if self.updates_active_group == group else group
+        self._render_updates_model()
+        self._refresh_updates_texts()
+
+    def _on_clear_update_group_filter(self, _button):
+        """Return from a summary-card filter to the complete update list."""
+        if self.updates_active_group is None:
+            return
+        self.updates_active_group = None
         self._render_updates_model()
         self._refresh_updates_texts()
 
@@ -272,12 +294,14 @@ class UpdatesViewMixin:
     def _update_name_cell_data(self, _column, cell, model, iterator, _data):
         is_group = model.get_value(iterator, 5) is None
         cell.set_property("weight", 700 if is_group else 400)
+        cell.set_property("ypad", 8 if is_group else 4)
+        cell.set_property("xpad", 8 if is_group else 4)
         if is_group:
             palette = PALETTES[resolve_theme(self.preferences.theme)]
             cell.set_property("foreground-set", True)
             cell.set_property("foreground", palette["warning"])
             cell.set_property("background-set", True)
-            cell.set_property("background", palette["surface"])
+            cell.set_property("background", palette["surface_hover"])
         else:
             cell.set_property("foreground-set", False)
             cell.set_property("background-set", False)
@@ -286,6 +310,8 @@ class UpdatesViewMixin:
         item = model.get_value(iterator, 5)
         if item is not None:
             cell.set_property("visible", True)
+            cell.set_property("xpad", 8)
+            cell.set_property("ypad", 4)
             cell.set_property("activatable", bool(item.application.update_supported))
             cell.set_property("inconsistent", False)
             return
@@ -297,6 +323,8 @@ class UpdatesViewMixin:
                 states.append(bool(model.get_value(children, 0)))
             children = model.iter_next(children)
         cell.set_property("visible", True)
+        cell.set_property("xpad", 8)
+        cell.set_property("ypad", 8)
         cell.set_property("activatable", bool(states))
         cell.set_property("active", bool(states) and all(states))
         cell.set_property("inconsistent", bool(states) and not all(states))
@@ -304,12 +332,14 @@ class UpdatesViewMixin:
     def _update_detail_cell_data(self, _column, cell, model, iterator, _data):
         is_group = model.get_value(iterator, 5) is None
         cell.set_property("visible", True)
+        cell.set_property("ypad", 8 if is_group else 4)
+        cell.set_property("xpad", 8 if is_group else 4)
         if is_group:
             palette = PALETTES[resolve_theme(self.preferences.theme)]
             cell.set_property("foreground-set", True)
             cell.set_property("foreground", palette["muted"])
             cell.set_property("background-set", True)
-            cell.set_property("background", palette["surface"])
+            cell.set_property("background", palette["surface_hover"])
         else:
             cell.set_property("foreground-set", False)
             cell.set_property("background-set", False)

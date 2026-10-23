@@ -626,6 +626,7 @@
   "updates_reboot_required": "Sistem yeniden başlatma gerektiriyor.",
   "updates_select_all": "Tümünü seç",
   "updates_selected_count": "{count} seçildi",
+  "updates_show_all": "Tümünü göster",
   "updates_stat_applications": "Uygulamalar",
   "updates_stat_firmware": "Bellenim",
   "updates_stat_runtimes": "Çalışma ortamları",
