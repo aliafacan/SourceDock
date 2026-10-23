@@ -27,9 +27,12 @@ class ToastNotification(Gtk.Box):
         level: str = "info",
         on_close: Callable[[], None] | None = None,
         language: str = "tr",
+        action_label: str | None = None,
+        on_action: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.on_close = on_close
+        self.on_action = on_action
         self.get_style_context().add_class("toast-box")
         self.get_style_context().add_class(f"toast-{level}")
 
@@ -52,6 +55,12 @@ class ToastNotification(Gtk.Box):
         label.get_style_context().add_class("toast-label")
         self.pack_start(label, True, True, 0)
 
+        if action_label and on_action:
+            action_btn = Gtk.Button(label=action_label)
+            action_btn.get_style_context().add_class("suggested-action")
+            action_btn.connect("clicked", self._on_action_clicked)
+            self.pack_end(action_btn, False, False, 0)
+
         close_btn = Gtk.Button()
         close_btn.set_image(Gtk.Image.new_from_icon_name("window-close-symbolic", Gtk.IconSize.BUTTON))
         close_btn.set_relief(Gtk.ReliefStyle.NONE)
@@ -66,6 +75,12 @@ class ToastNotification(Gtk.Box):
     def _on_close_clicked(self) -> None:
         if self.on_close:
             self.on_close()
+
+    def _on_action_clicked(self, _button) -> None:
+        if self.on_close:
+            self.on_close()
+        if self.on_action:
+            self.on_action()
 
 
 class ToastHost(Gtk.Overlay):
@@ -86,14 +101,26 @@ class ToastHost(Gtk.Overlay):
         self._timeout_id = 0
         self.add_overlay(self._revealer)
 
-    def show_toast(self, message: str, level: str = "info", timeout: int = 4) -> ToastNotification:
+    def show_toast(
+        self,
+        message: str,
+        level: str = "info",
+        timeout: int = 4,
+        action_label: str | None = None,
+        on_action: Callable[[], None] | None = None,
+    ) -> ToastNotification:
         """Display ``message``; a non-positive ``timeout`` keeps it until dismissed."""
         self._cancel_timeout()
         if self._current is not None:
             self._revealer.remove(self._current)
             self._current.destroy()
         toast = ToastNotification(
-            message, level=level, on_close=self.hide_toast, language=self.language
+            message,
+            level=level,
+            on_close=self.hide_toast,
+            language=self.language,
+            action_label=action_label,
+            on_action=on_action,
         )
         self._current = toast
         self._revealer.add(toast)
