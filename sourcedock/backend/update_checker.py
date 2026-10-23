@@ -31,6 +31,14 @@ class ReleaseInfo:
     checksum_url: str | None = None
 
 
+@dataclass(frozen=True)
+class ReleaseCheckResult:
+    """Result of a release check, including a useful no-update status."""
+
+    release: ReleaseInfo | None
+    status: str
+
+
 def _version_key(value: str) -> tuple[int, ...] | None:
     match = _VERSION_RE.fullmatch(value.strip())
     if not match:
@@ -62,9 +70,24 @@ def check_latest_release(
     fail when GitHub is unavailable.
     """
 
+    return check_latest_release_result(
+        current_version,
+        opener=opener,
+        timeout=timeout,
+    ).release
+
+
+def check_latest_release_result(
+    current_version: str,
+    *,
+    opener: Callable[..., object] = urlopen,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> ReleaseCheckResult:
+    """Return update, up-to-date, or unavailable status for a release check."""
+
     current_key = _version_key(current_version)
     if current_key is None:
-        return None
+        return ReleaseCheckResult(None, "unavailable")
 
     request = Request(
         GITHUB_LATEST_RELEASE_URL,
@@ -77,18 +100,20 @@ def check_latest_release(
         with opener(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, TimeoutError, ValueError, TypeError, AttributeError):
-        return None
+        return ReleaseCheckResult(None, "unavailable")
 
     if not isinstance(payload, dict) or payload.get("draft") is True or payload.get("prerelease") is True:
-        return None
+        return ReleaseCheckResult(None, "unavailable")
 
     tag_name = payload.get("tag_name")
     if not isinstance(tag_name, str):
-        return None
+        return ReleaseCheckResult(None, "unavailable")
     version = tag_name.removeprefix("v")
     release_key = _version_key(version)
-    if release_key is None or release_key <= current_key:
-        return None
+    if release_key is None:
+        return ReleaseCheckResult(None, "unavailable")
+    if release_key <= current_key:
+        return ReleaseCheckResult(None, "up_to_date")
 
     release_url = payload.get("html_url")
     if not isinstance(release_url, str) or not release_url.startswith(("https://", "http://")):
@@ -114,12 +139,15 @@ def check_latest_release(
             elif asset_name == f"{expected_deb_name}.sha256":
                 checksum_url = asset_url
 
-    return ReleaseInfo(
-        version=version,
-        name=name.strip(),
-        url=release_url,
-        deb_url=deb_url,
-        checksum_url=checksum_url,
+    return ReleaseCheckResult(
+        ReleaseInfo(
+            version=version,
+            name=name.strip(),
+            url=release_url,
+            deb_url=deb_url,
+            checksum_url=checksum_url,
+        ),
+        "update_available",
     )
 
 

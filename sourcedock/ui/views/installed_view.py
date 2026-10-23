@@ -1963,6 +1963,9 @@ class InstalledViewMixin:
             dialog.destroy()
 
     def prompt_and_install_file(self, filename: str, on_finished: Callable[[], None] | None = None) -> None:
+        # A completed self-update download must not leave its persistent
+        # "downloading" toast underneath the installer preview.
+        self.hide_toast()
         lang = self.preferences.language
         finish_callback = on_finished or self.reload_applications_async
         loading = Gtk.Dialog(

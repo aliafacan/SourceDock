@@ -55,8 +55,17 @@ def _parse_dpkg_history_lines(lines) -> tuple[dict[str, str], dict[str, str]]:
         if not pkg:
             continue
         if action == "install":
-            installed_at[pkg] = date_str
-            last_updated[pkg] = date_str
+            # dpkg normally records upgrades as ``upgrade``, but some local
+            # package installs are logged as ``install <old> <new>``. Keep
+            # the original date when the versions differ; only a fresh
+            # install or same-version reinstall starts a new installation.
+            old_version = parts[4] if len(parts) > 5 else "<none>"
+            new_version = parts[5] if len(parts) > 5 else parts[4]
+            if old_version not in ("", "<none>") and old_version != new_version:
+                last_updated[pkg] = date_str
+            else:
+                installed_at[pkg] = date_str
+                last_updated[pkg] = date_str
         elif action in ("remove", "purge"):
             installed_at.pop(pkg, None)
         elif action == "upgrade":

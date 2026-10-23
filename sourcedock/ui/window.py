@@ -24,7 +24,7 @@ from sourcedock.core.models import (
 from sourcedock.backend.manager import ApplicationRegistry
 from sourcedock.backend.update_checker import (
     ReleaseInfo,
-    check_latest_release,
+    check_latest_release_result,
     download_release_package,
 )
 from sourcedock.store.registry import StoreRegistry
@@ -66,6 +66,7 @@ class MainWindow(
         self._release_check_initial_timer_id = 0
         self._release_check_periodic_timer_id = 0
         self._release_check_in_flight = False
+        self._release_check_manual_pending = False
         self._notified_release_version = ""
         self._release_update_in_progress = False
 
@@ -172,31 +173,71 @@ class MainWindow(
         self._run_release_check()
         return True
 
-    def _run_release_check(self) -> None:
-        if self._release_check_destroyed or self._release_check_in_flight:
+    def _run_release_check(self, *, manual: bool = False) -> None:
+        if self._release_check_destroyed:
+            return
+        if self._release_check_in_flight:
+            if manual:
+                self._release_check_manual_pending = True
+                self.show_toast(
+                    t(self.preferences.language, "app_update_checking"),
+                    level="info",
+                    timeout=0,
+                )
             return
         self._release_check_in_flight = True
+        if manual:
+            self.show_toast(
+                t(self.preferences.language, "app_update_checking"),
+                level="info",
+                timeout=0,
+            )
 
         def worker() -> None:
             try:
-                release = check_latest_release(APP_VERSION)
+                result = check_latest_release_result(APP_VERSION)
             except Exception:
-                release = None
-            GLib.idle_add(self._finish_release_check, release)
+                result = None
+            GLib.idle_add(self._finish_release_check, result, manual)
 
         threading.Thread(target=worker, daemon=True, name="release-check").start()
 
-    def _finish_release_check(self, release: ReleaseInfo | None) -> bool:
+    def _finish_release_check(self, result, manual: bool = False) -> bool:
         self._release_check_in_flight = False
-        if self._release_check_destroyed or release is None:
+        manual = manual or self._release_check_manual_pending
+        self._release_check_manual_pending = False
+        if self._release_check_destroyed:
             return False
-        if release.version == self._notified_release_version:
+        if result is None:
+            if manual:
+                message = t(self.preferences.language, "app_update_check_failed")
+                self._record_notification(message, "error")
+                self.show_toast(message, level="error", timeout=8)
             return False
-        if not self.preferences.notifications_enabled:
+        release = result.release
+        if manual and result.status == "up_to_date":
+            message = t(self.preferences.language, "app_update_up_to_date", version=APP_VERSION)
+            self._record_notification(message, "success")
+            self.show_toast(
+                message,
+                level="success",
+                timeout=6,
+            )
+        elif manual and result.status == "unavailable":
+            message = t(self.preferences.language, "app_update_check_failed")
+            self._record_notification(message, "error")
+            self.show_toast(message, level="error", timeout=8)
+        if release is None:
+            return False
+        if not manual and release.version == self._notified_release_version:
+            return False
+        if not manual and not self.preferences.notifications_enabled:
             return False
         self._notified_release_version = release.version
+        message = t(self.preferences.language, "app_update_available", version=release.version)
+        self._record_notification(message)
         self.show_toast(
-            t(self.preferences.language, "app_update_available", version=release.version),
+            message,
             level="info",
             timeout=10,
             action_label=(
@@ -240,15 +281,20 @@ class MainWindow(
             message = t(self.preferences.language, "app_update_download_failed")
             if error:
                 message = f"{message}: {error}"
+            self._record_notification(message, "error")
             self.show_toast(message, level="error", timeout=10)
             return False
+        self.hide_toast()
+        self._record_notification(t(self.preferences.language, "app_update_download_ready"), "success")
         self.prompt_and_install_file(package_path, on_finished=self._on_self_update_installed)
         return False
 
     def _on_self_update_installed(self) -> None:
         self.reload_applications_async()
+        message = t(self.preferences.language, "app_update_restart_required")
+        self._record_notification(message, "success")
         self.show_toast(
-            t(self.preferences.language, "app_update_restart_required"),
+            message,
             level="success",
             timeout=0,
         )

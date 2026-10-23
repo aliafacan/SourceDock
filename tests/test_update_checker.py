@@ -9,7 +9,12 @@ import tempfile
 import unittest
 from unittest.mock import Mock
 
-from sourcedock.backend.update_checker import ReleaseInfo, check_latest_release, download_release_package
+from sourcedock.backend.update_checker import (
+    ReleaseInfo,
+    check_latest_release,
+    check_latest_release_result,
+    download_release_package,
+)
 
 
 class _Response:
@@ -76,6 +81,28 @@ class TestUpdateChecker(unittest.TestCase):
                     opener=Mock(return_value=_Response({"tag_name": tag})),
                 )
                 self.assertIsNone(release)
+
+    def test_detailed_check_distinguishes_up_to_date_from_unavailable(self):
+        current = check_latest_release_result(
+            "1.4.1", opener=Mock(return_value=_Response({"tag_name": "v1.4.1"}))
+        )
+        unavailable = check_latest_release_result(
+            "1.4.1", opener=Mock(side_effect=OSError("offline"))
+        )
+
+        self.assertEqual(current.status, "up_to_date")
+        self.assertIsNone(current.release)
+        self.assertEqual(unavailable.status, "unavailable")
+        self.assertIsNone(unavailable.release)
+
+    def test_detailed_check_marks_new_release_as_available(self):
+        result = check_latest_release_result(
+            "1.4.1", opener=Mock(return_value=_Response({"tag_name": "v1.5.0"}))
+        )
+
+        self.assertEqual(result.status, "update_available")
+        self.assertIsNotNone(result.release)
+        self.assertEqual(result.release.version, "1.5.0")
 
     def test_ignores_draft_prerelease_and_invalid_payloads(self):
         payloads = (

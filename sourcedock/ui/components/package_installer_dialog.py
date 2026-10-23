@@ -630,6 +630,9 @@ class PackageInstallerDialog(Gtk.Dialog):
     def _prompt_auth_and_retry(self, failed: bool = False) -> None:
         """Yönetici parolası gerektiğinde modal parola penceresi açar ve kurulumu tekrarlar."""
         self._stop_pulse()
+        self.progress_status_label.set_text(t(self.language, "progress_auth_needed"))
+        self.log_expander.set_expanded(True)
+        self.present()
         dialog = Gtk.Dialog(
             title=t(self.language, "password_title"),
             transient_for=self,
@@ -663,12 +666,17 @@ class PackageInstallerDialog(Gtk.Dialog):
         content.pack_start(pwd_entry, False, False, 0)
 
         dialog.show_all()
+        dialog.present()
         resp = dialog.run()
         pwd = pwd_entry.get_text()
         dialog.destroy()
 
         if resp == Gtk.ResponseType.OK and pwd:
             self.registry.runner.set_sudo_password(pwd)
+            # The failed attempt is already over. Clear the guard before
+            # starting a new worker; otherwise _start_installation() treats
+            # the retry as the still-running original attempt and returns.
+            self._is_installing = False
             self._start_installation()
         else:
             self._on_install_failure(t(self.language, "progress_auth_needed"))
@@ -681,7 +689,10 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         trimmed = line.strip()
         if trimmed:
-            if len(trimmed) < 80:
+            normalized = trimmed.casefold()
+            if "password is required" in normalized or "parola gerekiyor" in normalized:
+                self.progress_status_label.set_text(t(self.language, "progress_auth_needed"))
+            elif len(trimmed) < 80:
                 self.progress_status_label.set_text(trimmed)
 
     def _on_pulse_tick(self) -> bool:

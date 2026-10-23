@@ -1,6 +1,7 @@
 """Responsive navigation and global search around the existing GTK pages."""
 
 import gi
+from datetime import datetime
 from pathlib import Path
 
 gi.require_version("Gtk", "3.0")
@@ -8,7 +9,7 @@ from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
 from sourcedock.constants import APP_VERSION
 from sourcedock.i18n import t
-from sourcedock.ui.components.common import icon_button
+from sourcedock.ui.components.common import icon_button, prepare_dialog
 from sourcedock.ui.components.toast import ToastHost
 
 PAGE_KEYS = {0: "nav_installed", 1: "nav_discover", 2: "nav_packages", 3: "nav_operations", 4: "nav_updates"}
@@ -17,6 +18,8 @@ PAGE_KEYS = {0: "nav_installed", 1: "nav_discover", 2: "nav_packages", 3: "nav_o
 class ShellViewMixin:
     def _build_window_shell(self):
         self._syncing_global_search = False
+        self._notification_history = []
+        self._notification_unread = 0
         self.header = Gtk.HeaderBar()
         self.header.set_show_close_button(True)
         self.header.set_title("SourceDock")
@@ -32,6 +35,9 @@ class ShellViewMixin:
         self.header_operations_btn = Gtk.Button()
         self.header_operations_btn.connect("clicked", lambda _button: self.pages.set_current_page(3))
         self.header.pack_end(self.header_operations_btn)
+        self.header_notifications_btn = Gtk.Button()
+        self.header_notifications_btn.connect("clicked", self._open_notifications)
+        self.header.pack_end(self.header_notifications_btn)
         self.set_titlebar(self.header)
 
         root = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -89,7 +95,14 @@ class ShellViewMixin:
         self.sidebar_version = Gtk.Label(label=APP_VERSION)
         self.sidebar_version.get_style_context().add_class("dim-label")
         self.sidebar_version.set_margin_top(16)
-        self.sidebar.pack_start(self.sidebar_version, False, False, 0)
+        self.sidebar_version_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.sidebar_version_row.set_halign(Gtk.Align.CENTER)
+        self.sidebar_version_row.pack_start(self.sidebar_version, False, False, 0)
+        self.sidebar_update_check_btn = Gtk.Button()
+        self.sidebar_update_check_btn.set_relief(Gtk.ReliefStyle.NONE)
+        self.sidebar_update_check_btn.connect("clicked", lambda _button: self._run_release_check(manual=True))
+        self.sidebar_version_row.pack_start(self.sidebar_update_check_btn, False, False, 0)
+        self.sidebar.pack_start(self.sidebar_version_row, False, False, 0)
         root.pack_start(self.pages, True, True, 0)
         self.pages.set_show_tabs(False)
         self.pages.set_show_border(False)
@@ -129,10 +142,11 @@ class ShellViewMixin:
             self.settings_label,
             self.help_label,
             self.brand_label,
-            self.sidebar_version,
+            self.sidebar_version_row,
         ):
             label.set_no_show_all(compact)
             label.set_visible(not compact)
+        self.sidebar_update_check_btn.set_visible(not compact)
         self._refresh_sidebar_toggle_text()
         # The size-request change can otherwise be applied one allocation
         # later. Keep the next page capture and user interaction in sync.
@@ -191,10 +205,16 @@ class ShellViewMixin:
             button.get_accessible().set_name(text)
         self.header_search.set_placeholder_text(t(lang, "global_search"))
         self.header_search.get_accessible().set_name(t(lang, "global_search"))
+        icon_button(
+            self.sidebar_update_check_btn,
+            "view-refresh-symbolic",
+            t(lang, "app_update_check_now"),
+        )
         self._refresh_sidebar_toggle_text()
         self._refresh_shell_page()
         icon_button(self.header_operations_btn, "emblem-synchronizing-symbolic", t(lang, "nav_operations"))
         self._refresh_update_count()
+        self._refresh_notifications_button()
         if hasattr(self, "toast_host") and self.toast_host is not None:
             self.toast_host.language = lang
 
@@ -247,6 +267,86 @@ class ShellViewMixin:
         self.header_updates_btn.get_accessible().set_name(
             t(self.preferences.language, "updates_count", count=count)
         )
+
+    def _refresh_notifications_button(self) -> None:
+        if not hasattr(self, "header_notifications_btn"):
+            return
+        count = self._notification_unread
+        self.header_notifications_btn.set_label(str(count) if count else "")
+        self.header_notifications_btn.set_image(
+            Gtk.Image.new_from_icon_name("dialog-information-symbolic", Gtk.IconSize.BUTTON)
+        )
+        self.header_notifications_btn.set_always_show_image(True)
+        label = t(self.preferences.language, "notifications_count", count=count)
+        self.header_notifications_btn.set_tooltip_text(label)
+        self.header_notifications_btn.get_accessible().set_name(label)
+
+    def _record_notification(self, message: str, level: str = "info") -> None:
+        """Keep a compact in-app history for important application events."""
+        self._notification_history.append(
+            {
+                "message": message,
+                "level": level,
+                "timestamp": datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
+            }
+        )
+        del self._notification_history[:-50]
+        self._notification_unread += 1
+        self._refresh_notifications_button()
+
+    def _open_notifications(self, _button=None) -> None:
+        self._notification_unread = 0
+        self._refresh_notifications_button()
+        lang = self.preferences.language
+        dialog = Gtk.Dialog(
+            title=t(lang, "notifications_title"),
+            transient_for=self,
+            modal=True,
+            destroy_with_parent=True,
+        )
+        prepare_dialog(dialog, width=620, height=420)
+        dialog.add_button(t(lang, "notifications_close"), Gtk.ResponseType.CLOSE)
+        clear_button = dialog.add_button(t(lang, "notifications_clear"), Gtk.ResponseType.APPLY)
+        clear_button.get_style_context().add_class("destructive-action")
+
+        content = dialog.get_content_area()
+        content.set_spacing(8)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        list_box = Gtk.ListBox()
+        list_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        scrolled.add(list_box)
+        content.pack_start(scrolled, True, True, 0)
+
+        if not self._notification_history:
+            empty = Gtk.Label(label=t(lang, "notifications_empty"))
+            empty.set_xalign(0)
+            empty.get_style_context().add_class("dim-label")
+            list_box.add(empty)
+        else:
+            for record in reversed(self._notification_history):
+                row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+                row.set_margin_top(8)
+                row.set_margin_bottom(8)
+                row.set_margin_start(10)
+                row.set_margin_end(10)
+                timestamp = Gtk.Label(label=record["timestamp"], xalign=0)
+                timestamp.get_style_context().add_class("dim-label")
+                message = Gtk.Label(label=record["message"], xalign=0)
+                message.set_line_wrap(True)
+                row.pack_start(timestamp, False, False, 0)
+                row.pack_start(message, False, False, 0)
+                list_box.add(row)
+
+        dialog.show_all()
+        response = dialog.run()
+        if response == Gtk.ResponseType.APPLY:
+            self._notification_history.clear()
+        dialog.destroy()
 
     def _on_global_search_changed(self, entry):
         if self._suppress_global_search_changed:
