@@ -18,7 +18,7 @@ SourceDock réunit la recherche, l’installation, la mise à jour et la suppres
 
 ## Captures d’écran
 
-Les images suivantes montrent l’interface actuelle de la version 1.4.1 en français :
+Les images suivantes montrent l’interface actuelle de la version 1.4.2 en français :
 
 ![Applications installées](docs/screenshots/installed-dark-fr-100-1366x768.png)
 ![Boutique et découverte](docs/screenshots/discover-light-fr-100-1366x768.png)
@@ -35,11 +35,11 @@ Les images suivantes montrent l’interface actuelle de la version 1.4.1 en fran
 
 ## Installation
 
-Téléchargez [SourceDock 1.4.1](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.1) et son checksum :
+Téléchargez [SourceDock 1.4.2](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.2) et son checksum :
 
 ```bash
-sha256sum -c sourcedock_1.4.1_all.deb.sha256
-sudo apt install ./sourcedock_1.4.1_all.deb
+sha256sum -c sourcedock_1.4.2_all.deb.sha256
+sudo apt install ./sourcedock_1.4.2_all.deb
 sourcedock
 ```
 
@@ -48,7 +48,7 @@ Lorsqu’une nouvelle version est disponible, SourceDock peut télécharger le D
 ## Compatibilité
 
 - Zorin OS 18.1 : installation réelle et cycle APT vérifiés.
-- Ubuntu 22.04 et 24.04 : CI PASS, 295/295 tests sous Xvfb/Openbox.
+- Ubuntu 22.04 et 24.04 : CI PASS, 296/296 tests sous Xvfb/Openbox.
 - Debian 12 : compatible ; Debian 11 nécessite Python 3.10 ou plus récent.
 - Fedora, openSUSE et Arch : support expérimental, sans paquet natif pour le moment.
 

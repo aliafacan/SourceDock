@@ -84,6 +84,31 @@ class TestTranslationTables(unittest.TestCase):
                 seen.add(key.value)
         self.assertEqual(duplicates, [], f"duplicate translation keys: {duplicates}")
 
+    def test_locale_json_has_no_duplicate_keys(self):
+        from tools.translation_catalog import audit
+
+        duplicate_locales = {
+            language: result["duplicate_keys"]
+            for language, result in audit().items()
+            if result["duplicate_keys"]
+        }
+        self.assertEqual(duplicate_locales, {})
+
+    def test_known_mixed_language_errors_are_not_present(self):
+        for language in ("de", "es", "pt_BR", "fr"):
+            values = TRANSLATIONS[language]
+            with self.subTest(language=language):
+                self.assertNotIn(" to ", values["appimage_add_failed"])
+                self.assertNotIn(" to ", values["package_inspect_failed"])
+                self.assertNotIn("only if", values["store_snap_classic_message"])
+                for key in (
+                    "security_appimage_body",
+                    "security_local_body",
+                    "security_signature_local",
+                    "security_trust_confirmation",
+                ):
+                    self.assertNotEqual(values[key], TRANSLATIONS["en"][key])
+
 
 class TestTranslationCoverage(unittest.TestCase):
     def test_every_static_lookup_resolves_to_a_translation(self):

@@ -105,7 +105,10 @@ class TestUpdateChecker(unittest.TestCase):
             "https://github.com/aliafacan/SourceDock/releases/download/v1.5.0/sourcedock_1.5.0_all.deb",
             "https://github.com/aliafacan/SourceDock/releases/download/v1.5.0/sourcedock_1.5.0_all.deb.sha256",
         )
-        opener = Mock(side_effect=[_Response(package_data), _Response(f"{checksum}  package.deb\n")])
+        opener = Mock(side_effect=[
+            _Response(package_data),
+            _Response(f"{checksum}  sourcedock_1.5.0_all.deb\n"),
+        ])
 
         with tempfile.TemporaryDirectory() as directory:
             path = download_release_package(release, destination_dir=directory, opener=opener)
@@ -125,6 +128,21 @@ class TestUpdateChecker(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "checksum"):
                 download_release_package(release, destination_dir=directory, opener=opener)
+
+    def test_download_release_package_rejects_malformed_checksum_file(self):
+        release = ReleaseInfo(
+            "1.5.0",
+            "SourceDock 1.5.0",
+            "https://github.com/aliafacan/SourceDock/releases/tag/v1.5.0",
+            "https://github.com/aliafacan/SourceDock/releases/download/v1.5.0/sourcedock_1.5.0_all.deb",
+            "https://github.com/aliafacan/SourceDock/releases/download/v1.5.0/sourcedock_1.5.0_all.deb.sha256",
+        )
+        opener = Mock(side_effect=[_Response(b"fake deb payload"), _Response("not a checksum")])
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                download_release_package(release, destination_dir=directory, opener=opener)
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
 
 if __name__ == "__main__":

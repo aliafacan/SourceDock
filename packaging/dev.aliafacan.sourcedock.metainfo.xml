@@ -18,6 +18,12 @@
   <categories><category>System</category><category>PackageManager</category></categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.2" date="2026-10-23" type="stable">
+      <description>
+        <p>Improved translation quality across German, Spanish, Brazilian Portuguese and French, with reviewed security messages and localized UI screenshots.</p>
+        <p>Added translation auditing for placeholders, markup, duplicate keys and untranslated or mixed-language text. Verified the self-update checksum and cancellation flow.</p>
+      </description>
+    </release>
     <release version="1.4.1" date="2026-10-23" type="stable">
       <description>
         <p>Fixed Store search state handling so visible user input remains stable while provider results load.</p>

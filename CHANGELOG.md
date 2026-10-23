@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.4.2 - 2026-10-23
+
+### Localization Quality
+
+- Reviewed the German, Spanish, Brazilian Portuguese and French catalogues and removed the identified mixed-language strings from the application, installer, store and operations flows.
+- Added a translation audit for catalogue parity, placeholders, Pango-style markup, duplicate JSON keys, untranslated candidates and security-sensitive messages.
+
+### Translation Consistency
+
+- Corrected terminology for installation, removal, updates, package sources, permissions, diagnostics and self-update notifications.
+- Refreshed localized GTK screenshots for all six languages and the dark, light and system themes.
+
+### Security Message Review
+
+- Reviewed AppImage, Flatpak, Snap Classic, repository signature, administrator permission and destructive-operation warnings without weakening their meaning.
+
+### UI Localization Fixes
+
+- Fixed the known mixed-language AppImage error messages and localized status text used by the installed-applications and store views.
+
+### Self-Update Verification
+
+- Preserved the v1.4.1 verified DEB download, SHA-256 validation, normal authorization preview and restart-required flow for the v1.4.2 upgrade path.
+
 ## 1.4.1 - 2026-10-23
 
 ### UI & Provider Reliability

@@ -18,7 +18,7 @@ SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen P
 
 ## Screenshots
 
-Die folgenden Bilder zeigen die aktuelle 1.4.1-Oberfläche auf Deutsch:
+Die folgenden Bilder zeigen die aktuelle 1.4.2-Oberfläche auf Deutsch:
 
 ![Installierte Anwendungen](docs/screenshots/installed-dark-de-100-1366x768.png)
 ![Store und Entdecken](docs/screenshots/discover-light-de-100-1366x768.png)
@@ -35,11 +35,11 @@ Die folgenden Bilder zeigen die aktuelle 1.4.1-Oberfläche auf Deutsch:
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.1](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.1). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 1.4.2](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.2). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.1_all.deb.sha256
-sudo apt install ./sourcedock_1.4.1_all.deb
+sha256sum -c sourcedock_1.4.2_all.deb.sha256
+sudo apt install ./sourcedock_1.4.2_all.deb
 sourcedock
 ```
 
@@ -48,7 +48,7 @@ SourceDock kann neue Releases melden und die geprüfte DEB-Datei anschließend i
 ## Kompatibilität
 
 - Zorin OS 18.1: reale Installation und APT-Lebenszyklus geprüft.
-- Ubuntu 22.04 und 24.04: CI PASS, 295/295 Tests unter Xvfb/Openbox.
+- Ubuntu 22.04 und 24.04: CI PASS, 296/296 Tests unter Xvfb/Openbox.
 - Debian 12: kompatibel; Debian 11 benötigt Python 3.10 oder neuer.
 - Fedora, openSUSE und Arch: experimentell, native Paketierung noch nicht enthalten.
 
