@@ -152,13 +152,23 @@ class AptProvider(BaseNativeProvider):
     def _upgradable_packages(self) -> set[str]:
         if not self.runner.command_exists("apt"):
             return set()
-        result = self.runner.run(["apt", "list", "--upgradable", "-q"], timeout=30)
+        result = self.runner.run(
+            ["apt", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "list", "--upgradable", "-q"],
+            timeout=10,
+        )
         packages: set[str] = set()
         for line in (result.stdout + result.stderr).splitlines():
             if "/" not in line:
                 continue
             name = line.split("/", 1)[0].strip()
-            if name and not name.lower().startswith("warning") and not name.lower().startswith("listing"):
+            if (
+                name
+                and not name.lower().startswith("warning")
+                and not name.lower().startswith("listing")
+                and not name.lower().startswith("error")
+                and not name.lower().startswith("e:")
+                and not name.lower().startswith("w:")
+            ):
                 packages.add(name)
         return packages
 
@@ -265,13 +275,23 @@ class AptProvider(BaseNativeProvider):
     def _upgradable_packages_with_versions(self) -> dict[str, str]:
         if not self.runner.command_exists("apt"):
             return {}
-        result = self.runner.run(["apt", "list", "--upgradable", "-q"], timeout=30)
+        result = self.runner.run(
+            ["apt", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "list", "--upgradable", "-q"],
+            timeout=10,
+        )
         versions: dict[str, str] = {}
         for line in (result.stdout + result.stderr).splitlines():
             if "/" not in line:
                 continue
             name = line.split("/", 1)[0].strip()
-            if not name or name.lower().startswith("warning") or name.lower().startswith("listing"):
+            if (
+                not name
+                or name.lower().startswith("warning")
+                or name.lower().startswith("listing")
+                or name.lower().startswith("error")
+                or name.lower().startswith("e:")
+                or name.lower().startswith("w:")
+            ):
                 continue
             parts = line.split()
             new_ver = parts[1] if len(parts) >= 2 else ""

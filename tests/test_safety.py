@@ -2027,5 +2027,123 @@ sys.exit(0)
         self.assertNotIn('secret_token_xyz987', combined)
         self.assertIn('[redacted]', combined)
 
+    def test_regression_o_package_installer_dialog_progress_and_result_visibility(self):
+        """GTK3 set_no_show_all(True) container trapping regression test.
+        _start_installation and _on_install_success/_on_install_failure must call
+        set_no_show_all(False) and show_all() so progress widgets and result cards
+        are rendered instead of staying blank."""
+        import gi
+        gi.require_version("Gtk", "3.0")
+        from gi.repository import Gtk
+        from sourcedock.backend.local_packages import LocalPackageInfo
+        from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
+
+        info = LocalPackageInfo("/tmp/test.deb", "deb", "TestPkg", version="1.0")
+        reg = MagicMock()
+        with patch.object(PackageInstallerDialog, "__init__", lambda self, *a, **kw: None):
+            dlg = PackageInstallerDialog()
+            dlg.language = "tr"
+            dlg.info = info
+            dlg.registry = reg
+            dlg.runner = reg.runner
+            dlg.auth_mode = "system"
+            dlg.save_installed = False
+            dlg.delete_after = False
+            dlg._is_installing = False
+            dlg._pulse_timeout_id = None
+            dlg._current_op_id = None
+            dlg.create_desktop_check = None
+            dlg.copy_to_apps_check = None
+            dlg.flatpak_scope_system_radio = None
+            dlg.is_reinstall = False
+            dlg.delete_after_check = None
+            dlg.on_finished = None
+
+            dlg.trust_check = Gtk.CheckButton(active=True)
+            dlg.preview_container = Gtk.Box()
+            dlg.action_btn = Gtk.Button()
+
+            dlg.progress_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            dlg.progress_container.set_no_show_all(True)
+            dlg.progress_status_label = Gtk.Label()
+            dlg.progress_bar = Gtk.ProgressBar()
+            dlg.log_buffer = Gtk.TextBuffer()
+            dlg.progress_container.pack_start(dlg.progress_status_label, False, False, 0)
+            dlg.progress_container.pack_start(dlg.progress_bar, False, False, 0)
+
+            dlg.result_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            dlg.result_container.set_no_show_all(True)
+            dlg.result_badge_label = Gtk.Label()
+            dlg.result_detail_label = Gtk.Label()
+            dlg.result_container.pack_start(dlg.result_badge_label, False, False, 0)
+            dlg.result_container.pack_start(dlg.result_detail_label, False, False, 0)
+
+            dlg.install_btn = Gtk.Button()
+            dlg.cancel_btn = Gtk.Button()
+            dlg.close_btn = Gtk.Button()
+            dlg.launch_btn = Gtk.Button()
+            dlg.retry_btn = Gtk.Button()
+            dlg.action_row = Gtk.Box()
+            dlg.log_expander = Gtk.Expander()
+            dlg.auth_expander = Gtk.Expander()
+            dlg.auth_combo = Gtk.ComboBoxText()
+            dlg.save_check = Gtk.CheckButton()
+            dlg.delete_check = Gtk.CheckButton()
+
+            with patch("threading.Thread"):
+                dlg._start_installation()
+            self.assertFalse(dlg.progress_container.get_no_show_all())
+            self.assertTrue(dlg.progress_container.get_visible())
+            self.assertTrue(dlg.progress_bar.get_visible())
+
+            dlg._on_install_failure("Test error message")
+            self.assertFalse(dlg.result_container.get_no_show_all())
+            self.assertTrue(dlg.result_container.get_visible())
+            self.assertTrue(dlg.result_badge_label.get_visible())
+
+            dlg._is_installing = False
+            with patch("threading.Thread"):
+                dlg._on_retry_clicked(dlg.retry_btn)
+            self.assertTrue(dlg.result_container.get_no_show_all())
+            self.assertFalse(dlg.result_container.get_visible())
+            self.assertFalse(dlg.progress_container.get_no_show_all())
+            self.assertTrue(dlg.progress_container.get_visible())
+
+            dlg._on_install_success(deleted_file=False)
+            self.assertFalse(dlg.result_container.get_no_show_all())
+            self.assertTrue(dlg.result_container.get_visible())
+
+    def test_regression_p_apt_upgradable_queries_use_lock_timeout_zero(self):
+        """APT list --upgradable queries must use DPkg::Lock::Timeout=0 and 10s timeout,
+        failing fast or filtering errors gracefully so concurrent operations/store searches
+        never block or crash when dpkg/apt lock is held."""
+        from sourcedock.backend.apt import AptProvider
+
+        runner = MagicMock()
+        runner.command_exists.side_effect = lambda cmd: cmd == "apt"
+        provider = AptProvider(runner=runner, scanner=MagicMock())
+
+        runner.run.return_value = subprocess.CompletedProcess(
+            args=["apt"],
+            returncode=0,
+            stdout="Listing...\ncurl/jammy-updates 7.81.0-1ubuntu1.16 amd64 [upgradable from: 7.81.0-1ubuntu1.15]\ngit/jammy-updates 1:2.34.1-1ubuntu1.11 amd64 [upgradable from: 1:2.34.1-1ubuntu1.10]\n",
+            stderr="",
+        )
+        pkgs = provider._upgradable_packages()
+        self.assertEqual(pkgs, {"curl", "git"})
+        cmd_called = runner.run.call_args[0][0]
+        timeout_called = runner.run.call_args[1].get("timeout")
+        self.assertEqual(cmd_called, ["apt", "-o", "DPkg::Lock::Timeout=0", "list", "--upgradable", "-q"])
+        self.assertEqual(timeout_called, 10)
+
+        runner.run.return_value = subprocess.CompletedProcess(
+            args=["apt"],
+            returncode=100,
+            stdout="",
+            stderr="E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 12345 (apt)\nW: Some index files failed to download.\nError: Failed to fetch\n",
+        )
+        self.assertEqual(provider._upgradable_packages(), set())
+        self.assertEqual(provider._upgradable_packages_with_versions(), {})
+
 if __name__ == "__main__":
     unittest.main()
