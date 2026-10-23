@@ -44,7 +44,7 @@ To inspect a freshly built package instead of an older tracked artifact:
 
 ```bash
 bash packaging/build_deb.sh /tmp/sourcedock-test-package
-export SOURCEDOCK_TEST_DEB=/tmp/sourcedock-test-package/sourcedock_1.4.0_all.deb
+export SOURCEDOCK_TEST_DEB=/tmp/sourcedock-test-package/sourcedock_1.4.1_all.deb
 # Then run the Xvfb/Openbox command above.
 ```
 
@@ -73,7 +73,7 @@ is FAIL, not a successful sample.
 ## Physical X11 Acceptance
 
 ```bash
-SOURCEDOCK_TEST_PACKAGE=/tmp/sourcedock-test-package/sourcedock_1.4.0_all.deb \
+SOURCEDOCK_TEST_PACKAGE=/tmp/sourcedock-test-package/sourcedock_1.4.1_all.deb \
   bash tools/run_acceptance_x11.sh
 ```
 
