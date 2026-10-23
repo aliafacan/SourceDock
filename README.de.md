@@ -16,6 +16,14 @@
 
 SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen Paketdateien in einer einzigen, responsiven Oberfläche. Die Anwendung arbeitet asynchron, zeigt Anbieterfehler transparent an und fordert erhöhte Rechte erst für die jeweilige bestätigte Aktion an.
 
+## Screenshots
+
+Die folgenden Bilder zeigen die aktuelle 1.4.1-Oberfläche (englische UI):
+
+![Installierte Anwendungen](docs/screenshots/installed-dark-en-100-1366x768.png)
+![Store und Entdecken](docs/screenshots/discover-light-en-100-1366x768.png)
+![Update-Zentrale](docs/screenshots/updates-dark-en-100-1366x768.png)
+
 ## Funktionen
 
 - Einheitliche Ansicht für installierte Anwendungen, Pakete, Updates und Store-Suche.
