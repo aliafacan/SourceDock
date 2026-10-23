@@ -20,6 +20,7 @@ from sourcedock.core.models import (
     is_native_source,
 )
 from sourcedock.core.runner import CommandRunner
+from sourcedock.core.errors import BackendError
 from sourcedock.backend.distro import DistroInfo, detect_distro, parse_os_release
 from sourcedock.backend.base_native import BaseNativeProvider
 from sourcedock.backend.apt import AptProvider
@@ -252,6 +253,30 @@ class TestRegistryMultiDistroDispatch(unittest.TestCase):
         )
         store.install(res)
         store._run_privileged_streaming.assert_called_with(["dnf", "install", "-y", "blender"], timeout=1800)
+
+    def test_snap_install_waits_for_an_active_change_before_retrying(self):
+        store = StoreRegistry.__new__(StoreRegistry)
+        store._run_privileged_streaming = MagicMock(
+            side_effect=[
+                BackendError('Command failed: snap install wordcraft\nsnap "wordcraft" has "install-snap" change in progress'),
+                None,
+            ]
+        )
+        store._wait_for_snap_change = MagicMock(return_value=False)
+
+        result = StoreResult(
+            name="Wordcraft",
+            app_id="wordcraft",
+            description="Word processor",
+            source=SOURCE_SNAP,
+            version="1.0",
+            remote="snap-store",
+        )
+
+        store._install_snap(result)
+
+        store._wait_for_snap_change.assert_called_once_with("wordcraft")
+        self.assertEqual(store._run_privileged_streaming.call_count, 2)
 
 
 if __name__ == "__main__":

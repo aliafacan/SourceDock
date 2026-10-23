@@ -94,6 +94,7 @@ class StoreRegistry:
     SEARCH_CACHE_TTL_SECONDS = 15 * 60
     SEARCH_PARTIAL_CACHE_TTL_SECONDS = 60
     SEARCH_CACHE_MAX_ENTRIES = 24
+    SNAP_CHANGE_WAIT_SECONDS = 300
 
     """Mağazalardan (Flatpak, Snap, APT, DNF, Pacman, Zypper) arama ve kurulum işlemlerini yürüten sınıf."""
 
@@ -794,7 +795,63 @@ class StoreRegistry:
         if classic:
             cmd.append("--classic")
         cmd.append(result.app_id)
-        self._run_privileged_streaming(cmd, timeout=1800, snap_pkg=result.app_id)
+        try:
+            self._run_privileged_streaming(cmd, timeout=1800, snap_pkg=result.app_id)
+        except BackendError as exc:
+            if not self._is_snap_change_in_progress(str(exc)):
+                raise
+
+            # snapd rejects a second transaction while another change is
+            # active.  Wait for that transaction instead of showing a false
+            # installation failure to the user.
+            if self._wait_for_snap_change(result.app_id):
+                return
+            self._run_privileged_streaming(cmd, timeout=1800, snap_pkg=result.app_id)
+
+    @staticmethod
+    def _is_snap_change_in_progress(message: str) -> bool:
+        lowered = message.casefold()
+        return "change in progress" in lowered
+
+    def _snap_package_is_installed(self, package: str) -> bool:
+        try:
+            result = self._run(["snap", "list", package], timeout=10)
+        except BackendError:
+            return False
+        if result.returncode != 0:
+            return False
+        return any(line.split() and line.split()[0] == package for line in result.stdout.splitlines()[1:])
+
+    def _snap_has_active_change(self) -> bool:
+        try:
+            result = self._run(["snap", "changes"], timeout=10)
+        except BackendError:
+            # Keep waiting when the status query is temporarily unavailable;
+            # retrying immediately would reproduce the same snapd conflict.
+            return True
+        if result.returncode != 0:
+            return True
+        active_statuses = {"doing", "undoing", "hold"}
+        for line in result.stdout.splitlines()[1:]:
+            fields = line.split()
+            if len(fields) >= 2 and fields[1].casefold() in active_statuses:
+                return True
+        return False
+
+    def _wait_for_snap_change(self, package: str) -> bool:
+        deadline = time.monotonic() + self.SNAP_CHANGE_WAIT_SECONDS
+        last_message = ""
+        while time.monotonic() < deadline:
+            if self._snap_package_is_installed(package):
+                return True
+            if not self._snap_has_active_change():
+                return False
+            message = f"Snap başka bir işlem yürütüyor; {package} için bekleniyor..."
+            if message != last_message and self._output_callback is not None:
+                self._output_callback(message)
+                last_message = message
+            time.sleep(2)
+        return self._snap_package_is_installed(package)
 
     def _install_apt(self, result: StoreResult) -> None:
         cmd = ["apt-get", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "install", "-y", result.app_id]
