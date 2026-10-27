@@ -151,6 +151,7 @@ bash packaging/build_deb.sh dist
 ## Proje Dokümantasyonu
 
 - [Katkı Rehberi](CONTRIBUTING.md)
+- [Topluluk Kuralları](CODE_OF_CONDUCT.md)
 - [Mimari Yapı](docs/ARCHITECTURE.md)
 - [Uyumluluk Tablosu](docs/COMPATIBILITY.md)
 - [Değişiklik Günlüğü](CHANGELOG.md)

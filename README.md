@@ -151,6 +151,7 @@ bash packaging/build_deb.sh dist
 ## Project Documentation
 
 - [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 - [System Architecture](docs/ARCHITECTURE.md)
 - [Compatibility Matrix](docs/COMPATIBILITY.md)
 - [Changelog](CHANGELOG.md)

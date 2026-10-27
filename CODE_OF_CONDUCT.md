@@ -1,6 +1,6 @@
 <div align="center">
 
-[ 🇹🇷 **Türkçe** ](#-türkçe) &nbsp;&bull;&nbsp; [ 🇬🇧 **English** ](#-english)
+[ 🇹🇷 **Türkçe** ](#-türkçe) &nbsp;&bull;&nbsp; [ 🇬🇧 **English** ](#-english) &nbsp;&bull;&nbsp; [ 🇩🇪 **Deutsch** ](#-deutsch) &nbsp;&bull;&nbsp; [ 🇪🇸 **Español** ](#-español) &nbsp;&bull;&nbsp; [ 🇧🇷 **Português (BR)** ](#-português-br) &nbsp;&bull;&nbsp; [ 🇫🇷 **Français** ](#-français)
 
 </div>
 
@@ -102,3 +102,47 @@ This Code of Conduct applies within all project spaces, and also applies when an
 ## Contact & Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers at [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). All complaints will be reviewed and investigated promptly and fairly, with full confidentiality maintained.
+
+---
+
+<a id="-deutsch"></a>
+# 🇩🇪 SourceDock — Verhaltenskodex
+
+Wir verpflichten uns, SourceDock zu einer respektvollen, belästigungsfreien und inklusiven Gemeinschaft für alle zu machen – unabhängig von Herkunft, Identität, Behinderung, Erfahrungsstand, Religion oder sexueller Orientierung.
+
+Wir erwarten Empathie, Respekt für unterschiedliche Sichtweisen, konstruktives Feedback und die Bereitschaft, Verantwortung für Fehler zu übernehmen. Unzulässig sind sexualisierte Sprache oder Bilder, Trolling, Beleidigungen, persönliche Angriffe, Belästigung und die Veröffentlichung privater Informationen ohne Zustimmung.
+
+Projektverantwortliche dürfen Beiträge, Kommentare, Issues und andere Inhalte, die diesen Regeln widersprechen, angemessen moderieren, bearbeiten oder entfernen. Meldungen können vertraulich an [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com) gesendet werden.
+
+---
+
+<a id="-español"></a>
+# 🇪🇸 SourceDock — Código de conducta
+
+Nos comprometemos a mantener una comunidad respetuosa, inclusiva y libre de acoso para todas las personas, sin importar su origen, identidad, discapacidad, experiencia, religión u orientación sexual.
+
+Esperamos empatía, respeto por las distintas opiniones, comentarios constructivos y responsabilidad por los errores. No se permiten lenguaje o imágenes sexualizadas, trolling, insultos, ataques personales, acoso ni la publicación de información privada sin permiso.
+
+Las personas responsables del proyecto pueden moderar, editar o retirar contenido que incumpla estas reglas. Las denuncias pueden enviarse de forma confidencial a [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com).
+
+---
+
+<a id="-português-br"></a>
+# 🇧🇷 SourceDock — Código de conduta
+
+Comprometemo-nos a manter uma comunidade respeitosa, inclusiva e livre de assédio para todas as pessoas, independentemente de origem, identidade, deficiência, experiência, religião ou orientação sexual.
+
+Esperamos empatia, respeito por diferentes opiniões, feedback construtivo e responsabilidade pelos próprios erros. Não são permitidos linguagem ou imagens sexualizadas, trolling, insultos, ataques pessoais, assédio nem a publicação de informações privadas sem autorização.
+
+As pessoas responsáveis pelo projeto podem moderar, editar ou remover conteúdo que viole estas regras. Denúncias podem ser enviadas confidencialmente para [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com).
+
+---
+
+<a id="-français"></a>
+# 🇫🇷 SourceDock — Code de conduite
+
+Nous nous engageons à offrir à toutes les personnes une communauté respectueuse, inclusive et exempte de harcèlement, quels que soient leur origine, leur identité, leur handicap, leur expérience, leur religion ou leur orientation sexuelle.
+
+Nous attendons de chacun de l’empathie, du respect pour les points de vue différents, des retours constructifs et la responsabilité de ses erreurs. Sont interdits le langage ou les images sexualisés, le trolling, les insultes, les attaques personnelles, le harcèlement et la publication d’informations privées sans autorisation.
+
+Les responsables du projet peuvent modérer, modifier ou retirer tout contenu contraire à ces règles. Les signalements peuvent être envoyés confidentiellement à [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com).
