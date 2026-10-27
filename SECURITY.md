@@ -13,6 +13,8 @@ administrative access. Credentials are kept in memory, passed to sudo on stdin,
 redacted from diagnostics and cleared after the operation. GUI execution as root is refused.
 
 Local files are unverified unless an actual verification mechanism proves otherwise.
+The release SHA-256 file checks the downloaded DEB's integrity; it is not a digital
+signature and must not be described as signer or publisher authentication.
 AppImage inspection never executes the file. An installed AppImage is not guaranteed
 to be sandboxed. Portable removal requires matching ownership records and manifests.
 

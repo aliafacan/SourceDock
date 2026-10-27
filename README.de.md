@@ -18,16 +18,17 @@ SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen P
 
 ## Screenshots
 
-Die folgenden Bilder zeigen die aktuelle 1.4.6-Oberfläche auf Deutsch:
+Die Bilder sind nach Ansicht, Theme, Sprache und 1366×768-Auflösung benannt:
 
-![Installierte Anwendungen](docs/screenshots/installed-dark-de-100-1366x768.png)
 ![Store und Entdecken](docs/screenshots/discover-light-de-100-1366x768.png)
+![Installierte Anwendungen](docs/screenshots/installed-dark-de-100-1366x768.png)
 ![Update-Zentrale](docs/screenshots/updates-dark-de-100-1366x768.png)
 
 ## Funktionen
 
 - Einheitliche Ansicht für installierte Anwendungen, Pakete, Updates und Store-Suche.
-- APT-Unterstützung sowie Parser für DNF, Pacman und Zypper; Flatpak und Snap optional.
+- Klare Bereiche für Store, installierte Anwendungen, Updates, Vorgänge, Systempakete, Paketinstallation, Einstellungen und Hilfe; Updates sind in Anwendungen, System, Runtimes und Firmware gegliedert.
+- APT als primäre native Integration; DNF, Pacman und Zypper experimentell; Flatpak und Snap optional.
 - Lokale `.deb`-Vorschau mit Version, Architektur, Abhängigkeiten und Installationsstatus.
 - Dunkles, helles und System-Theme, Skalierung von 90–125 % und sechs Sprachen.
 - Periodische GitHub-Release-Prüfung mit verifiziertem DEB-Self-Update über SHA-256.
@@ -48,7 +49,7 @@ SourceDock kann neue Releases melden und die geprüfte DEB-Datei anschließend i
 ## Kompatibilität
 
 - Zorin OS 18.1: reale Installation und APT-Lebenszyklus geprüft.
-- Ubuntu 22.04 und 24.04: CI PASS, 296/296 Tests unter Xvfb/Openbox.
+- Ubuntu 22.04 und 24.04: durch den CI-Workflow mit Xvfb/Openbox, unittest, Ruff, compileall und `.deb`-Build abgedeckt; ein aktuelles Remote-Ergebnis wird hier nicht behauptet.
 - Debian 12: kompatibel; Debian 11 benötigt Python 3.10 oder neuer.
 - Fedora, openSUSE und Arch: experimentell, native Paketierung noch nicht enthalten.
 

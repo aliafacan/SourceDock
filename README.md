@@ -24,11 +24,11 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 
 <div align="center">
 
-### Installed Applications (Dark Mode)
-![Installed Applications View](docs/screenshots/installed-dark-en-100-1366x768.png)
-
 ### Software Discovery & Store (Light Mode)
 ![Discover & Store View](docs/screenshots/discover-light-en-100-1366x768.png)
+
+### Installed Applications (Dark Mode)
+![Installed Applications View](docs/screenshots/installed-dark-en-100-1366x768.png)
 
 ### Unified Updates Center (Dark Mode)
 ![Updates Center View](docs/screenshots/updates-dark-en-100-1366x768.png)
@@ -49,7 +49,8 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 ## Core Features
 
 - **Unified Application Management**: Browse, search, inspect, and remove software across system packages and desktop applications with responsive sidebar navigation.
-- **Distro-Agnostic Architecture**: Native package manager integration (APT, with parser models for DNF, Pacman, and Zypper) alongside optional Flatpak and Snap providers.
+- **Clear workspace views**: Discover, Installed, Updates, Operations, System Packages, Install Package, Settings, and Help; Updates separates Applications, System, Runtimes, and Firmware.
+- **Provider-aware architecture**: APT is the primary native integration; DNF, Pacman, and Zypper backends are experimental. Flatpak, Snap, AppImage, portable archives, and fwupd are optional and depend on host tools.
 - **Standalone Package Installer**: Preview `.deb` packages before installation, checking description, architecture, file size, dependencies, and origin.
 - **Safe Transaction Execution**: Non-blocking asynchronous command runner equipped with `flock`-based file locks, timeout bounds, and sensitive credential masking.
 - **Transparent Operation History**: Bounded, inspectable transaction logs with user-controlled export and clearing.
@@ -61,7 +62,7 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 
 SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based distributions (Zorin OS, Ubuntu, Debian, Linux Mint, etc.).
 
-1. Download the matching `.deb` package and checksum from the [SourceDock 1.4.6 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6).
+1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 1.4.6 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6).
 2. Verify the package checksum:
    ```bash
    sha256sum -c sourcedock_1.4.6_all.deb.sha256
@@ -100,10 +101,10 @@ The `.deb` package installs the GNOME desktop right-click integration (`sourcedo
 | :--- | :---: | :--- |
 | **Zorin OS 18.1** | **Verified** | Real workstation testing: clean `.deb` installation, live desktop navigation, and actual APT package install/remove cycles. |
 | **Zorin OS 17.x** | **Untested** | Core stack compatible with Ubuntu 22.04 base; covered by automated CI test suite. |
-| **Ubuntu 22.04 & 24.04** | **CI PASS** | Verified in automated CI: 296/296 unit tests passing under Xvfb/Openbox, Ruff clean, compileall clean, and `.deb` package build. |
+| **Ubuntu 22.04 & 24.04** | **CI target** | The repository CI workflow runs the guarded unittest suite under Xvfb/Openbox, Ruff, compileall, and `.deb` build checks. A current remote CI result is not claimed here. |
 | **Debian 12** | **Compatible** | Compatible dependencies via `.deb` package (Python 3.11+ and GTK 3); live hardware testing pending. |
 | **Debian 11** | **Unsupported** | Ships with Python 3.9 by default; SourceDock strictly requires Python >= 3.10. |
-| **Fedora / openSUSE / Arch** | **Experimental** | Backend parser and execution abstractions verified via mocked test suites; native packaging (.rpm / PKGBUILD) not yet provided. |
+| **Fedora / openSUSE / Arch** | **Experimental** | DNF, Zypper, and Pacman integrations are present but require real-host validation; native packaging (.rpm / PKGBUILD) is not provided. |
 
 For detailed environment test breakdowns and architectural boundaries, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
@@ -135,7 +136,7 @@ python3 main.py /path/to/package.deb
 ```
 
 ### Running the Test Suite
-The full guarded test suite (296 tests) runs headless under an Xvfb display and Openbox window manager:
+The guarded unittest suite runs headless under an Xvfb display and Openbox window manager. The repository is the source of truth for the current test count:
 ```bash
 xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```
