@@ -1,20 +1,27 @@
 ---
-name: Özellik İsteği (Feature Request)
-about: SourceDock için yeni bir fikir veya geliştirme önerin
-title: '[ÖNERİ] '
+name: Feature request
+about: Suggest an improvement for SourceDock
+title: "[Feature] "
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
-**Önerilen Özellik ile Çözülecek Problem**
-Bu öneri hangi eksikliği veya zorluğu çözmeyi hedefliyor? (Örn: '... yaparken çok zorlanıyorum çünkü ...')
+## Problem
 
-**Önerilen Çözüm**
-Uygulamaya nasıl bir özellik eklenmeli? Davranışı ve arayüzü nasıl olmalı?
+<!-- What problem would this proposal solve? Who is affected? -->
 
-**Düşünülen Alternatifler**
-Varsa düşündüğünüz alternatif yaklaşımlar.
+## Proposed solution
 
-**Ek Bağlam**
-Fikrinizi açıklayan şemalar, referans uygulamalar veya ekran görüntüleri.
+<!-- Describe the desired behavior and user experience. -->
 
+## Alternatives considered
+
+<!-- What alternatives or workarounds have you considered? -->
+
+## Compatibility and security considerations
+
+<!-- Mention provider, distribution, permission, privacy, or performance impact. -->
+
+## Additional context
+
+<!-- Add mockups, references, screenshots, or related issues. Remove personal data. -->
