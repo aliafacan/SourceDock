@@ -1,4 +1,14 @@
-# SourceDock Security Policy
+<div align="center">
+
+<a id="top"></a>
+[🇬🇧 English](#english) &nbsp;•&nbsp; [🇹🇷 Türkçe](#turkish) &nbsp;•&nbsp; [🇩🇪 Deutsch](#german) &nbsp;•&nbsp; [🇪🇸 Español](#spanish) &nbsp;•&nbsp; [🇧🇷 Português (BR)](#portuguese) &nbsp;•&nbsp; [🇫🇷 Français](#french)
+
+</div>
+
+---
+
+<a id="english"></a>
+# 🇬🇧 SourceDock Security Policy
 
 ## Reporting a vulnerability
 
@@ -59,3 +69,136 @@ relevant tests under `tests/`.
 Security fixes are applied to the current development line. Users should upgrade
 to the latest published release where possible. Backports to older versions are
 evaluated case by case and are not guaranteed.
+
+[Back to top](#top)
+
+---
+
+<a id="turkish"></a>
+# 🇹🇷 SourceDock Güvenlik Politikası
+
+## Güvenlik açığı bildirimi
+
+Şüpheli güvenlik açıklarını [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com)
+adresine özel olarak bildirin. Yaması yayımlanmamış bir açığı public issue, pull request
+veya tartışma olarak paylaşmayın.
+
+Mümkün ve güvenliyse etkilenen sürüm/commit, dağıtım ve masaüstü ortamı, etki açıklaması,
+ön koşullar, yeniden üretme adımları ve kişisel verilerden arındırılmış logları ekleyin.
+Şifre, token, özel anahtar, kullanıcı adı veya kişisel dosya yollarını silin. Kimlik bilgisi
+veya zararlı örnek göndermeden önce güvenli aktarım yöntemini kararlaştırın.
+
+Bildirimler mümkün olduğunca gizli incelenir; yanıt ve düzeltme süreleri için garanti edilen
+bir hizmet seviyesi yoktur.
+
+## Kapsam ve sınırlar
+
+Paket komutları ve yetkilendirme, arşiv çıkarma ve yol geçişi, kimlik bilgileri ve loglar,
+masaüstü entegrasyonu, güvenilmeyen yerel dosyalar, güncelleme indirmeleri ve checksum
+doğrulaması kapsam dahilindedir.
+
+SourceDock normal masaüstü kullanıcısı olarak çalışmalıdır; GUI root olarak çalıştırılmamalıdır.
+Yerel dosyalar otomatik olarak güvenilir kabul edilmez, AppImage incelemesi dosyayı çalıştırmaz
+ve SHA-256 dosyası yalnızca bütünlük doğrular; dijital imza veya yayıncı doğrulaması değildir.
+
+Güvenlik düzeltmeleri mevcut geliştirme hattına uygulanır. Kullanıcıların mümkün olduğunda
+en son yayımlanan sürüme geçmesi önerilir; eski sürümlere geri taşıma garanti edilmez.
+
+[Başa dön](#top)
+
+---
+
+<a id="german"></a>
+# 🇩🇪 Sicherheitsrichtlinie von SourceDock
+
+Melde vermutete Sicherheitslücken vertraulich an
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). Erstelle für eine ungepatchte
+Lücke kein öffentliches Issue, keine Pull Request und keine Diskussion.
+
+Gib nach Möglichkeit Version oder Commit, Distribution, Desktop-Umgebung, Auswirkungen,
+Voraussetzungen, Reproduktionsschritte und bereinigte Logs an. Entferne Passwörter, Tokens,
+private Schlüssel, Benutzernamen und persönliche Pfade. Sende keine Zugangsdaten oder
+Schadproben ohne vorher vereinbarten sicheren Übertragungsweg.
+
+Der Schwerpunkt liegt auf Paketbefehlen und Berechtigungen, Archivextraktion und Pfaden,
+Anmeldedaten und Protokollen, Desktop-Integration, lokalen Dateien sowie Downloads und
+Prüfsummen. SourceDock läuft als normaler Desktop-Benutzer; die GUI darf nicht als root
+laufen. SHA-256 bestätigt nur die Integrität des Downloads, keine Signatur oder Herkunft.
+
+Meldungen werden so vertraulich wie praktisch möglich behandelt. Es gibt keine garantierte
+Antwort- oder Behebungsfrist. Sicherheitsfixes gelten primär für die aktuelle Entwicklungslinie.
+
+[Zum Anfang](#top)
+
+---
+
+<a id="spanish"></a>
+# 🇪🇸 Política de seguridad de SourceDock
+
+Envía las vulnerabilidades sospechadas de forma privada a
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). No abras un issue, pull request
+ni debate público para una vulnerabilidad sin corregir.
+
+Incluye, cuando sea seguro, la versión o commit afectado, distribución, entorno de escritorio,
+impacto, requisitos previos, pasos de reproducción y logs sin datos personales. Elimina
+contraseñas, tokens, claves privadas, nombres de usuario y rutas personales. No envíes
+credenciales ni muestras maliciosas sin acordar un método seguro.
+
+El alcance incluye comandos de paquetes y permisos, extracción de archivos, rutas, credenciales,
+logs, integración de escritorio, archivos locales, descargas y verificaciones de checksum.
+SourceDock debe ejecutarse como usuario normal; la GUI no debe ejecutarse como root. SHA-256
+verifica la integridad de la descarga, no una firma ni la identidad del publicador.
+
+Los informes se gestionan con la mayor confidencialidad posible, sin garantía de plazos fijos.
+Las correcciones se aplican principalmente a la línea de desarrollo actual.
+
+[Volver al inicio](#top)
+
+---
+
+<a id="portuguese"></a>
+# 🇧🇷 Política de segurança do SourceDock
+
+Envie suspeitas de vulnerabilidade em privado para
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). Não abra uma issue, pull request
+ou discussão pública para uma vulnerabilidade ainda não corrigida.
+
+Quando for seguro, inclua a versão ou commit afetado, distribuição, ambiente de desktop,
+impacto, pré-requisitos, passos de reprodução e logs sem dados pessoais. Remova senhas,
+tokens, chaves privadas, nomes de usuário e caminhos pessoais. Não envie credenciais ou
+amostras maliciosas sem combinar um método seguro.
+
+O escopo inclui comandos de pacotes e autorização, extração de arquivos, caminhos,
+credenciais, logs, integração de desktop, arquivos locais, downloads e verificações de
+checksum. O SourceDock deve rodar como usuário normal; a GUI não deve rodar como root.
+SHA-256 verifica apenas a integridade do download, não uma assinatura ou o publicador.
+
+Os relatos são tratados com a maior confidencialidade possível, sem prazo fixo garantido.
+As correções são aplicadas principalmente à linha de desenvolvimento atual.
+
+[Voltar ao início](#top)
+
+---
+
+<a id="french"></a>
+# 🇫🇷 Politique de sécurité de SourceDock
+
+Signalez les vulnérabilités présumées en privé à
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). N’ouvrez pas d’issue, de pull
+request ou de discussion publique pour une vulnérabilité non corrigée.
+
+Lorsque c’est possible, indiquez la version ou le commit, la distribution, l’environnement
+de bureau, l’impact, les prérequis, les étapes de reproduction et des journaux nettoyés.
+Retirez mots de passe, tokens, clés privées, noms d’utilisateur et chemins personnels. N’envoyez
+pas d’identifiants ni d’échantillon malveillant sans méthode de transfert sûre convenue.
+
+Le périmètre couvre les commandes de paquets et l’autorisation, l’extraction d’archives, les
+chemins, les identifiants, les journaux, l’intégration de bureau, les fichiers locaux, les
+téléchargements et les sommes de contrôle. SourceDock doit fonctionner comme utilisateur
+normal ; l’interface ne doit pas fonctionner en root. SHA-256 vérifie uniquement l’intégrité
+du téléchargement, pas une signature ni l’identité de l’éditeur.
+
+Les signalements sont traités de manière aussi confidentielle que possible, sans délai garanti.
+Les correctifs s’appliquent principalement à la ligne de développement actuelle.
+
+[Retour au début](#top)
