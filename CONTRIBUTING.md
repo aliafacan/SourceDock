@@ -1,323 +1,142 @@
-<div align="center">
+# Contributing to SourceDock
 
-[ 🇹🇷 **Türkçe** ](#-türkçe) &nbsp;&bull;&nbsp; [ 🇬🇧 **English** ](#-english)
+Thank you for helping improve SourceDock. This guide describes the project’s
+development expectations and the checks required before opening a pull request.
+For community expectations, see the [Code of Conduct](CODE_OF_CONDUCT.md). For
+security vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of opening a
+public issue.
 
-</div>
+## Before you start
 
----
+1. Search existing issues and pull requests before starting work.
+2. For a substantial feature or behavior change, open an issue first so the scope
+   and design can be discussed.
+3. Keep changes focused. Avoid mixing unrelated refactors, formatting changes, or
+   generated screenshots into a feature or bug-fix pull request.
 
-<a id="-türkçe"></a>
-# 🇹🇷 SourceDock — Geliştirici & Katkı Kılavuzu (Contributing Guide)
+## Development environment
 
-> *SourceDock, farklı Linux yazılım kaynaklarını anlaşılır ve güvenli bir masaüstü deneyiminde birleştirme amacıyla geliştirilir.*
+SourceDock is a Python 3.10+ GTK 3 application. On Debian, Ubuntu, or Zorin OS,
+install the runtime and test dependencies with:
 
-Açık kaynak dünyasına ve SourceDock projesine katkıda bulunmak istediğiniz için teşekkür ederiz! Bu belge, projenin mimari standartlarını, kodlama kurallarını ve geliştirme iş akışını açıklar.
-
-SourceDock 1.4.6'nın birincil yerel paket sağlayıcısı APT'tir. DNF, Pacman ve Zypper
-entegrasyonları deneysel kabul edilir; Flatpak, Snap, AppImage, taşınabilir arşiv ve
-fwupd sağlayıcıları makinedeki araçların varlığına bağlıdır. Dokümantasyon ve ekran
-görüntülerinde bu sağlayıcılar aynı olgunluk seviyesinde sunulmamalıdır.
-
----
-
-## 📐 1. Altın Mimari Kuralımız (Clean Architecture)
-
-> **Önemli Kural:**  
-> Hiçbir dosya gereksiz yere şişirilmeyecek, spagetti koda izin verilmeyecektir.  
-> Yeni bir özellik eklerken mevcut dosyaları yüzlerce satır uzatmak yerine, işlevsel alt modüller oluşturulmalı veya ilgili katmana (`core/`, `backend/`, `ui/views/`, `ui/components/`) yerleştirilmelidir.
-
-### Modüler Dizin Yapısı:
-```text
-sourcedock/
-├── core/                  # İş mantığından bağımsız temel çekirdek
-│   ├── models.py          # Veri modelleri ve tip tanımları
-│   ├── errors.py          # Proje geneli hata sınıfları
-│   └── runner.py          # Güvenli komut çalıştırma ve sudo yönetimi
-│
-├── backend/               # Paket yöneticisi entegrasyonları
-│   ├── base_native.py     # Dağıtım-bağımsız yerel paket yöneticisi soyutlaması
-│   ├── distro.py          # Linux dağıtımı otomatik algılama
-│   ├── apt.py             # Debian / Ubuntu / Zorin yerel yöneticisi
-│   ├── dnf.py             # Fedora / RHEL yerel yöneticisi
-│   ├── pacman.py          # Arch Linux / Manjaro yerel yöneticisi
-│   ├── zypper.py          # openSUSE yerel yöneticisi
-│   ├── flatpak.py         # Flatpak sandbox yönetimi
-│   ├── snap.py            # Snap ve --classic yönetimi
-│   ├── firmware.py        # Donanım yazılımı / fwupd entegrasyonu
-│   ├── appimage.py        # AppImage çalıştırma ve masaüstü entegrasyonu
-│   ├── portable.py        # Taşınabilir arşiv (tar.gz/zip) yöneticisi
-│   ├── local_packages.py  # Çevrimdışı paket inceleme ve kurucu
-│   ├── mime_integration.py# MIME türleri ve varsayılan yükleyici entegrasyonu
-│   ├── scanner.py         # Masaüstü uygulamaları tarayıcısı
-│   └── manager.py         # Birleşik ApplicationRegistry
-│
-├── store/                 # Mağaza ve depo entegrasyonu
-│   └── registry.py        # Flathub, Snap Store ve yerel depo arama motoru
-│
-├── ui/                    # Kullanıcı arayüzü (GTK 3)
-│   ├── views/             # Sekme görünümleri (ViewMixin'ler)
-│   │   ├── installed_view.py # Yüklü uygulamalar sekmesi
-│   │   ├── store_view.py     # Mağaza sekmesi
-│   │   ├── packages_view.py  # Sistem paketleri sekmesi
-│   │   ├── operations_view.py# Süreç izleme sekmesi
-│   │   ├── settings_view.py  # Ayarlar diyaloğu
-│   │   └── help_view.py      # Yardım kılavuzu diyaloğu (F1)
-│   ├── components/        # Tekrar kullanılabilir UI bileşenleri
-│   │   ├── dialogs.py        # Onay ve şifre pencereleri
-│   │   ├── progress.py       # İlerleme penceresi (OperationProgressWindow)
-│   │   └── package_installer_dialog.py # Bağımsız mini kurucu diyaloğu
-│   └── window.py          # MainWindow (tüm mixin'leri birleştiren ana pencere)
-│
-├── constants.py           # Uygulama sabitleri
-├── locales/               # Altı dil için JSON çeviri katalogları
-├── i18n.py                # Katalog yükleme ve uyumluluk yardımcıları
-├── preferences.py         # JSON tabanlı kullanıcı tercihleri
-└── theme.py               # Modern GTK CSS renk ve stil motoru
-```
-
----
-
-## 🌍 2. Çok Dilli Yerelleştirme (i18n) Zorunluluğu
-
-Kullanıcı arayüzünde görünen **hiçbir metin koda doğrudan (hardcoded) yazılmamalıdır**.
-- Her yeni etiket, buton metni, hata mesajı veya araç ipucu (tooltip) desteklenen altı katalogda (`tr`, `en`, `de`, `es`, `pt_BR`, `fr`) [`sourcedock/locales/`](sourcedock/locales/) altında tanımlanmalıdır.
-- Arayüzde `t(lang, "anahtar_adi")` fonksiyonu kullanılmalıdır.
-- Ayarlar penceresinden dil değiştirildiğinde arayüzün anında güncellenebilmesi için dinamik yenileme (`_refresh_texts`) metoduna dahil edilmelidir.
-- Yer tutucular İngilizce referans katalogla aynı kalmalıdır. Değişiklikten sonra `python3 tools/translation_catalog.py --check` ve `tests/test_i18n_integrity.py` çalıştırılmalıdır (ayrıntılar için [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md)).
-
----
-
-## 🛠️ 3. Geliştirme Ortamı ve Çalıştırma
-
-### Sistem Gereksinimleri (Ubuntu/Debian/Zorin tabanlı sistemler):
 ```bash
 sudo apt update
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
+sudo apt install python3 python3-gi python3-gi-cairo \
+  gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 \
+  xvfb openbox x11-utils dpkg-dev desktop-file-utils appstream
 ```
 
-### Projeyi Çalıştırma:
-```bash
-# Geliştirme modunda başlatıcı betik ile çalıştırma:
-./run.sh
+Run the application from the repository root:
 
-# Veya doğrudan Python ile:
+```bash
 python3 main.py
-
-# Bağımsız mini kurucu modunu test etme:
-python3 main.py /ornek/paket.deb
+python3 main.py /path/to/package.deb  # standalone package preview
 ```
 
----
+The version is defined in `sourcedock/constants.py`. The `sourcedock/` package is
+the implementation source of truth; the root-level compatibility modules should
+not receive new architecture unless a change explicitly requires it.
 
-## 🧪 4. Birim Testleri Çalıştırma (Testing)
+## Code and architecture
 
-Yeni bir özellik eklediğinizde veya hata düzelttiğinizde lütfen mevcut testlerin geçtiğinden emin olun ve gerekirse yeni testler ekleyin:
+- Keep UI code in `sourcedock/ui/`, domain and process logic in `sourcedock/core/`,
+  provider integrations in `sourcedock/backend/`, and store/catalog logic in
+  `sourcedock/store/`.
+- Prefer small, cohesive modules over growing monolithic files.
+- Keep privileged operations explicit and constrained. Do not add code that runs
+  the GUI as root, bypasses authorization, executes untrusted local files, or logs
+  credentials and private paths.
+- Preserve the project’s provider status model: APT is the primary native
+  integration; other providers may be optional or experimental.
+- Use clear names and comments for security-sensitive behavior. Do not silently
+  weaken an existing warning or validation rule.
+
+## Localization
+
+Every user-visible string must use the existing translation system. Add new keys to
+all six catalogues under `sourcedock/locales/` (`en`, `tr`, `de`, `es`, `pt_BR`,
+`fr`), keep placeholders and markup identical, and include the text in the relevant
+refresh path when runtime language switching applies.
+
+Run the localization checks after changing catalogues:
+
 ```bash
-python3 tools/run_tests.py
+python3 tools/translation_catalog.py --check
+python3 -m unittest tests.test_i18n_integrity
 ```
 
-GTK testleri için Xvfb/Openbox komutları ve atlanan testlerin yorumu: [test katmanları](tests/README.md).
+See [docs/LOCALIZATION.md](docs/LOCALIZATION.md) for the translation workflow.
 
-### GTK ekran görüntüsü üretimi
+## Required checks
 
-Dokümantasyon görselleri gerçek GTK uygulamasından üretilmelidir; HTML/CSS maketi veya
-temsili görsel kullanılmamalıdır. 1366×768 doğrulaması ve gerçek yerel metadata ile
-örnek komut:
+Run the same checks used by CI before submitting a pull request:
 
 ```bash
-xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/ui_smoke.py --real-data --root-fit --expected-root 1366x768 --themes light dark --languages en --scales 100 --output /tmp/sourcedock-captures'
+python3 -m venv /tmp/sourcedock-lint
+/tmp/sourcedock-lint/bin/pip install -r requirements-dev.txt
+/tmp/sourcedock-lint/bin/ruff check .
+/usr/bin/python3 -m compileall -q main.py sourcedock tests tools
+bash packaging/build_deb.sh dist
 ```
 
-Görsellerde gerçek kullanıcı yolları ve kişisel bilgiler görünmemelidir. İşlem sürüyormuş
-gibi sahte ilerleme, uydurma sürüm veya uydurma yükleme sonucu eklenmemelidir.
+Run the guarded test suite with a display server and window manager:
 
----
-
-## 📦 5. Debian (.deb) Paketi Üretme
-
-Uygulamayı Debian paketi olarak derlemek için:
 ```bash
-./packaging/build_deb.sh
-```
-Oluşturulan paket `packaging/sourcedock_<version>_all.deb` dosyasında yer alacaktır. Sürüm kaynağı `sourcedock/constants.py` dosyasıdır.
-
----
-
-## 🚀 6. Katkı ve Pull Request (PR) Gönderme
-
-1. Depoyu fork'layın ve kendi dalınızı (branch) oluşturun:
-   ```bash
-   git checkout -b feature/yeni-ozellik
-   ```
-2. Değişikliklerinizi yapın ve test edin:
-   ```bash
-   python3 tools/run_tests.py
-   ```
-3. Anlaşılır bir commit mesajı yazın (Conventional Commits önerilir):
-   - `feat: Yeni özellik açıklaması`
-   - `fix: Düzeltilen hata açıklaması`
-   - `docs: Dokümantasyon güncellemesi`
-   - `refactor: Kod temizliği ve modülerleştirme`
-4. Dalınızı push'layın ve GitHub üzerinden Pull Request açın.
-
----
-
-## 📬 7. İletişim
-
-Her türlü soru, öneri ve güvenlik bildirimi için proje yöneticisine [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com) adresinden ulaşabilirsiniz.
-
----
----
-
-<a id="-english"></a>
-# 🇬🇧 SourceDock — Developer & Contributing Guide
-
-> *SourceDock is built to bring Linux software sources together in a clear, safe and native desktop experience.*
-
-Thank you for your interest in contributing to SourceDock! This guide outlines the project's architectural standards, coding conventions, and development workflow.
-
-For SourceDock 1.4.6, APT is the primary native package integration. DNF, Pacman, and
-Zypper are experimental; Flatpak, Snap, AppImage, portable archives, and fwupd depend
-on host tools. Documentation must not present these providers as equally mature.
-
----
-
-## 📐 1. Clean Architecture & Modular Code Structure
-
-> **Golden Rule:**  
-> No monolithic files or spaghetti code are allowed.  
-> When introducing new functionality, do not append hundreds of lines to existing files. Create well-isolated submodules in their respective layer (`core/`, `backend/`, `ui/views/`, `ui/components/`).
-
-### Project Structure Overview:
-```text
-sourcedock/
-├── core/                  # Core domain models and utilities
-│   ├── models.py          # Unified data models & type definitions
-│   ├── errors.py          # Custom error hierarchy
-│   └── runner.py          # Process execution & privileged command runner
-│
-├── backend/               # Package manager backends
-│   ├── base_native.py     # Distro-agnostic native package manager base
-│   ├── distro.py          # OS & Linux distribution auto-detection
-│   ├── apt.py             # Debian / Ubuntu / Zorin backend
-│   ├── dnf.py             # Fedora / RHEL backend
-│   ├── pacman.py          # Arch Linux / Manjaro backend
-│   ├── zypper.py          # openSUSE backend
-│   ├── flatpak.py         # Flatpak sandboxed application manager
-│   ├── snap.py            # Snap Store and --classic confinement manager
-│   ├── firmware.py        # Hardware firmware / fwupd provider
-│   ├── appimage.py        # AppImage runtime & desktop integration
-│   ├── portable.py        # Portable archives (tar.gz/zip) backend
-│   ├── local_packages.py  # Standalone package inspection and installer
-│   ├── mime_integration.py# Desktop MIME types & default handler setup
-│   ├── scanner.py         # Desktop entry parser & icon resolution
-│   └── manager.py         # Unified ApplicationRegistry coordinator
-│
-├── store/                 # Online store catalog & multi-source search
-│   └── registry.py        # Flathub, Snap Store & native repository search
-│
-├── ui/                    # GTK 3 User Interface
-│   ├── views/             # Tab views (ViewMixins)
-│   │   ├── installed_view.py # Installed applications tab
-│   │   ├── store_view.py     # App store catalog tab
-│   │   ├── packages_view.py  # System packages & upgrade tab
-│   │   ├── operations_view.py# Process monitor & lock status tab
-│   │   ├── settings_view.py  # Preferences dialog
-│   │   └── help_view.py      # Help guide dialog (F1)
-│   ├── components/        # Reusable UI widgets
-│   │   ├── dialogs.py        # Confirmation, auth & permission dialogs
-│   │   ├── progress.py       # Operation progress dialog
-│   │   └── package_installer_dialog.py # Standalone mini-installer dialog
-│   └── window.py          # MainWindow combining all view mixins
-│
-├── constants.py           # Application constants
-├── locales/               # Six-language JSON translation catalogues
-├── i18n.py                # Catalogue loading and compatibility helpers
-├── preferences.py         # JSON-backed configuration storage
-└── theme.py               # Modern GTK CSS styling engine
+xvfb-run -a bash -c 'openbox >/tmp/sourcedock-test-wm.log 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```
 
----
+See [tests/README.md](tests/README.md) for test layers, supported skips, and
+environment-specific requirements. Tests must not install, remove, or update
+packages on the host system.
 
-## 🌍 2. Multilingual Localization (i18n) Requirement
+## Documentation and screenshots
 
-**Zero Hardcoded Strings:**
-- Every new label, button text, error message, or tooltip must be defined in all six supported catalogues (`tr`, `en`, `de`, `es`, `pt_BR`, `fr`) under [`sourcedock/locales/`](sourcedock/locales/).
-- Use `t(lang, "key_name")` in UI components.
-- Ensure all text elements are registered in `_refresh_texts()` so language changes apply instantly without requiring an application restart.
-- Keep placeholders identical to the English reference catalogue. Run `python3 tools/translation_catalog.py --check` and `tests/test_i18n_integrity.py` after changes; see [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the full workflow.
+Update affected documentation when behavior, compatibility, security boundaries,
+or user-facing workflows change. Screenshots must come from the real GTK smoke
+harness; do not use HTML mockups or fabricated progress, versions, or results.
+Remove personal paths and other private data before committing an image.
 
----
+## Pull requests
 
-## 🛠️ 3. Development Setup & Running
+1. Fork the repository and create a focused branch, for example:
+   `git switch -c fix/describe-the-change`.
+2. Implement the change with tests or documentation updates as appropriate.
+3. Use a clear Conventional Commit-style subject, such as `fix: handle stale
+   package metadata` or `docs: clarify release verification`.
+4. Run the required checks and include relevant results in the pull request.
+5. Explain the user impact, compatibility implications, security considerations,
+   and any known limitations. Keep screenshots and logs free of secrets.
 
-### Prerequisites (Ubuntu/Debian/Zorin):
-```bash
-sudo apt update
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
-```
+Maintainers may request changes, squash commits, or adjust the final commit
+message before merging. A pull request must satisfy the Code of Conduct and the
+project’s security and quality requirements.
 
-### Running the App:
-```bash
-# Run with launcher script in development:
-./run.sh
+## Questions
 
-# Or directly with Python:
-python3 main.py
-
-# Test standalone mini-installer mode:
-python3 main.py /path/to/sample.deb
-```
-
----
-
-## 🧪 4. Running Unit Tests
-
-Ensure all unit tests pass before submitting changes:
-```bash
-python3 tools/run_tests.py
-```
-
-See [test layers](tests/README.md) for Xvfb/Openbox setup and explicit skip reporting.
-
-### GTK screenshot generation
-
-Documentation screenshots must come from the real GTK application. Do not use HTML/CSS
-mockups or representative images. Use the smoke harness at 1366×768 with real local
-metadata, and redact personal paths before publishing. Do not invent progress, versions,
-or installation results.
+For general questions, use a GitHub issue or discussion when available. Do not
+publish a security vulnerability; report it privately according to [SECURITY.md](SECURITY.md).
 
 ---
 
-## 📦 5. Building Debian (.deb) Package
+# SourceDock’e katkıda bulunma
 
-To build the standalone installation package:
-```bash
-./packaging/build_deb.sh
-```
-The output file is `packaging/sourcedock_<version>_all.deb`. `sourcedock/constants.py` is the version source.
+SourceDock’i geliştirmeye yardımcı olduğunuz için teşekkür ederiz. Geliştirme
+kuralları ve pull request öncesi kontroller için bu belgeyi izleyin. Topluluk
+beklentileri için [Davranış Kuralları](CODE_OF_CONDUCT.md), güvenlik açıkları için
+ise [SECURITY.md](SECURITY.md) belgesini kullanın; güvenlik açığını herkese açık
+issue olarak paylaşmayın.
 
----
+## Kısa kurallar
 
-## 🚀 6. Contributing & Pull Requests Workflow
+- Mevcut issue ve pull request’leri kontrol edin; büyük değişiklikleri başlamadan
+  önce issue üzerinden tartışın.
+- Değişiklikleri odaklı tutun; ilgisiz refactor, biçim değişikliği veya ekran
+  görüntülerini aynı pull request’e eklemeyin.
+- Kullanıcıya görünen her metni çeviri sistemi üzerinden ekleyin ve altı katalogda
+  (`en`, `tr`, `de`, `es`, `pt_BR`, `fr`) güncelleyin.
+- Yetkili işlemleri, kimlik bilgilerini ve yerel dosya güvenliğini zayıflatmayın.
+- Değişiklikle ilgili testleri çalıştırın; sonuçları pull request açıklamasında belirtin.
 
-1. Fork the repository and create your feature branch:
-   ```bash
-   git checkout -b feature/awesome-feature
-   ```
-2. Make your changes and run the test suite:
-   ```bash
-   python3 tools/run_tests.py
-   ```
-3. Write clear commit messages following Conventional Commits:
-   - `feat: New feature summary`
-   - `fix: Bug fix summary`
-   - `docs: Documentation update`
-   - `refactor: Code restructuring`
-4. Push your branch and open a Pull Request on GitHub.
-
----
-
-## 📬 7. Contact
-
-For inquiries, support, or security reports, reach out to the maintainer at [aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com).
+Geliştirme ortamı, mimari sınırlar, yerelleştirme, test, paketleme ve pull request
+ayrıntıları için bu belgenin İngilizce bölümü ve [docs/LOCALIZATION.md](docs/LOCALIZATION.md)
+referans alınmalıdır.

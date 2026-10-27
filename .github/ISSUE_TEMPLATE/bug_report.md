@@ -1,42 +1,51 @@
 ---
-name: Hata Bildirimi (Bug Report)
-about: SourceDock'te karşılaştığınız bir sorunu bildirin
-title: '[HATA] '
+name: Bug report
+about: Report a reproducible problem in SourceDock
+title: "[Bug] "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
-**Hata Açıklaması**
-Karşılaştığınız hatanın açık ve net bir tanımı.
+## Security notice
 
-**Yeniden Oluşturma Adımları**
-Hatayı tetiklemek için izlenen adımlar:
-1. Sekmeye git: '...'
-2. Şu butona tıkla: '....'
-3. Şu dosyayı aç veya ara: '....'
-4. Hata meydana gelir.
+Do not use this template for a security vulnerability. Report it privately as
+described in [SECURITY.md](../../SECURITY.md).
 
-**Beklenen Davranış**
-Ne olması gerekiyordu?
+## Summary
 
-**Ekran Görüntüleri / Log Çıktıları**
-Varsa terminal çıktısı veya ekran görüntüsü ekleyin.
+<!-- What happened? Please describe the problem clearly and briefly. -->
+
+## Steps to reproduce
+
+1.
+2.
+3.
+
+## Expected behavior
+
+<!-- What did you expect to happen? -->
+
+## Actual behavior
+
+<!-- What happened instead? Include the exact error message when available. -->
+
+## Environment
+
+- SourceDock version or commit:
+- Distribution and version:
+- Desktop environment and session type (for example, GNOME/Wayland):
+- Package/provider involved (`.deb`, APT, Flatpak, Snap, AppImage, etc.):
+- Python and GTK versions, if relevant:
+- Theme, language, scale, and window size, if relevant:
+
+## Logs and screenshots
+
+<!-- Remove passwords, tokens, usernames, private paths, and other personal data. -->
 
 ```text
-# Terminal log çıktısını buraya yapıştırın
+Paste relevant logs here.
 ```
 
-**Sistem Bilgileri:**
- - Dağıtım (Distro) ve Sürüm: [Örn. Zorin OS 17.1, Ubuntu 24.04, Fedora 40]
- - Masaüstü Ortamı: [Örn. GNOME, KDE, XFCE]
- - İlgili Paket Türü: [Örn. .deb, Flatpak, Snap, AppImage, RPM]
- - SourceDock Sürümü: [Örn. 1.0.0 veya commit hash]
- - Python / GTK sürümleri:
- - Paket sağlayıcısı ve ilgili kaynak:
- - Tema, dil, ölçek ve pencere boyutu:
+## Additional context
 
-Log paylaşmadan önce parola, token, kullanıcı adı ve kişisel dosya yollarını maskeleyin.
-
-**Ek Bağlam**
-Sorunla ilgili belirtmek istediğiniz ek bilgiler.
-
+<!-- Add related issues, recent changes, or a minimal sample if safe to share. -->
