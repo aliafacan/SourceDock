@@ -18,16 +18,17 @@ O SourceDock reúne a busca, instalação, atualização e remoção de aplicati
 
 ## Capturas de tela
 
-As imagens abaixo mostram a interface atual da versão 1.4.6 em português do Brasil:
+As imagens são nomeadas por visão, tema, idioma e resolução 1366×768:
 
-![Aplicativos instalados](docs/screenshots/installed-dark-pt_BR-100-1366x768.png)
 ![Loja e descoberta](docs/screenshots/discover-light-pt_BR-100-1366x768.png)
+![Aplicativos instalados](docs/screenshots/installed-dark-pt_BR-100-1366x768.png)
 ![Central de atualizações](docs/screenshots/updates-dark-pt_BR-100-1366x768.png)
 
 ## Recursos
 
 - Visões unificadas para aplicativos instalados, pacotes, atualizações e loja.
-- Integração com APT e modelos para DNF, Pacman e Zypper; Flatpak e Snap são opcionais.
+- Seções claras para loja, aplicativos instalados, atualizações, operações, pacotes do sistema, instalação de pacotes, configurações e ajuda; as atualizações são agrupadas em aplicativos, sistema, runtimes e firmware.
+- APT como integração nativa principal; DNF, Pacman e Zypper são experimentais; Flatpak e Snap são opcionais.
 - Pré-visualização de pacotes `.deb` com versão, arquitetura, dependências e status.
 - Temas escuro, claro e do sistema, escala de 90–125 % e seis idiomas.
 - Verificação periódica de releases do GitHub e autoatualização por DEB com SHA-256 verificado.
@@ -48,7 +49,7 @@ Quando uma nova versão está disponível, o SourceDock pode baixar o DEB do Git
 ## Compatibilidade
 
 - Zorin OS 18.1: instalação real e ciclo APT verificados.
-- Ubuntu 22.04 e 24.04: CI PASS, 296/296 testes com Xvfb/Openbox.
+- Ubuntu 22.04 e 24.04: cobertos pelo fluxo CI com Xvfb/Openbox, unittest, Ruff, compileall e compilação `.deb`; não afirmamos aqui um resultado remoto atual.
 - Debian 12: compatível; Debian 11 requer Python 3.10 ou mais recente.
 - Fedora, openSUSE e Arch: suporte experimental, sem pacotes nativos por enquanto.
 

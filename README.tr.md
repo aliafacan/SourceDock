@@ -24,11 +24,11 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 
 <div align="center">
 
-### Yüklü Uygulamalar (Koyu Tema)
-![Yüklü Uygulamalar Görünümü](docs/screenshots/installed-dark-tr-100-1366x768.png)
-
 ### Yazılım Keşfi ve Mağaza (Açık Tema)
 ![Mağaza ve Keşfet Görünümü](docs/screenshots/discover-light-tr-100-1366x768.png)
+
+### Yüklü Uygulamalar (Koyu Tema)
+![Yüklü Uygulamalar Görünümü](docs/screenshots/installed-dark-tr-100-1366x768.png)
 
 ### Birleşik Güncelleme Merkezi (Koyu Tema)
 ![Güncellemeler Görünümü](docs/screenshots/updates-dark-tr-100-1366x768.png)
@@ -49,7 +49,8 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 ## Temel Özellikler
 
 - **Birleşik Uygulama Yönetimi**: Duyarlı kenar çubuğu gezintisiyle sistem paketleri ve masaüstü uygulamaları arasında arama yapma, ayrıntıları inceleme ve kaldırma.
-- **Dağıtımdan Bağımsız Mimari**: Yerel paket yöneticisi entegrasyonu (APT; DNF, Pacman ve Zypper ayrıştırıcı modelleri) ile isteğe bağlı Flatpak ve Snap sağlayıcıları.
+- **Açık çalışma alanları**: Keşfet, Yüklü, Güncellemeler, İşlemler, Sistem Paketleri, Paket Kur, Ayarlar ve Yardım bölümleri; Güncellemeler görünümünde Uygulamalar, Sistem, Runtime ve Firmware grupları.
+- **Sağlayıcı odaklı mimari**: Birincil yerel entegrasyon APT'tir; DNF, Pacman ve Zypper arka uçları deneyseldir. Flatpak, Snap, AppImage, taşınabilir arşivler ve fwupd sistem araçlarına bağlı isteğe bağlı sağlayıcılardır.
 - **Müstakil Paket Kurucu**: Yerel `.deb` paketlerini kurmadan önce açıklama, mimari, dosya boyutu, bağımlılıklar ve kaynak açısından önizleme imkânı.
 - **Güvenli İşlem Yürütme**: Dosya kilitleri (`flock`), zaman aşımı sınırları ve parola/kullanıcı yolu redaksiyonu ile donatılmış asenkron komut çalıştırıcısı.
 - **Şeffaf İşlem Geçmişi**: Kullanıcı denetiminde dışa aktarılabilen ve temizlenebilen kayıt defteri.
@@ -61,7 +62,7 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 
 SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint vb.) için standart Debian paketi (`.deb`) olarak dağıtılmaktadır.
 
-1. Eşleşen `.deb` paketini ve sağlama özetini [SourceDock 1.4.6 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6) sayfasından indirin.
+1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.6 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
    sha256sum -c sourcedock_1.4.6_all.deb.sha256
@@ -100,10 +101,10 @@ SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint 
 | :--- | :---: | :--- |
 | **Zorin OS 18.1** | **Doğrulandı** | Gerçek kullanıcı ortamı testi: Temiz `.deb` kurulumu, canlı masaüstü kullanımı ve gerçek APT paketi kurma/kaldırma döngüsü. |
 | **Zorin OS 17.x** | **Test Edilmedi** | Çekirdek yığın Ubuntu 22.04 ile uyumludur; otomatik CI test takımı kapsamındadır. |
-| **Ubuntu 22.04 & 24.04** | **CI PASS** | Otomatik CI doğrulaması: Xvfb/Openbox altında 296/296 test, Ruff ve compileall temiz, `.deb` paket inşası başarılı. |
+| **Ubuntu 22.04 & 24.04** | **CI hedefi** | Depo CI iş akışı Xvfb/Openbox altında korumalı unittest takımını, Ruff, compileall ve `.deb` derleme kontrollerini çalıştırır. Güncel uzak CI sonucu burada iddia edilmemektedir. |
 | **Debian 12** | **Uyumlu** | `.deb` paketi üzerinden bağımlılıklar uyumludur (Python 3.11+ ve GTK 3); canlı donanım testi beklemededir. |
 | **Debian 11** | **Desteklenmiyor** | Varsayılan olarak Python 3.9 ile gelir; SourceDock kesin olarak Python >= 3.10 gerektirir. |
-| **Fedora / openSUSE / Arch** | **Deneysel** | Ayrıştırıcı ve yürütme katmanı birim testlerle doğrulandı; yerel paketleme (.rpm / PKGBUILD) henüz sunulmamaktadır. |
+| **Fedora / openSUSE / Arch** | **Deneysel** | DNF, Zypper ve Pacman entegrasyonları mevcut ancak gerçek sistem doğrulaması beklemektedir; yerel paketleme (.rpm / PKGBUILD) sunulmamaktadır. |
 
 Ayrıntılı ortam testleri ve mimari sınırlar için [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) belgesine bakınız.
 
@@ -135,7 +136,7 @@ python3 main.py /dosya/yolu/paket.deb
 ```
 
 ### Test Takımını Çalıştırma
-Korumalı tam test takımı (296 test), Xvfb ekranı ve Openbox pencere yöneticisi altında çalıştırılır:
+Korumalı unittest takımı, Xvfb ekranı ve Openbox pencere yöneticisi altında çalıştırılır. Güncel test sayısı depo içindeki test keşfinden alınmalıdır:
 ```bash
 xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
 ```

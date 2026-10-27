@@ -18,16 +18,17 @@ SourceDock réunit la recherche, l’installation, la mise à jour et la suppres
 
 ## Captures d’écran
 
-Les images suivantes montrent l’interface actuelle de la version 1.4.6 en français :
+Les images sont nommées selon la vue, le thème, la langue et la résolution 1366×768 :
 
-![Applications installées](docs/screenshots/installed-dark-fr-100-1366x768.png)
 ![Boutique et découverte](docs/screenshots/discover-light-fr-100-1366x768.png)
+![Applications installées](docs/screenshots/installed-dark-fr-100-1366x768.png)
 ![Centre des mises à jour](docs/screenshots/updates-dark-fr-100-1366x768.png)
 
 ## Fonctionnalités
 
 - Vues unifiées pour les applications installées, les paquets, les mises à jour et la boutique.
-- Intégration APT et modèles pour DNF, Pacman et Zypper ; Flatpak et Snap restent optionnels.
+- Sections dédiées à la boutique, aux applications installées, aux mises à jour, aux opérations, aux paquets système, à l’installation, aux réglages et à l’aide ; les mises à jour sont regroupées par applications, système, runtimes et firmware.
+- APT comme intégration native principale ; DNF, Pacman et Zypper sont expérimentaux ; Flatpak et Snap restent optionnels.
 - Prévisualisation des paquets `.deb` avec version, architecture, dépendances et état d’installation.
 - Thèmes sombre, clair et système, échelle de 90 à 125 % et six langues.
 - Vérification périodique des releases GitHub et auto-mise à jour DEB avec checksum SHA-256.
@@ -48,7 +49,7 @@ Lorsqu’une nouvelle version est disponible, SourceDock peut télécharger le D
 ## Compatibilité
 
 - Zorin OS 18.1 : installation réelle et cycle APT vérifiés.
-- Ubuntu 22.04 et 24.04 : CI PASS, 296/296 tests sous Xvfb/Openbox.
+- Ubuntu 22.04 et 24.04 : couverts par le workflow CI avec Xvfb/Openbox, unittest, Ruff, compileall et construction `.deb` ; aucun résultat distant actuel n’est affirmé ici.
 - Debian 12 : compatible ; Debian 11 nécessite Python 3.10 ou plus récent.
 - Fedora, openSUSE et Arch : support expérimental, sans paquet natif pour le moment.
 

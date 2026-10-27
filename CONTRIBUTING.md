@@ -13,6 +13,11 @@
 
 Açık kaynak dünyasına ve SourceDock projesine katkıda bulunmak istediğiniz için teşekkür ederiz! Bu belge, projenin mimari standartlarını, kodlama kurallarını ve geliştirme iş akışını açıklar.
 
+SourceDock 1.4.6'nın birincil yerel paket sağlayıcısı APT'tir. DNF, Pacman ve Zypper
+entegrasyonları deneysel kabul edilir; Flatpak, Snap, AppImage, taşınabilir arşiv ve
+fwupd sağlayıcıları makinedeki araçların varlığına bağlıdır. Dokümantasyon ve ekran
+görüntülerinde bu sağlayıcılar aynı olgunluk seviyesinde sunulmamalıdır.
+
 ---
 
 ## 📐 1. Altın Mimari Kuralımız (Clean Architecture)
@@ -113,6 +118,19 @@ python3 tools/run_tests.py
 
 GTK testleri için Xvfb/Openbox komutları ve atlanan testlerin yorumu: [test katmanları](tests/README.md).
 
+### GTK ekran görüntüsü üretimi
+
+Dokümantasyon görselleri gerçek GTK uygulamasından üretilmelidir; HTML/CSS maketi veya
+temsili görsel kullanılmamalıdır. 1366×768 doğrulaması ve gerçek yerel metadata ile
+örnek komut:
+
+```bash
+xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/ui_smoke.py --real-data --root-fit --expected-root 1366x768 --themes light dark --languages en --scales 100 --output /tmp/sourcedock-captures'
+```
+
+Görsellerde gerçek kullanıcı yolları ve kişisel bilgiler görünmemelidir. İşlem sürüyormuş
+gibi sahte ilerleme, uydurma sürüm veya uydurma yükleme sonucu eklenmemelidir.
+
 ---
 
 ## 📦 5. Debian (.deb) Paketi Üretme
@@ -157,6 +175,10 @@ Her türlü soru, öneri ve güvenlik bildirimi için proje yöneticisine [aliaf
 > *SourceDock is built to bring Linux software sources together in a clear, safe and native desktop experience.*
 
 Thank you for your interest in contributing to SourceDock! This guide outlines the project's architectural standards, coding conventions, and development workflow.
+
+For SourceDock 1.4.6, APT is the primary native package integration. DNF, Pacman, and
+Zypper are experimental; Flatpak, Snap, AppImage, portable archives, and fwupd depend
+on host tools. Documentation must not present these providers as equally mature.
 
 ---
 
@@ -257,6 +279,13 @@ python3 tools/run_tests.py
 ```
 
 See [test layers](tests/README.md) for Xvfb/Openbox setup and explicit skip reporting.
+
+### GTK screenshot generation
+
+Documentation screenshots must come from the real GTK application. Do not use HTML/CSS
+mockups or representative images. Use the smoke harness at 1366×768 with real local
+metadata, and redact personal paths before publishing. Do not invent progress, versions,
+or installation results.
 
 ---
 
