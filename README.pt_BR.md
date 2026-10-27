@@ -65,4 +65,4 @@ xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null
 bash packaging/build_deb.sh dist
 ```
 
-Veja o [guia de contribuição](CONTRIBUTING.md), a [arquitetura](docs/ARCHITECTURE.md), a [localização](docs/LOCALIZATION.md), o [changelog](CHANGELOG.md) e a [licença](LICENSE).
+Veja o [guia de contribuição](CONTRIBUTING.md), o [código de conduta](CODE_OF_CONDUCT.md), a [política de segurança](SECURITY.md), a [arquitetura](docs/ARCHITECTURE.md), a [localização](docs/LOCALIZATION.md), o [changelog](CHANGELOG.md) e a [licença](LICENSE).
