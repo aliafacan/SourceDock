@@ -1,4 +1,14 @@
-# SourceDock Code of Conduct
+<div align="center">
+
+<a id="top"></a>
+[🇬🇧 English](#english) &nbsp;•&nbsp; [🇹🇷 Türkçe](#turkish) &nbsp;•&nbsp; [🇩🇪 Deutsch](#german) &nbsp;•&nbsp; [🇪🇸 Español](#spanish) &nbsp;•&nbsp; [🇧🇷 Português (BR)](#portuguese) &nbsp;•&nbsp; [🇫🇷 Français](#french)
+
+</div>
+
+---
+
+<a id="english"></a>
+# 🇬🇧 SourceDock Code of Conduct
 
 _This Code of Conduct is adapted from the Contributor Covenant, version 2.1._
 
@@ -69,7 +79,8 @@ This document is based on the [Contributor Covenant, version 2.1](https://www.co
 
 ---
 
-# SourceDock Topluluk Kuralları
+<a id="turkish"></a>
+# 🇹🇷 SourceDock Topluluk Kuralları
 
 _Bu belge Contributor Covenant 2.1 temel alınarak uyarlanmıştır._
 
@@ -124,3 +135,179 @@ kadar değişebilir. Misilleme kabul edilmez.
 
 Bildirim bir proje yöneticisiyle ilgiliyse aynı adrese gönderin ve çıkar çatışmasını
 belirtin; mümkün olduğunda ilgili yönetici inceleme sürecinden çıkarılır.
+
+[Başa dön](#top)
+
+---
+
+<a id="german"></a>
+# 🇩🇪 SourceDock Verhaltenskodex
+
+_Dieser Verhaltenskodex basiert auf dem Contributor Covenant 2.1._
+
+## Unser Versprechen
+
+Wir verpflichten uns, SourceDock zu einem offenen, respektvollen und belästigungsfreien
+Projekt für alle zu machen. Beiträge sind unabhängig von Alter, Behinderung, Herkunft,
+Geschlechtsidentität oder -ausdruck, Erfahrungsstand, Bildung, Nationalität, Aussehen,
+Rasse, Religion, sexueller Orientierung, sozialem Status oder anderen Merkmalen willkommen.
+
+Wir erwarten von allen Beteiligten, in gutem Glauben zu handeln und eine professionelle,
+inklusive Gemeinschaft zu fördern.
+
+## Unsere Standards
+
+Erwünschtes Verhalten umfasst Empathie, Geduld und Respekt, das Anerkennen verschiedener
+Perspektiven, konstruktives Feedback, die Übernahme von Verantwortung für Fehler sowie
+Kritik an Ideen, Code, Dokumentation oder Verhalten statt an Personen.
+
+Nicht akzeptabel sind Belästigung, Diskriminierung, Einschüchterung, Drohungen, persönliche
+Angriffe, sexualisierte Sprache oder Bilder, Trolling, absichtliche Störung, Beleidigungen,
+Doxing, Identitätsmissbrauch, unerwünschter Kontakt, Vergeltung sowie die Förderung solcher
+Verhaltensweisen.
+
+## Geltungsbereich und Meldungen
+
+Diese Regeln gelten für Issues, Pull Requests, Diskussionen, Reviews, Dokumentation,
+Chats, Veranstaltungen und die öffentliche Vertretung von SourceDock.
+
+Melde unangemessenes Verhalten vertraulich an
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). Teile nur notwendige Angaben
+und entferne Passwörter, Tokens, private Schlüssel und persönliche Daten. Meldungen werden
+so vertraulich wie praktisch möglich fair geprüft. Maßnahmen können von einer privaten
+Verwarnung bis zum dauerhaften Ausschluss reichen. Vergeltung ist nicht akzeptabel.
+
+Wenn eine Meldung eine Maintainer-Person betrifft, nenne den Interessenkonflikt in der
+Meldung, damit diese Person möglichst nicht an der Prüfung beteiligt wird.
+
+[Zum Anfang](#top)
+
+---
+
+<a id="spanish"></a>
+# 🇪🇸 Código de conducta de SourceDock
+
+_Este código se basa en Contributor Covenant 2.1._
+
+## Nuestro compromiso
+
+Nos comprometemos a que SourceDock sea un proyecto abierto, respetuoso y libre de acoso
+para todas las personas. Aceptamos contribuciones sin importar edad, discapacidad, origen,
+identidad o expresión de género, experiencia, educación, nacionalidad, apariencia, raza,
+religión, orientación sexual, situación socioeconómica u otra característica.
+
+Esperamos que todas las personas actúen de buena fe y ayuden a mantener una comunidad
+profesional e inclusiva.
+
+## Normas y alcance
+
+Esperamos empatía, paciencia y respeto, reconocimiento de distintas perspectivas,
+comentarios constructivos, responsabilidad por los errores y críticas dirigidas a ideas,
+código, documentación o conductas, no a las personas.
+
+No se acepta el acoso, la discriminación, la intimidación, las amenazas, los ataques
+personales, el lenguaje o las imágenes sexualizadas, el trolling, la interrupción
+deliberada, los insultos, el doxing, la suplantación, el contacto no deseado ni las
+represalias. Estas reglas se aplican a issues, pull requests, debates, revisiones,
+documentación, chats, eventos y a la representación pública de SourceDock.
+
+## Denuncias y aplicación
+
+Informa de conductas inaceptables de forma privada a
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). Envía solo la información
+necesaria y elimina contraseñas, tokens, claves privadas y datos personales. Las denuncias
+se revisarán de forma justa y tan confidencial como sea posible. Las medidas pueden ir
+desde una advertencia privada hasta la exclusión permanente. Las represalias no están
+permitidas.
+
+Si la denuncia se refiere a una persona mantenedora, indica el conflicto de intereses para
+que, cuando sea posible, no participe en la revisión.
+
+[Volver al inicio](#top)
+
+---
+
+<a id="portuguese"></a>
+# 🇧🇷 Código de Conduta do SourceDock
+
+_Este código é baseado no Contributor Covenant 2.1._
+
+## Nosso compromisso
+
+Estamos comprometidos em tornar o SourceDock um projeto aberto, respeitoso e livre de
+assédio para todas as pessoas. Aceitamos contribuições independentemente de idade,
+deficiência, origem, identidade ou expressão de gênero, experiência, educação,
+nacionalidade, aparência, raça, religião, orientação sexual, condição socioeconômica ou
+qualquer outra característica.
+
+Esperamos que todas as pessoas ajam de boa-fé e ajudem a manter uma comunidade profissional
+e inclusiva.
+
+## Padrões e escopo
+
+Esperamos empatia, paciência e respeito, reconhecimento de diferentes perspectivas,
+feedback construtivo, responsabilidade pelos próprios erros e críticas dirigidas a ideias,
+código, documentação ou comportamentos, não a pessoas.
+
+Não são aceitos assédio, discriminação, intimidação, ameaças, ataques pessoais, linguagem
+ou imagens sexualizadas, trolling, interrupção deliberada, insultos, doxxing, falsidade de
+identidade, contato indesejado ou retaliação. Estas regras se aplicam a issues, pull
+requests, discussões, revisões, documentação, chats, eventos e à representação pública do
+SourceDock.
+
+## Denúncias e aplicação
+
+Envie denúncias de comportamento inaceitável de forma privada para
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). Compartilhe apenas o necessário
+e remova senhas, tokens, chaves privadas e dados pessoais. As denúncias serão analisadas
+com justiça e com a maior confidencialidade possível. As medidas podem variar de uma
+advertência privada à remoção permanente. Retaliações não são aceitáveis.
+
+Se a denúncia envolver uma pessoa mantenedora, informe o conflito de interesses para que,
+quando possível, ela não participe da análise.
+
+[Voltar ao início](#top)
+
+---
+
+<a id="french"></a>
+# 🇫🇷 Code de conduite de SourceDock
+
+_Ce code est adapté du Contributor Covenant 2.1._
+
+## Notre engagement
+
+Nous nous engageons à faire de SourceDock un projet ouvert, respectueux et exempt de
+harcèlement pour tout le monde. Les contributions sont les bienvenues quels que soient
+l’âge, le handicap, l’origine, l’identité ou l’expression de genre, l’expérience,
+l’éducation, la nationalité, l’apparence, la race, la religion, l’orientation sexuelle,
+la situation socio-économique ou toute autre caractéristique.
+
+Nous attendons de chaque participant qu’il agisse de bonne foi et contribue à une communauté
+professionnelle et inclusive.
+
+## Règles et périmètre
+
+Nous attendons de l’empathie, de la patience et du respect, la reconnaissance de points de
+vue différents, des retours constructifs, la responsabilité de ses erreurs et des critiques
+portant sur les idées, le code, la documentation ou les comportements, jamais sur les personnes.
+
+Le harcèlement, la discrimination, l’intimidation, les menaces, les attaques personnelles,
+le langage ou les images sexualisés, le trolling, la perturbation volontaire, les insultes,
+le doxing, l’usurpation d’identité, les contacts indésirables et les représailles sont
+interdits. Ces règles s’appliquent aux issues, pull requests, discussions, revues,
+documents, chats, événements et à toute représentation publique de SourceDock.
+
+## Signalement et application
+
+Signalez tout comportement inacceptable en privé à
+[aliafacan.dev@gmail.com](mailto:aliafacan.dev@gmail.com). Ne transmettez que les éléments
+nécessaires et retirez les mots de passe, tokens, clés privées et données personnelles.
+Les signalements sont examinés équitablement et de manière aussi confidentielle que possible.
+Les mesures peuvent aller d’un avertissement privé à l’exclusion permanente. Les représailles
+ne sont pas acceptées.
+
+Si le signalement concerne une personne mainteneuse, indiquez le conflit d’intérêts afin
+qu’elle soit écartée de l’examen lorsque cela est possible.
+
+[Retour au début](#top)

@@ -1,4 +1,14 @@
-# Contributing to SourceDock
+<div align="center">
+
+<a id="top"></a>
+[🇬🇧 English](#english) &nbsp;•&nbsp; [🇹🇷 Türkçe](#turkish) &nbsp;•&nbsp; [🇩🇪 Deutsch](#german) &nbsp;•&nbsp; [🇪🇸 Español](#spanish) &nbsp;•&nbsp; [🇧🇷 Português (BR)](#portuguese) &nbsp;•&nbsp; [🇫🇷 Français](#french)
+
+</div>
+
+---
+
+<a id="english"></a>
+# 🇬🇧 Contributing to SourceDock
 
 Thank you for helping improve SourceDock. This guide describes the project’s
 development expectations and the checks required before opening a pull request.
@@ -118,7 +128,8 @@ publish a security vulnerability; report it privately according to [SECURITY.md]
 
 ---
 
-# SourceDock’e katkıda bulunma
+<a id="turkish"></a>
+# 🇹🇷 SourceDock’e katkıda bulunma
 
 SourceDock’i geliştirmeye yardımcı olduğunuz için teşekkür ederiz. Geliştirme
 kuralları ve pull request öncesi kontroller için bu belgeyi izleyin. Topluluk
@@ -140,3 +151,163 @@ issue olarak paylaşmayın.
 Geliştirme ortamı, mimari sınırlar, yerelleştirme, test, paketleme ve pull request
 ayrıntıları için bu belgenin İngilizce bölümü ve [docs/LOCALIZATION.md](docs/LOCALIZATION.md)
 referans alınmalıdır.
+
+[Başa dön](#top)
+
+---
+
+<a id="german"></a>
+# 🇩🇪 Zu SourceDock beitragen
+
+Vielen Dank für deine Hilfe bei SourceDock. Für Gemeinschaftsregeln siehe den
+[Verhaltenskodex](CODE_OF_CONDUCT.md), für Sicherheitslücken die
+[Sicherheitsrichtlinie](SECURITY.md). Sicherheitslücken dürfen nicht öffentlich gemeldet werden.
+
+## Vor dem Start
+
+- Suche zuerst nach bestehenden Issues und Pull Requests.
+- Besprich größere Funktionen oder Verhaltensänderungen vorab in einem Issue.
+- Halte Änderungen fokussiert und vermeide unabhängige Refactorings oder generierte Dateien.
+
+## Entwicklung und Architektur
+
+SourceDock ist eine Python-3.10+-GTK-3-Anwendung. Auf Debian, Ubuntu oder Zorin OS werden
+Python/PyGObject, GTK 3, Xvfb, Openbox, `dpkg-dev`, `desktop-file-utils` und `appstream`
+benötigt. Starte die Anwendung mit `python3 main.py`; ein lokales `.deb` kann mit
+`python3 main.py /pfad/zum/paket.deb` geprüft werden.
+
+UI-Code gehört nach `sourcedock/ui/`, Kern- und Prozesslogik nach `sourcedock/core/`,
+Provider nach `sourcedock/backend/` und Kataloglogik nach `sourcedock/store/`. Die GUI darf
+nicht als root laufen, Autorisierung darf nicht umgangen werden und Zugangsdaten oder private
+Pfade dürfen nicht protokolliert werden. APT ist die primäre native Integration; andere
+Provider können optional oder experimentell sein.
+
+## Übersetzungen und Tests
+
+Jeder sichtbare Text muss über das Übersetzungssystem laufen. Neue Schlüssel müssen in allen
+sechs Katalogen unter `sourcedock/locales/` (`en`, `tr`, `de`, `es`, `pt_BR`, `fr`) vorhanden
+sein. Platzhalter und Markup müssen übereinstimmen.
+
+```bash
+python3 tools/translation_catalog.py --check
+python3 -m unittest tests.test_i18n_integrity
+/tmp/sourcedock-lint/bin/ruff check .
+/usr/bin/python3 -m compileall -q main.py sourcedock tests tools
+bash packaging/build_deb.sh dist
+xvfb-run -a bash -c 'openbox >/tmp/sourcedock-test-wm.log 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; /usr/bin/python3 tools/run_tests.py --require-wm'
+```
+
+Tests dürfen keine Pakete auf dem Host installieren, entfernen oder aktualisieren. Screenshots
+müssen aus der echten GTK-Anwendung stammen und dürfen keine persönlichen Daten enthalten.
+
+## Pull Requests
+
+Erstelle einen fokussierten Branch, verwende eine klare Conventional-Commit-Betreffzeile,
+führe die relevanten Prüfungen aus und beschreibe Benutzer-, Kompatibilitäts- und
+Sicherheitsauswirkungen. Dokumentation muss bei Änderungen an Verhalten, Kompatibilität oder
+Sicherheitsgrenzen aktualisiert werden.
+
+[Zum Anfang](#top)
+
+---
+
+<a id="spanish"></a>
+# 🇪🇸 Contribuir a SourceDock
+
+Gracias por ayudar a mejorar SourceDock. Consulta el [código de conducta](CODE_OF_CONDUCT.md)
+para las normas de la comunidad y [SECURITY.md](SECURITY.md) para vulnerabilidades; no
+publiques una vulnerabilidad en un issue.
+
+## Antes de empezar
+
+- Busca issues y pull requests existentes.
+- Discute las funciones importantes o cambios de comportamiento en un issue antes de comenzar.
+- Mantén los cambios enfocados y evita refactors o archivos generados no relacionados.
+
+## Desarrollo y arquitectura
+
+SourceDock es una aplicación Python 3.10+ con GTK 3. Usa `python3 main.py` para ejecutarla y
+`python3 main.py /ruta/al/paquete.deb` para previsualizar un paquete local. La interfaz debe
+permanecer en `sourcedock/ui/`, la lógica central en `sourcedock/core/`, los proveedores en
+`sourcedock/backend/` y los catálogos en `sourcedock/store/`. No ejecutes la GUI como root,
+no evadas la autorización y no registres credenciales ni rutas privadas.
+
+## Traducciones, pruebas y pull requests
+
+Todo texto visible debe usar el sistema de traducción y existir en los seis catálogos
+(`en`, `tr`, `de`, `es`, `pt_BR`, `fr`). Conserva los mismos marcadores y etiquetas. Ejecuta
+`python3 tools/translation_catalog.py --check`, Ruff, `compileall`, la construcción del `.deb`
+y la suite protegida con Xvfb/Openbox descrita en la sección inglesa. Las pruebas no deben
+modificar la base de paquetes del sistema. Los pull requests deben explicar el impacto para
+el usuario, la compatibilidad, la seguridad y las limitaciones conocidas.
+
+[Volver al inicio](#top)
+
+---
+
+<a id="portuguese"></a>
+# 🇧🇷 Contribuindo com o SourceDock
+
+Obrigado por ajudar a melhorar o SourceDock. Consulte o [Código de Conduta](CODE_OF_CONDUCT.md)
+para as regras da comunidade e [SECURITY.md](SECURITY.md) para vulnerabilidades; não publique
+uma vulnerabilidade em uma issue.
+
+## Antes de começar
+
+- Pesquise issues e pull requests existentes.
+- Discuta recursos importantes ou mudanças de comportamento em uma issue antes de começar.
+- Mantenha as alterações focadas e evite refatorações ou arquivos gerados sem relação.
+
+## Desenvolvimento e arquitetura
+
+O SourceDock é uma aplicação Python 3.10+ com GTK 3. Execute `python3 main.py` e use
+`python3 main.py /caminho/para/pacote.deb` para visualizar um pacote local. O código de UI
+fica em `sourcedock/ui/`, a lógica central em `sourcedock/core/`, os provedores em
+`sourcedock/backend/` e os catálogos em `sourcedock/store/`. A GUI não deve ser executada como
+root, a autorização não deve ser contornada e credenciais ou caminhos privados não devem ser
+registrados.
+
+## Traduções, testes e pull requests
+
+Todo texto visível deve usar o sistema de tradução e existir nos seis catálogos (`en`, `tr`,
+`de`, `es`, `pt_BR`, `fr`), mantendo os mesmos placeholders e marcação. Execute as verificações
+de catálogo, Ruff, `compileall`, build do `.deb` e a suíte protegida com Xvfb/Openbox descritas
+na seção inglesa. Os testes não devem alterar o banco de pacotes do sistema. Pull requests
+devem explicar impacto ao usuário, compatibilidade, segurança e limitações conhecidas.
+
+[Voltar ao início](#top)
+
+---
+
+<a id="french"></a>
+# 🇫🇷 Contribuer à SourceDock
+
+Merci de contribuer à l’amélioration de SourceDock. Consultez le [code de conduite](CODE_OF_CONDUCT.md)
+pour les règles de la communauté et [SECURITY.md](SECURITY.md) pour les vulnérabilités ; ne
+publiez jamais une vulnérabilité dans une issue.
+
+## Avant de commencer
+
+- Recherchez les issues et pull requests existantes.
+- Discutez les fonctionnalités importantes ou les changements de comportement dans une issue.
+- Gardez les changements ciblés et évitez les refactorings ou fichiers générés sans rapport.
+
+## Développement et architecture
+
+SourceDock est une application Python 3.10+ basée sur GTK 3. Lancez-la avec `python3 main.py`
+et prévisualisez un paquet local avec `python3 main.py /chemin/vers/paquet.deb`. Le code UI
+reste dans `sourcedock/ui/`, la logique centrale dans `sourcedock/core/`, les fournisseurs dans
+`sourcedock/backend/` et les catalogues dans `sourcedock/store/`. L’interface ne doit pas être
+exécutée en root ; l’autorisation ne doit pas être contournée et les identifiants ou chemins
+privés ne doivent pas être journalisés.
+
+## Traductions, tests et pull requests
+
+Tout texte visible doit utiliser le système de traduction et exister dans les six catalogues
+(`en`, `tr`, `de`, `es`, `pt_BR`, `fr`), avec les mêmes placeholders et balises. Exécutez les
+vérifications des catalogues, Ruff, `compileall`, la construction `.deb` et la suite protégée
+par Xvfb/Openbox décrites dans la section anglaise. Les tests ne doivent pas modifier la base
+de paquets du système. Les pull requests doivent décrire l’impact utilisateur, la compatibilité,
+la sécurité et les limites connues.
+
+[Retour au début](#top)
