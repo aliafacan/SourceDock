@@ -36,11 +36,11 @@ Les images sont nommées selon la vue, le thème, la langue et la résolution 13
 
 ## Installation
 
-Téléchargez [SourceDock 1.4.6](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6) et son checksum :
+Téléchargez [SourceDock 1.4.7](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.7) et son checksum :
 
 ```bash
-sha256sum -c sourcedock_1.4.6_all.deb.sha256
-sudo apt install ./sourcedock_1.4.6_all.deb
+sha256sum -c sourcedock_1.4.7_all.deb.sha256
+sudo apt install ./sourcedock_1.4.7_all.deb
 sourcedock
 ```
 

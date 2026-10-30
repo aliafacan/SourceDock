@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import nullcontext
 from enum import Enum
+import getpass
 import os
 from pathlib import Path
 import shlex
@@ -1009,6 +1010,10 @@ class CommandRunner:
     def _run_privileged_locked(self, command, timeout, input_text, allow_cancel=False):
         if allow_cancel is None:
             allow_cancel = False
+        if shutil.which("sudo") is None:
+            raise BackendError(
+                "Sistemde 'sudo' komutu bulunamadı. Lütfen 'sudo' paketini kurun (Debian'da root ile: 'apt install sudo')."
+            )
         self._wait_for_apt_locks(command)
         sudo_probe = self.run(["sudo", "-n", "true"], timeout=5, allow_cancel=False)
         if sudo_probe.returncode == 0:
@@ -1036,7 +1041,61 @@ class CommandRunner:
     ) -> None:
         if result.returncode != 0:
             combined = ((result.stderr or "") + "\n" + (result.stdout or "")).strip().lower()
-            if any(kw in combined for kw in ("password", "try again", "incorrect", "sorry")):
+            sudoers_denied = (
+                "not in the sudoers file" in combined
+                or "is not in sudoers" in combined
+                or "not in sudoers" in combined
+                or "sudoers dosyasında yok" in combined
+                or "ist nicht in der sudoers" in combined
+                or "n'est pas dans le fichier sudoers" in combined
+                or "no está en el archivo sudoers" in combined
+                or "não está no arquivo sudoers" in combined
+            )
+            if sudoers_denied:
+                self.clear_sudo_password()
+                current_user = getpass.getuser()
+                raise BackendError(
+                    redact_text(
+                        f"Kullanıcı ({current_user}) 'sudo' yetkisine sahip değil. "
+                        f"Bu işlem için kullanıcının sudo grubuna eklenmesi gerekir "
+                        f"(Örn. Debian'da root kullanıcısı ile: 'usermod -aG sudo {current_user}').",
+                        (self._sudo_password,),
+                    )
+                )
+
+            auth_failed = any(
+                kw in combined
+                for kw in (
+                    "password",
+                    "try again",
+                    "incorrect",
+                    "sorry",
+                    "authentication failure",
+                    "auth failure",
+                    "permission denied",
+                    "şifre",
+                    "parola",
+                    "üzgünüm",
+                    "yeniden deneyin",
+                    "hatalı",
+                    "passwort",
+                    "versuchen sie es noch einmal",
+                    "leider",
+                    "falsch",
+                    "contraseña",
+                    "intente de nuevo",
+                    "lo siento",
+                    "incorrecta",
+                    "mot de passe",
+                    "réessayez",
+                    "désolé",
+                    "senha",
+                    "tente novamente",
+                    "desculpe",
+                    "incorreta",
+                )
+            )
+            if auth_failed:
                 self.clear_sudo_password()
                 raise AuthRequiredError(
                     "Yonetici parolasi hatali. Lutfen tekrar dene.",

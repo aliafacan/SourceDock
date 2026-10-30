@@ -36,11 +36,11 @@ Die Bilder sind nach Ansicht, Theme, Sprache und 1366×768-Auflösung benannt:
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.6](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 1.4.7](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.7). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.6_all.deb.sha256
-sudo apt install ./sourcedock_1.4.6_all.deb
+sha256sum -c sourcedock_1.4.7_all.deb.sha256
+sudo apt install ./sourcedock_1.4.7_all.deb
 sourcedock
 ```
 

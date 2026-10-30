@@ -104,12 +104,13 @@ def detect_system_language(environ: dict[str, str] | None = None) -> str:
     candidates = []
     for variable in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
         candidates.extend(part.strip() for part in env.get(variable, "").split(":") if part.strip())
-    try:
-        detected, _ = locale.getlocale(locale.LC_MESSAGES)
-        if detected:
-            candidates.append(detected)
-    except (locale.Error, ValueError):
-        pass
+    if environ is None:
+        try:
+            detected, _ = locale.getlocale(locale.LC_MESSAGES)
+            if detected:
+                candidates.append(detected)
+        except (locale.Error, ValueError):
+            pass
     codes = {code.casefold(): code for code in SUPPORTED_LANGUAGES}
     for candidate in candidates:
         normalized = candidate.split("@", 1)[0].split(".", 1)[0].replace("-", "_")
