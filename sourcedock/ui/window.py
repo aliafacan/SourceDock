@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import getpass
 import os
 import shutil
 import sys
@@ -816,6 +817,10 @@ class MainWindow(
         message = t(self.preferences.language, retry_key if retry else message_key)
         if operation:
             message = f"{message}\n\n{t(self.preferences.language, 'password_operation', operation=operation)}"
+        current_user = getpass.getuser()
+        if current_user != "root":
+            user_hint = t(self.preferences.language, "password_user_hint", user=current_user)
+            message = f"{message}\n\n{user_hint}"
         label = Gtk.Label(label=message)
         label.set_line_wrap(True)
         label.set_xalign(0)

@@ -62,14 +62,14 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 
 SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint vb.) için standart Debian paketi (`.deb`) olarak dağıtılmaktadır.
 
-1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.6 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.6) sayfasından indirin.
+1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.7 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.7) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
-   sha256sum -c sourcedock_1.4.6_all.deb.sha256
+   sha256sum -c sourcedock_1.4.7_all.deb.sha256
    ```
 3. Paketi APT ile kurun:
    ```bash
-   sudo apt install ./sourcedock_1.4.6_all.deb
+   sudo apt install ./sourcedock_1.4.7_all.deb
    ```
 4. Uygulamayı başlatın:
    ```bash

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.7 - 2026-10-30
+
+### Debian 13 & MATE Compatibility and Store Reliability
+
+- Resolved GTK Store category button reentrancy and signal bounce that caused `RecursionError: maximum recursion depth exceeded` when switching categories or modifying search queries.
+- Added reentrancy guards to category selection chips (`_updating_category_buttons`) and source filter toggles (`_updating_store_filters`) to safely prevent programmatic `set_active` state changes from triggering recursive `clicked`/`toggled` signal loops.
+- Prevented redundant background search worker threads when rapidly clicking or re-selecting active category filters.
+- Enforced generation tracking to discard stale search results from superseded worker threads.
+
+### APT Authorization & Sudo Privilege Handling
+
+- Improved privilege error classification: explicitly detected "not in the sudoers file" across locales and surfaced a clear, actionable guidance message explaining how to add the user to the `sudo` group (e.g., via root `usermod -aG sudo <user>`) without entering an infinite password retry loop.
+- Added multilingual detection for sudo authentication failures across English, Turkish, German, French, and Spanish, safely distinguishing authentication failures from missing group permissions.
+- Added a helpful username hint in administrator password dialogs to clarify that the current user's login password (sudo) is required, preventing confusion on Debian systems where root and user passwords differ.
+- Handled missing `sudo` command gracefully with clear installation advice.
+- Fixed locale leakage in `detect_system_language` when an explicit environment dictionary is provided.
+
+### Regression Coverage & Test Scope
+
+- Added automated regression suite `tests/test_debian_mate_compat.py` covering single-click, sequential clicks, active category re-selection, filter switching, rapid search submission, stale generation discarding, multilingual sudo error classification, sudoers permission separation, and secret redaction.
+- Note on testing scope: Verified under automated test harness and Python 3.12/3.13; full end-to-end testing on bare-metal Debian 13/MATE awaits community feedback on Issue #6.
+
+
 ## 1.4.6 - 2026-10-23
 
 ### Installation Progress Clarity

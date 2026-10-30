@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import getpass
 import json
 import re
 import threading
@@ -485,7 +486,12 @@ def ask_sudo_password(
     box.set_margin_top(16)
     box.set_margin_bottom(16)
 
-    prompt_label = Gtk.Label(label=t(language, retry_key if retry else message_key))
+    prompt = t(language, retry_key if retry else message_key)
+    current_user = getpass.getuser()
+    if current_user != "root":
+        user_hint = t(language, "password_user_hint", user=current_user)
+        prompt = f"{prompt}\n\n{user_hint}"
+    prompt_label = Gtk.Label(label=prompt)
     prompt_label.set_xalign(0)
     box.pack_start(prompt_label, False, False, 0)
 

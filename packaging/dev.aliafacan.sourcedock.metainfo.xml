@@ -18,6 +18,11 @@
   <categories><category>System</category><category>PackageManager</category></categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.7" date="2026-10-30" type="stable">
+      <description>
+        <p>Fixes Store category RecursionError on Debian 13/MATE, improves APT sudo authorization error handling and adds privilege guidance.</p>
+      </description>
+    </release>
     <release version="1.4.6" date="2026-10-23" type="stable">
       <description>
         <p>Clarifies installation progress by keeping transient sudo diagnostics out of the live status line while preserving them in Details.</p>

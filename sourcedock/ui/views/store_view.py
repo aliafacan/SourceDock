@@ -275,10 +275,18 @@ class StoreViewMixin:
         )
 
     def _on_store_category(self, _button, query):
-        for button, _key in self.store_category_buttons:
-            button.set_active(button.get_label() == _button.get_label())
-        self.store_search_entry.set_text(query)
-        self.header_search.set_text(query)
+        if getattr(self, "_updating_category_buttons", False):
+            return
+        self._updating_category_buttons = True
+        try:
+            for button, _key in self.store_category_buttons:
+                target_state = (button.get_label() == _button.get_label())
+                if button.get_active() != target_state:
+                    button.set_active(target_state)
+            self.store_search_entry.set_text(query)
+            self.header_search.set_text(query)
+        finally:
+            self._updating_category_buttons = False
         self.on_store_search()
 
     def _on_store_search_changed(self, _entry: Gtk.SearchEntry) -> None:
@@ -290,9 +298,15 @@ class StoreViewMixin:
         query = self.store_search_entry.get_text().strip()
         category_queries = {"office", "editor", "browser", "graphics", "system"}
         if query not in category_queries:
-            for button, _key in self.store_category_buttons:
-                button.set_active(False)
+            self._updating_category_buttons = True
+            try:
+                for button, _key in self.store_category_buttons:
+                    if button.get_active():
+                        button.set_active(False)
+            finally:
+                self._updating_category_buttons = False
         if not query:
+            self._active_store_search_key = None
             self._store_search_generation += 1
             self.store_busy = False
             self.store_results = []
@@ -310,13 +324,23 @@ class StoreViewMixin:
     def on_store_filter_toggled(self, button: Gtk.ToggleButton, source: str) -> None:
         if not hasattr(self, "store_results_store") or self.store_results_store is None:
             return
+        if getattr(self, "_updating_store_filters", False):
+            return
         if not button.get_active():
             if not any(btn.get_active() for btn in self.store_filter_buttons.values()):
-                button.set_active(True)
+                self._updating_store_filters = True
+                try:
+                    button.set_active(True)
+                finally:
+                    self._updating_store_filters = False
             return
-        for src, btn in self.store_filter_buttons.items():
-            if src != source:
-                btn.set_active(False)
+        self._updating_store_filters = True
+        try:
+            for src, btn in self.store_filter_buttons.items():
+                if src != source and btn.get_active():
+                    btn.set_active(False)
+        finally:
+            self._updating_store_filters = False
         self.store_filter_source = source
         self._render_store_results(self.store_results)
 
@@ -331,6 +355,11 @@ class StoreViewMixin:
         query = self.header_search.get_text().strip() or self.store_search_entry.get_text().strip()
         if not query:
             return
+        filter_source = getattr(self, "store_filter_source", "all")
+        active_key = (query, filter_source)
+        if self.store_busy and getattr(self, "_active_store_search_key", None) == active_key:
+            return
+        self._active_store_search_key = active_key
         self._store_search_generation += 1
         generation = self._store_search_generation
         self.store_busy = True
@@ -369,6 +398,8 @@ class StoreViewMixin:
     ) -> bool:
         if generation is not None and generation != self._store_search_generation:
             return False
+        if complete or error:
+            self._active_store_search_key = None
         self.store_busy = not complete
         self.store_search_btn.set_sensitive(complete)
         self.store_search_entry.set_sensitive(True)
