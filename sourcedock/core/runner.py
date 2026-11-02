@@ -8,6 +8,8 @@ from contextlib import nullcontext
 from enum import Enum
 import getpass
 import os
+import re
+import uuid
 from pathlib import Path
 import shlex
 import shutil
@@ -27,6 +29,11 @@ from sourcedock.core.process import (
 
 class OperationState(str, Enum):
     """Bir komut veya işlemin yaşam döngüsü durumları."""
+    QUEUED = "QUEUED"
+    PREPARING = "PREPARING"
+    CANCEL_REQUESTED = "CANCEL_REQUESTED"
+    CANCELLED = "CANCELLED"
+    VERIFYING = "VERIFYING"
     RUNNING = "RUNNING"
     TIMEOUT_WARNING = "TIMEOUT_WARNING"
     COMPLETED = "COMPLETED"
@@ -54,6 +61,8 @@ class OperationContext:
         self.secrets = tuple(s for s in secrets if s)
         self.process: subprocess.Popen | None = None
         self.pid: int | None = None
+        self.cancel_requested = False
+        self.mutation_started = False
         self.cancelled = False
         self.timed_out = False
         self.lingering = False
@@ -80,6 +89,8 @@ class CommandRunner:
         self._proc_lock = threading.RLock()
         self._proc_cond = threading.Condition(self._proc_lock)
         self._operations: dict[str, OperationContext] = {}
+        self._tasks: dict[str, OperationContext] = {}
+        self.apt_transactions = {}
         self._thread_to_op: dict[int, str] = {}
         self._pid_to_op: dict[int, str] = {}
         self._thread_op_stack: dict[int, list[str]] = {}
@@ -90,6 +101,8 @@ class CommandRunner:
     def _ensure_state(self) -> None:
         if not hasattr(self, "_proc_lock"):
             self._proc_lock = threading.RLock()
+        if not hasattr(self, "_tasks"):
+            self._tasks = {}
         if not hasattr(self, "_operations"):
             self._operations = {}
         if not hasattr(self, "_thread_to_op"):
@@ -113,9 +126,77 @@ class CommandRunner:
         if not hasattr(self, "_fallback_context"):
             self._fallback_context = None
 
+    def prepare_operation(self, op_id: str) -> OperationContext:
+        self._ensure_state()
+        with self._proc_lock:
+            if op_id not in self._tasks:
+                task = OperationContext(op_id)
+                task.state = OperationState.QUEUED
+                self._tasks[op_id] = task
+            return self._tasks[op_id]
+
+    def operation_status(self, op_id: str) -> dict:
+        """Explicit capabilities for one owned task; never infer from callbacks."""
+        self._ensure_state()
+        with self._proc_lock:
+            task = self._tasks.get(op_id)
+            context = self.get_operation_context(op_id)
+            active = task is not None and not task.completed_event.is_set()
+            critical = bool(context and context.is_critical)
+            pending = bool(task and task.cancel_requested)
+            return {"state": task.state.value if task else "UNKNOWN",
+                    "can_cancel": active and not critical and not pending,
+                    "can_request_cancel": active and critical and not pending,
+                    "cancel_requested": pending, "critical": critical}
+
+    def complete_task(self, op_id: str, success: bool) -> None:
+        self._ensure_state()
+        with self._proc_lock:
+            task = self._tasks.get(op_id)
+            if not task or task.completed_event.is_set():
+                return
+            context = self.get_operation_context(op_id)
+            if context and context.process is not None and context.process.poll() is None:
+                return
+            task.state = (OperationState.CANCELLED if task.cancelled else
+                          OperationState.COMPLETED if success else OperationState.FAILED)
+            task.completed_event.set()
+            task.secrets = ()
+            # Keep bounded terminal state for late callbacks and inspection.
+            for key in list(self._tasks)[:-200]:
+                if self._tasks[key].completed_event.is_set():
+                    del self._tasks[key]
+
+    def request_cancel(self, op_id: str) -> str:
+        self._ensure_state()
+        with self._proc_lock:
+            task = self._tasks.get(op_id)
+            if not task or task.completed_event.is_set():
+                return "finished"
+            context = self.get_operation_context(op_id)
+            if context is not None and context.process is not None and context.process.poll() is not None:
+                return "finished"
+            task.cancel_requested = True
+            task.state = OperationState.CANCEL_REQUESTED
+            if context and context.is_critical:
+                context.cancel_requested = True
+                return "pending"
+            task.cancelled = True
+            if context:
+                self.cancel_current(op_id)
+            self.clear_sudo_password()
+            return "cancelled"
+
+    def _check_task_cancelled(self) -> None:
+        self._ensure_state()
+        task = self._tasks.get(self._thread_bound_ops.get(threading.get_ident()))
+        if task and task.cancelled:
+            raise BackendError("Operation cancelled.")
+
     def bind_thread_op(self, op_id: str) -> None:
         """Mevcut thread'i belirli bir işlem kimliğiyle ilişkilendirir."""
         self._ensure_state()
+        self.prepare_operation(op_id)
         with self._proc_lock:
             tid = threading.get_ident()
             self._thread_bound_ops[tid] = op_id
@@ -435,6 +516,7 @@ class CommandRunner:
     ) -> OperationContext:
         self._ensure_state()
         with self._proc_lock:
+            self._check_task_cancelled()
             self.poll_tracked_operations()
             tid = threading.get_ident()
             bound_worker_op = self._thread_bound_ops.get(tid)
@@ -449,7 +531,7 @@ class CommandRunner:
                     op_id = bound_op_id
                 else:
                     self._op_counter += 1
-                    op_id = f"op_{self._op_counter}_{tid}"
+                    op_id = f"op_{uuid.uuid4().hex}"
 
             context = OperationContext(
                 op_id,
@@ -460,6 +542,10 @@ class CommandRunner:
                 secrets=(self._sudo_password,) if self._sudo_password else (),
             )
             context.is_critical = not allow_cancel or critical_command(command or [])
+            if bound_worker_op in self._tasks:
+                task = self._tasks[bound_worker_op]
+                if not task.cancel_requested:
+                    task.state = OperationState.RUNNING if context.is_critical else OperationState.PREPARING
             self._operations[op_id] = context
             if context.is_critical:
                 with CommandRunner._class_lock:
@@ -486,6 +572,8 @@ class CommandRunner:
                 if context.process is None or context.process.poll() is not None:
                     if context.pid and context.pid in self._pid_to_op:
                         self._pid_to_op.pop(context.pid, None)
+                    if context.process is not None:
+                        context.returncode = context.process.poll()
                     context.process = None
 
     def _finish_operation(self, context: OperationContext) -> None:
@@ -499,6 +587,9 @@ class CommandRunner:
                     if context.returncode == 0
                     else OperationState.FAILED
                 )
+            if context.cancelled:
+                context.state = OperationState.CANCELLED
+            context.secrets = ()
             context.completed_event.set()
 
             # 1. PID eşlemesini idempotent temizle
@@ -703,22 +794,29 @@ class CommandRunner:
                     return False
 
             # Kritik işlem politikası (Fail-Closed): Hedefli iptalde de kritik koruma zorunlu
-            if not target_ctx.allow_cancel:
+            if not target_ctx.allow_cancel or target_ctx.is_critical:
+                target_ctx.cancel_requested = True
                 return False
-
-            # İptal durumunu yalnızca bu bağlamda izole et
-            target_ctx.cancelled = True
+            if target_ctx.completed_event.is_set():
+                return False
             proc = target_ctx.process
+            if proc is not None and proc.poll() is not None:
+                return False
+            target_ctx.cancelled = True
+            task = self._tasks.get(target_ctx.parent_op_id or target_ctx.op_id)
+            if task:
+                task.cancel_requested = task.cancelled = True
+                task.state = OperationState.CANCEL_REQUESTED
             if proc is not None:
-                poll_fn = getattr(proc, "poll", lambda: None)
-                if poll_fn() is None:
-                    terminate_process(proc)
+                terminate_process(proc)
+                # Never block GTK waiting for a child ignoring SIGTERM.
+                def reap_cancelled():
                     try:
-                        wait_fn = getattr(proc, "wait", None)
-                        if wait_fn is not None:
-                            wait_fn(timeout=0.8)
+                        proc.wait(timeout=0.8)
                     except (subprocess.TimeoutExpired, OSError):
-                        terminate_process(proc, force=True)
+                        if proc.poll() is None:
+                            terminate_process(proc, force=True)
+                threading.Thread(target=reap_cancelled, daemon=True).start()
             return True
 
     def set_sudo_password(self, password: str) -> None:
@@ -1002,8 +1100,14 @@ class CommandRunner:
             allow_cancel = False
         with NATIVE_OPERATION_LOCK:
             self._wait_for_critical_transactions()
+            self._check_task_cancelled()
             try:
                 return self._run_privileged_locked(command, timeout, input_text, allow_cancel=allow_cancel)
+            except AuthRequiredError as exc:
+                task = self._tasks.get(self._thread_bound_ops.get(threading.get_ident()))
+                if task and task.mutation_started:
+                    raise BackendError("Authorization expired after a package command. Review the actual package state before retrying.") from exc
+                raise
             finally:
                 self.clear_sudo_password()
 
@@ -1011,105 +1115,111 @@ class CommandRunner:
         if allow_cancel is None:
             allow_cancel = False
         if shutil.which("sudo") is None:
+            if os.geteuid() == 0:
+                # A root-login Debian system may intentionally omit sudo.
+                # Keep the application unprivileged in normal use and only
+                # accept this path when the already-running process is root.
+                result = self._execute_privileged_command(
+                    command, timeout, input_text, allow_cancel, direct_root=True
+                )
+                self._raise_for_privileged_result(result, command)
+                self._mark_task_mutated(command)
+                return result
             raise BackendError(
                 "Sistemde 'sudo' komutu bulunamadı. Lütfen 'sudo' paketini kurun (Debian'da root ile: 'apt install sudo')."
             )
         self._wait_for_apt_locks(command)
         sudo_probe = self.run(["sudo", "-n", "true"], timeout=5, allow_cancel=False)
         if sudo_probe.returncode == 0:
-            result = self.run(["sudo", "-n", *command], timeout=timeout, input_text=input_text, allow_cancel=allow_cancel)
+            result = self._execute_privileged_command(command, timeout, input_text, allow_cancel)
             self._raise_for_privileged_result(result, command)
+            self._mark_task_mutated(command)
             return result
 
+        if any(token in (sudo_probe.stdout + sudo_probe.stderr).lower()
+               for token in ("sudoers", "not allowed to execute")):
+            self._raise_for_privileged_result(sudo_probe, ["sudo", "-n", "true"])
         if not self._sudo_password:
             raise AuthRequiredError(
                 "Yonetici parolasi gerekiyor. Canli onizlemeyi uygulama icinden acmak icin parolayi gir.",
             )
 
-        stdin_text = f"{self._sudo_password}\n"
-        if input_text is not None:
-            stdin_text += input_text
-
-        result = self.run(["sudo", "-S", "-p", "", *command], timeout=timeout, input_text=stdin_text, allow_cancel=allow_cancel)
+        # Authenticate separately: package output is never evidence of a bad
+        # password. A failed command must not replay a partially applied task.
+        validation = self.run(
+            ["sudo", "-S", "-p", "", "-v"], timeout=30,
+            input_text=f"{self._sudo_password}\n", allow_cancel=False,
+        )
+        self._raise_for_privileged_result(validation, ["sudo", "-v"], auth_only=True)
+        result = self._execute_privileged_command(command, timeout, input_text, allow_cancel)
         self._raise_for_privileged_result(result, command)
+        self._mark_task_mutated(command)
         return result
 
-    def _raise_for_privileged_result(
-        self,
-        result: subprocess.CompletedProcess[str],
-        command: list[str],
-    ) -> None:
-        if result.returncode != 0:
-            combined = ((result.stderr or "") + "\n" + (result.stdout or "")).strip().lower()
-            sudoers_denied = (
-                "not in the sudoers file" in combined
-                or "is not in sudoers" in combined
-                or "not in sudoers" in combined
-                or "sudoers dosyasında yok" in combined
-                or "ist nicht in der sudoers" in combined
-                or "n'est pas dans le fichier sudoers" in combined
-                or "no está en el archivo sudoers" in combined
-                or "não está no arquivo sudoers" in combined
-            )
-            if sudoers_denied:
-                self.clear_sudo_password()
-                current_user = getpass.getuser()
-                raise BackendError(
-                    redact_text(
-                        f"Kullanıcı ({current_user}) 'sudo' yetkisine sahip değil. "
-                        f"Bu işlem için kullanıcının sudo grubuna eklenmesi gerekir "
-                        f"(Örn. Debian'da root kullanıcısı ile: 'usermod -aG sudo {current_user}').",
-                        (self._sudo_password,),
-                    )
-                )
+    def _execute_privileged_command(self, command, timeout, input_text, allow_cancel, direct_root=False):
+        record = None
+        if command and Path(command[0]).name == "apt-get" and any(
+            action in command for action in ("install", "remove", "purge", "upgrade")
+        ):
+            from sourcedock.backend.apt_transactions import AptTransaction
+            record = AptTransaction.begin(self, command)
+            self.apt_transactions[record.id] = record
+            for key in list(self.apt_transactions)[:-50]:
+                del self.apt_transactions[key]
+            task = self._tasks.get(self._thread_bound_ops.get(threading.get_ident()))
+            if task:
+                task.transaction_id = record.id
+        actual_command = list(command) if direct_root else ["sudo", "-n", *command]
+        result = self.run(actual_command, timeout=timeout,
+                          input_text=input_text, allow_cancel=allow_cancel)
+        if record:
+            record.finish(self, result)
+        return result
 
-            auth_failed = any(
-                kw in combined
-                for kw in (
-                    "password",
-                    "try again",
-                    "incorrect",
-                    "sorry",
-                    "authentication failure",
-                    "auth failure",
-                    "permission denied",
-                    "şifre",
-                    "parola",
-                    "üzgünüm",
-                    "yeniden deneyin",
-                    "hatalı",
-                    "passwort",
-                    "versuchen sie es noch einmal",
-                    "leider",
-                    "falsch",
-                    "contraseña",
-                    "intente de nuevo",
-                    "lo siento",
-                    "incorrecta",
-                    "mot de passe",
-                    "réessayez",
-                    "désolé",
-                    "senha",
-                    "tente novamente",
-                    "desculpe",
-                    "incorreta",
-                )
-            )
-            if auth_failed:
-                self.clear_sudo_password()
-                raise AuthRequiredError(
-                    "Yonetici parolasi hatali. Lutfen tekrar dene.",
-                    password_failed=True,
-                )
-            stderr = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
-            raise BackendError(
-                redact_text(f"Komut basarisiz oldu: {' '.join(command)}\n{stderr}", (self._sudo_password,))
-            )
+    def _mark_task_mutated(self, command):
+        task = self._tasks.get(self._thread_bound_ops.get(threading.get_ident()))
+        if task and critical_command(command):
+            task.mutation_started = True
+
+    def _raise_for_privileged_result(self, result, command, *, auth_only=False) -> None:
+        if result.returncode == 0:
+            return
+        secret = self._sudo_password
+        combined = ((result.stderr or "") + "\n" + (result.stdout or "")).strip()
+        lowered = combined.lower()
+        denied = any(token in lowered for token in (
+            "not in the sudoers", "not in sudoers", "not allowed to execute",
+            "sudoers dosyasında yok", "ist nicht in der sudoers",
+            "n'est pas dans le fichier sudoers", "no está en el archivo sudoers",
+            "não está no arquivo sudoers",
+        ))
+        if denied:
+            self.clear_sudo_password()
+            raise BackendError(redact_text(
+                f"Sudo authorization denied for {getpass.getuser()}.\n{combined}", (secret,)))
+        # Only the isolated sudo validation command may request a retry.
+        # Match actual diagnostics, never generic words such as 'password'.
+        auth_failed = auth_only and any(re.fullmatch(pattern, line.strip(), re.I) for line in combined.splitlines()
+            for pattern in (
+                r"sudo: \d+ incorrect password attempts?",
+                r"(?:sudo: )?Sorry, try again\.",
+                r"(?:sudo: )?authentication failure",
+                r"(?:sudo: )?Üzgünüm, yeniden deneyin\.",
+                r"(?:sudo: )?Leider, versuchen Sie es noch einmal\.",
+                r"(?:sudo: )?Désolé, réessayez\.",
+                r"(?:sudo: )?Lo siento, intente de nuevo\.",
+                r"(?:sudo: )?Desculpe, tente novamente\.",
+            ))
+        if auth_failed:
+            self.clear_sudo_password()
+            raise AuthRequiredError("Administrator authentication failed.", password_failed=True)
+        raise BackendError(redact_text(
+            f"Command failed: {' '.join(command)}\n{combined or 'Unknown error'}", (secret,)))
 
     def _wait_for_apt_locks(self, command: list[str], max_wait: int = 300) -> None:
         if not command or command[0] not in {"apt", "apt-get", "nala", "dpkg"}:
             return
-        context = self._create_operation(["apt-lock-wait", *command], allow_cancel=True)
+        context = self._create_operation(["apt-lock-wait"], allow_cancel=True)
         started = time.monotonic()
         last_message = ""
         try:

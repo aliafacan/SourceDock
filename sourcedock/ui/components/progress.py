@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import re
 import shlex
+import time
 
 import gi
 
@@ -42,6 +43,8 @@ class OperationProgressWindow(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
         make_window_movable(self, independent=True)
         self.get_style_context().add_class("icon-settings-window")
+        self._last_measurement = 0.0
+        self._progress_watch = GLib.timeout_add_seconds(1, self._expire_measurement)
         self._done = False
         self._on_progress = on_progress
         self._download_total_kib: int | None = None
@@ -120,7 +123,7 @@ class OperationProgressWindow(Gtk.Window):
         button_row.pack_start(self._close_btn, False, False, 0)
 
         self._pulse_source: int | None = GLib.timeout_add(80, self._pulse)
-        self.connect("destroy", lambda _widget: self._stop_pulse())
+        self.connect("destroy", self._on_destroy)
         self.show_all()
 
     def _short_error(self, message: str) -> str:
@@ -133,6 +136,21 @@ class OperationProgressWindow(Gtk.Window):
             return t(self.language, "progress_auth_needed")
         first_line = next((line.strip() for line in message.splitlines() if line.strip()), message.strip())
         return first_line[:180]
+
+    def _on_destroy(self, *_args):
+        self._stop_pulse()
+        if self._progress_watch:
+            GLib.source_remove(self._progress_watch)
+            self._progress_watch = None
+
+    def _expire_measurement(self):
+        if self._done:
+            self._progress_watch = None
+            return False
+        if self._last_measurement and time.monotonic() - self._last_measurement > 5:
+            self._start_pulse()
+            self._last_measurement = 0.0
+        return True
 
     def _pulse(self) -> bool:
         self._progress.pulse()
@@ -156,19 +174,10 @@ class OperationProgressWindow(Gtk.Window):
         self._status_label.set_text(status)
 
     def append_log(self, line: str) -> None:
-        if not line.strip():
+        if self._done or not line.strip():
             return
         self._append_detail(line)
         if self._consume_package_progress(line):
-            self._fire_progress()
-            return
-        percent_match = re.search(r"(\d{1,3})\s*%", line)
-        if percent_match:
-            self._stop_pulse()
-            percent = max(0, min(100, int(percent_match.group(1))))
-            self._progress.set_fraction(percent / 100)
-            self._progress.set_text(f"%{percent}")
-            self._progress.set_show_text(True)
             self._fire_progress()
             return
         status = self._summarize_progress_line(line)
@@ -182,15 +191,43 @@ class OperationProgressWindow(Gtk.Window):
         mark = self._log_buf.create_mark(None, self._log_buf.get_end_iter(), False)
         self._log_view.scroll_mark_onscreen(mark)
         self._log_buf.delete_mark(mark)
+        if self._log_buf.get_line_count() > 2000:
+            self._log_buf.delete(self._log_buf.get_start_iter(), self._log_buf.get_iter_at_line(500))
 
     def _consume_package_progress(self, line: str) -> bool:
         clean = re.sub(r"\s+", " ", line).strip()
         lowered = clean.lower()
 
+        # Each percentage belongs to its own phase. Get: reports the size
+        # of an item being fetched, not the bytes actually received.
+        phases = (
+            (r"^(?:Preparing to unpack|Unpacking|Paket açılıyor)|paketi açılıyor", "progress_installing"),
+            (r"^(?:Setting up|Processing triggers)|(?:ayarlanıyor|yapılandırılıyor|tetikleyiciler işleniyor)", "progress_configuring"),
+            (r"^(?:Reading package lists|Building dependency tree|Reading state information|Paket listeleri okunuyor|Bağımlılık ağacı)", "progress_calculating_deps"),
+            (r"^(?:Fetched|İndirilen|Alınan):? \d", "progress_install_preparing"),
+        )
+        for pattern, key in phases:
+            if re.search(pattern, clean, re.I):
+                self._set_activity_phase(t(self.language, key), clean)
+                return True
+        apt_percent = re.match(r"^(\d{1,3})%\s+\[", clean)
+        dpkg_percent = re.match(r"^Progress:\s*\[\s*(\d{1,3})%\s*\]", clean)
+        if apt_percent or dpkg_percent:
+            match = apt_percent or dpkg_percent
+            percent = min(100, int(match.group(1)))
+            self._title_label.set_text(t(self.language, "progress_downloading" if apt_percent else "progress_installing"))
+            self._stop_pulse()
+            self._last_measurement = time.monotonic()
+            self._progress.set_fraction(percent / 100)
+            self._progress.set_text(f"%{percent}")
+            self._progress.set_show_text(True)
+            return True
+
         fp_bar = re.search(r"[\[|]\s*[=■▌█▇▆▅▄▃▂▁\s]*[\]|]\s*(\d{1,3})\s*%", clean)
         if fp_bar:
             percent = max(0, min(100, int(fp_bar.group(1))))
             self._stop_pulse()
+            self._last_measurement = time.monotonic()
             self._progress.set_fraction(percent / 100)
             self._progress.set_text(f"%{percent}")
             self._progress.set_show_text(True)
@@ -232,10 +269,11 @@ class OperationProgressWindow(Gtk.Window):
             )
             return True
 
-        snap_pct = re.search(r"\b(\d{1,3})%\b", clean)
+        snap_pct = re.search(r"\b(\d{1,3})%", clean)
         if snap_pct and re.search(r"[kKmMgG][bB]/?s|→|snap", clean, re.IGNORECASE):
             percent = max(0, min(100, int(snap_pct.group(1))))
             self._stop_pulse()
+            self._last_measurement = time.monotonic()
             self._progress.set_fraction(percent / 100)
             self._progress.set_text(f"%{percent}")
             self._progress.set_show_text(True)
@@ -409,28 +447,8 @@ class OperationProgressWindow(Gtk.Window):
         return packages
 
     def _update_download_status(self) -> None:
-        if not self._download_total_kib:
-            return
-        self._stop_pulse()
-        fraction = max(0.0, min(1.0, self._download_seen_kib / self._download_total_kib))
-        self._progress.set_fraction(fraction)
-        percent = int(fraction * 100)
-        self._progress.set_text(f"%{percent}")
-        self._progress.set_show_text(True)
-        if percent >= 100:
-            self._title_label.set_text(t(self.language, "progress_download_done"))
-            prep = t(self.language, "progress_install_preparing")
-            self._status_label.set_text(
-                f"{self._format_kib(min(self._download_seen_kib, self._download_total_kib))} / {self._format_kib(self._download_total_kib)} - {prep}"
-            )
-        else:
-            item_part = ""
-            if self._download_items_total:
-                unit = t(self.language, "progress_packages_unit")
-                item_part = f" · {min(self._download_seen_items, self._download_items_total)}/{self._download_items_total} {unit}"
-            self._status_label.set_text(
-                f"{self._format_kib(min(self._download_seen_kib, self._download_total_kib))} / {self._format_kib(self._download_total_kib)}{item_part}"
-            )
+        self._start_pulse()
+        self._status_label.set_text(self._current_package or t(self.language, "progress_downloading"))
 
     def _package_name_from_apt_download(self, body: str) -> str:
         tokens = body.split()
@@ -465,6 +483,8 @@ class OperationProgressWindow(Gtk.Window):
         self._on_progress(fraction, label)
 
     def finish(self, success: bool, message: str) -> None:
+        if self._done:
+            return
         self._done = True
         self._stop_pulse()
         self._progress.set_fraction(1.0 if success else 0.0)
