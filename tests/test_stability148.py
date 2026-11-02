@@ -67,6 +67,13 @@ class TestAuthentication148(unittest.TestCase):
             ["apt-get", "remove", "demo"], 900, None, False, direct_root=True
         )
 
+    def test_password_is_sent_to_the_real_sudo_command_via_stdin(self):
+        with patch.object(self.runner, "run", return_value=result()) as run:
+            self.runner._execute_privileged_command(["true"], 30, None, False)
+        self.assertEqual(run.call_args.args[0], ["sudo", "-k", "-S", "-p", "", "true"])
+        self.assertEqual(run.call_args.kwargs["input_text"], "not-for-logs\n")
+        self.assertNotIn("not-for-logs", str(run.call_args.args[0]))
+
 
 class TestOperationCapabilities148(unittest.TestCase):
     def setUp(self):

@@ -12,6 +12,7 @@
 - Added verified APT transaction snapshots and read-only rollback previews. Rollback execution remains intentionally disabled until a provider-safe, user-confirmed implementation is available.
 - Documented the current sudo-only authorization boundary and the unshipped Polkit helper proof of concept.
 - Corrected APT application metadata so dpkg upgrade history takes precedence over `.list` file mtimes when showing the last update date.
+- Fixed local `.deb` installation on systems where the sudo timestamp cache is unavailable between validation and the package command by forwarding the entered password only through the protected sudo stdin channel.
 
 ## 1.4.7 - 2026-10-30
 

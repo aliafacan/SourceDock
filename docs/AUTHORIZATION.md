@@ -25,6 +25,10 @@ The operation result is reported only after the worker exits.
   3. Main window destruction / session termination (`destroy` event).
 - **Redaction Guard**: All streaming command output, exceptions, and diagnostics
   actively redact secrets and user home paths via `redact_text()`.
+- **Command Authentication**: After isolated validation, a supplied password is
+  passed to the actual privileged command only through sudo stdin (`sudo -k -S`);
+  it is never included in argv or operation logs. This avoids relying on a
+  sudo timestamp cache that may not be shared between subprocess contexts.
 - **Cancellation Boundary**: Active mutating package transactions (APT, dpkg, DNF,
   RPM, Pacman, Zypper, Snap, fwupdmgr) are marked critical (`critical_command()`);
   invoking UI cancellation on these operations returns `False` and leaves the
