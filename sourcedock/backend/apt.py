@@ -308,8 +308,10 @@ class AptProvider(BaseNativeProvider):
                     file_mtime_date = datetime.fromtimestamp(path_times[key]).strftime("%Y-%m-%d")
                     break
 
-            # Son güncelleme: .list mtime'ı veya dpkg logundaki son upgrade/install
-            last_updated_dates[pkg] = file_mtime_date or dpkg_last.get(pkg, "")
+            # Dpkg history records the package action date. The .list mtime is
+            # only a fallback because upgrades rewrite that file and can make
+            # installation and update dates appear identical.
+            last_updated_dates[pkg] = dpkg_last.get(pkg, "") or file_mtime_date
 
             # Geçerli kurulum: remove/purge sonrası yeni install tarihi; yoksa
             # sistem kurulum tarihi veya .list mtime.

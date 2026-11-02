@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import MagicMock, patch
 
-from sourcedock.backend.apt import _parse_dpkg_history_lines
+from sourcedock.backend.apt import AptProvider, _parse_dpkg_history_lines
 
 
 class TestAptInstallationDates(unittest.TestCase):
@@ -42,6 +43,19 @@ class TestAptInstallationDates(unittest.TestCase):
 
         self.assertEqual(installed["demo"], "2026-04-01")
         self.assertEqual(updated["demo"], "2026-04-12")
+
+    def test_collection_prefers_dpkg_upgrade_date_over_list_mtime(self):
+        provider = AptProvider(MagicMock(), MagicMock())
+        provider._parse_dpkg_history = MagicMock(
+            return_value=({"demo": "2026-03-01"}, {"demo": "2026-03-12"})
+        )
+        provider._get_system_install_date = MagicMock(return_value="")
+        stat_result = MagicMock(stdout="/var/lib/dpkg/info/demo.list\t1775000000\n")
+        with patch.object(provider.runner, "run", return_value=stat_result):
+            installed, updated = provider._collect_package_dates(["demo"])
+
+        self.assertEqual(installed["demo"], "2026-03-01")
+        self.assertEqual(updated["demo"], "2026-03-12")
 
 
 if __name__ == "__main__":

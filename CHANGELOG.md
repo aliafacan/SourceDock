@@ -11,6 +11,7 @@
 - Added explicit operation states and capability-based cancellation. Critical package mutations now accept a cancellation request without terminating APT/dpkg processes.
 - Added verified APT transaction snapshots and read-only rollback previews. Rollback execution remains intentionally disabled until a provider-safe, user-confirmed implementation is available.
 - Documented the current sudo-only authorization boundary and the unshipped Polkit helper proof of concept.
+- Corrected APT application metadata so dpkg upgrade history takes precedence over `.list` file mtimes when showing the last update date.
 
 ## 1.4.7 - 2026-10-30
 
