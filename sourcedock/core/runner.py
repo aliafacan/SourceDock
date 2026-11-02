@@ -1169,9 +1169,20 @@ class CommandRunner:
             task = self._tasks.get(self._thread_bound_ops.get(threading.get_ident()))
             if task:
                 task.transaction_id = record.id
-        actual_command = list(command) if direct_root else ["sudo", "-n", *command]
+        if direct_root:
+            actual_command = list(command)
+            actual_input = input_text
+        elif self._sudo_password:
+            # Do not rely on sudo's timestamp cache: some sudo policies keep
+            # validation and command authentication in separate contexts.
+            # The password stays on stdin and is never placed in argv/logs.
+            actual_command = ["sudo", "-k", "-S", "-p", "", *command]
+            actual_input = f"{self._sudo_password}\n{input_text or ''}"
+        else:
+            actual_command = ["sudo", "-n", *command]
+            actual_input = input_text
         result = self.run(actual_command, timeout=timeout,
-                          input_text=input_text, allow_cancel=allow_cancel)
+                          input_text=actual_input, allow_cancel=allow_cancel)
         if record:
             record.finish(self, result)
         return result
