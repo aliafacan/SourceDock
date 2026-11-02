@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.8 - 2026-11-02
+
+### Stability and safe package operations
+
+- Fixed repeated administrator-password prompts after completed APT removals and stopped generic package errors from being classified as authentication failures.
+- Preserved installed-application list anchors, selections, sorting and filters across table and card refreshes.
+- Made the Store search field directly usable, with guarded local/global synchronization, Enter/button submission and stale-result protection.
+- Reworked package progress reporting to separate download percentages from installation/configuration phases and use indeterminate progress when no reliable percentage exists.
+- Added explicit operation states and capability-based cancellation. Critical package mutations now accept a cancellation request without terminating APT/dpkg processes.
+- Added verified APT transaction snapshots and read-only rollback previews. Rollback execution remains intentionally disabled until a provider-safe, user-confirmed implementation is available.
+- Documented the current sudo-only authorization boundary and the unshipped Polkit helper proof of concept.
+
 ## 1.4.7 - 2026-10-30
 
 ### Debian 13 & MATE Compatibility and Store Reliability
