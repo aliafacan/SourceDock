@@ -40,4 +40,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/*.deb dist/*.sha256 --generate-notes --title "SourceDock $RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/*.deb dist/*.sha256 --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/*.deb dist/*.sha256 --generate-notes --title "SourceDock $RELEASE_TAG"
+          fi
