@@ -18,6 +18,12 @@
   <categories><category>System</category><category>PackageManager</category></categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.8" date="2026-11-02" type="stable">
+      <description>
+        <p>Improves APT authorization classification, preserves application-list position across refreshes, restores reliable Store search and separates package download progress from installation phases.</p>
+        <p>Adds explicit operation capabilities, safe cancellation requests for critical package transactions and verified read-only rollback previews.</p>
+      </description>
+    </release>
     <release version="1.4.7" date="2026-10-30" type="stable">
       <description>
         <p>Fixes Store category RecursionError on Debian 13/MATE, improves APT sudo authorization error handling and adds privilege guidance.</p>

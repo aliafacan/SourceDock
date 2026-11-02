@@ -1,9 +1,12 @@
 # Authorization and Cancellation
 
-The active implementation retains sudo for compatibility. It never launches the
-GTK application as root. Privileged commands use argv lists and stdin authentication;
-passwords are cleared when the operation finishes or fails. Streaming diagnostics
-mask secrets and home paths. A shared lock serializes privileged operations.
+The active implementation uses sudo when available and supports a sudo-less
+root-login system only when the already-running process has UID 0. It never
+elevates an unprivileged process and never launches the GTK application as root
+as an authorization workaround. Privileged commands use argv lists and stdin
+authentication; passwords are cleared when the operation finishes or fails.
+Streaming diagnostics mask secrets and home paths. A shared lock serializes
+privileged operations.
 
 Critical commands cannot be cancelled from the UI. Subprocess deadlines use a
 nonblocking selector, so silence does not disable the timeout. Safe cancellation
@@ -38,7 +41,7 @@ that helper, not permit arbitrary shell execution. GUI code remains unprivileged
 Read-only proof of the simulation boundary:
 
 ```bash
-apt-get --simulate -o Debug::NoLocking=true install -- ./packaging/sourcedock_1.4.1_all.deb
+apt-get --simulate -o Debug::NoLocking=true install -- ./packaging/sourcedock_1.4.8_all.deb
 ```
 
 `backend/previews.py` implements that command and tests assert that it never calls
@@ -58,8 +61,8 @@ The review now includes a small, auditable PoC under `packaging/polkit/`:
   argv list. It never uses a shell and never re-executes sudo.
 
 `packaging/build_deb.sh` intentionally does **not** install either file, so the
-active `1.4.1` behavior is unchanged. `tests/test_polkit_helper.py` pins the
+active `1.4.8` behavior remains limited to the reviewed sudo/direct-root paths.
+`tests/test_polkit_helper.py` pins the
 security properties. Enabling this path still requires an independent review, a
 D-Bus-activated variant for the custom action, and per-distribution acceptance;
 that part remains open.
-
