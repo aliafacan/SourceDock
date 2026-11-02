@@ -26,7 +26,7 @@ class ShellViewMixin:
         self.header_search = Gtk.SearchEntry()
         self.header_search.set_width_chars(24)
         self.header_search.set_max_width_chars(28)
-        self.header_search.connect("search-changed", self._on_global_search_changed)
+        self.header_search.connect("changed", self._on_global_search_changed)
         self.header_search.connect("activate", self._on_global_search_activate)
         self.header.pack_start(self.header_search)
         self.header_updates_btn = Gtk.Button()
@@ -352,7 +352,7 @@ class ShellViewMixin:
         dialog.destroy()
 
     def _on_global_search_changed(self, entry):
-        if self._suppress_global_search_changed:
+        if self._suppress_global_search_changed or getattr(self, "_syncing_global_search", False):
             return
         page = self.pages.get_current_page()
         target = self._search_entry_for_page(page)
@@ -368,24 +368,11 @@ class ShellViewMixin:
             # explicitly and keep one search request per header change.
             handler = {
                 0: self.on_applications_search_changed,
+                1: self._on_store_search_changed,
                 2: self._on_packages_search_changed,
             }.get(page)
             if handler is not None:
                 handler(target)
-        if cursor_position is not None:
-            position = min(cursor_position, len(entry.get_text()))
-            entry.set_position(position)
-
-            # GTK may apply the SearchEntry's internal update after the
-            # signal handler returns and reset the cursor to the beginning.
-            # Restore it once more at the end of the main-loop turn.
-            def restore_cursor():
-                if entry.get_text() == self.header_search.get_text():
-                    entry.set_position(min(position, len(entry.get_text())))
-                return False
-
-            GLib.idle_add(restore_cursor)
-
     def _on_global_search_activate(self, _entry):
         if self.pages.get_current_page() not in (0, 1, 2):
             self.pages.set_current_page(1)

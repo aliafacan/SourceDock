@@ -158,7 +158,60 @@ class OperationsViewMixin:
         history_box.pack_start(history_actions, False, False, 0)
         history_expander.add(history_box)
         container.pack_start(history_expander, False, False, 0)
+        preview = Gtk.Button(label=t(self.preferences.language, "rollback_preview"))
+        preview.connect("clicked", self._show_apt_rollback_preview)
+        history_actions.pack_start(preview, False, False, 0)
         self._refresh_history()
+
+    def _show_apt_rollback_preview(self, button):
+        runners = (self.application_registry.runner, self.store_registry.runner)
+        records = [(runner, record) for runner in runners
+                   for record in getattr(runner, "apt_transactions", {}).values()]
+        dialog = Gtk.Dialog(title=t(self.preferences.language, "rollback_preview"),
+                            transient_for=self, modal=True)
+        dialog.set_default_size(680, 440)
+        dialog.add_button(t(self.preferences.language, "progress_close"), Gtk.ResponseType.CLOSE)
+        box = dialog.get_content_area()
+        note = Gtk.Label(label=t(self.preferences.language, "rollback_preview_only"), xalign=0)
+        note.set_line_wrap(True)
+        box.pack_start(note, False, False, 8)
+        combo = Gtk.ComboBoxText()
+        for index, (_runner, record) in enumerate(records):
+            combo.append(str(index), f"{record.id[:8]}: {' '.join(record.command)}")
+        box.pack_start(combo, False, False, 8)
+        output = Gtk.TextView(editable=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+        scroll = Gtk.ScrolledWindow()
+        scroll.add(output)
+        box.pack_start(scroll, True, True, 0)
+        generation = [0]
+        def changed(widget):
+            generation[0] += 1
+            token = generation[0]
+            index = widget.get_active()
+            if index < 0:
+                return
+            runner, record = records[index]
+            output.get_buffer().set_text(t(self.preferences.language, "progress_preparing"))
+            def worker():
+                try:
+                    message = record.preview(runner) or t(self.preferences.language, "rollback_no_changes")
+                except Exception as exc:
+                    message = str(exc)
+                def finish():
+                    if token == generation[0]:
+                        output.get_buffer().set_text(message)
+                    return False
+                GLib.idle_add(finish)
+            threading.Thread(target=worker, daemon=True).start()
+        combo.connect("changed", changed)
+        if records:
+            combo.set_active(len(records) - 1)
+        else:
+            output.get_buffer().set_text(t(self.preferences.language, "rollback_no_record"))
+        dialog.show_all()
+        dialog.run()
+        generation[0] += 1
+        dialog.destroy()
 
     def _register_active_op(
         self,
@@ -168,6 +221,8 @@ class OperationsViewMixin:
         pixbuf: GdkPixbuf.Pixbuf | None,
         download_size: str = "",
         cancel_fn=None,
+        runner=None,
+        op_id=None,
     ) -> None:
         self._active_ops[key] = {
             "command": command,
@@ -175,11 +230,57 @@ class OperationsViewMixin:
             "display_summary": summary,
             "pixbuf": pixbuf,
             "cancel_fn": cancel_fn,
+            "runner": runner,
+            "op_id": op_id,
         }
+        if runner is not None and op_id:
+            runner.prepare_operation(op_id)
+        if not getattr(self, "_operation_poll_source", None):
+            self._operation_poll_source = GLib.timeout_add(250, self._poll_operation_rows)
         self._refresh_operations_list()
+
+    def _operation_capabilities(self, op):
+        runner, op_id = op.get("runner"), op.get("op_id")
+        if runner is None or not op_id:
+            return {}
+        return runner.operation_status(op_id)
+
+    def _poll_operation_rows(self):
+        if not self._active_ops or getattr(self, "_release_check_destroyed", False):
+            self._operation_poll_source = None
+            return False
+        for row in self.operations_store:
+            op = self._active_ops.get(row[4])
+            if op:
+                capabilities = self._operation_capabilities(op)
+                state = t(self.preferences.language, "operation_state_" + capabilities.get("state", "UNKNOWN").lower())
+                text = f"{op['display_summary']} — {state}"
+                if row[_OC_COMMAND] != text:
+                    row[_OC_COMMAND] = text
+        self._sync_cancel_capabilities()
+        return True
+
+    def _sync_cancel_capabilities(self):
+        capabilities = [self._operation_capabilities(op) for op in self._active_ops.values()]
+        self.operations_cancel_btn.set_visible(any(c.get("can_cancel") or c.get("can_request_cancel") for c in capabilities))
+        self._on_operations_selection_changed(self.operations_tree.get_selection())
+
+    def _request_operation_cancel(self, key):
+        op = self._active_ops.get(key)
+        if not op or op.get("runner") is None:
+            return False
+        result = op["runner"].request_cancel(op["op_id"])
+        if result != "finished":
+            self.clear_cached_sudo_password()
+        if result == "pending":
+            op["display_summary"] = t(self.preferences.language, "cancel_pending")
+        self._poll_operation_rows()
+        return result == "cancelled"
 
     def _unregister_active_op(self, key: str, success=None, message="") -> None:
         operation = self._active_ops.pop(key, None)
+        if operation and operation.get("runner") is not None:
+            operation["runner"].complete_task(operation["op_id"], bool(success))
         if operation and success is not None:
             try:
                 self.operation_history.append(
@@ -194,7 +295,7 @@ class OperationsViewMixin:
         op = self._active_ops.get(key)
         if op:
             op["display_summary"] = f"{op['base_summary']} ({label})"
-            self._refresh_operations_list()
+            # The bounded timer updates only changed rows and keeps selection.
 
     def _on_operations_refresh(self, *_args) -> None:
         self._refresh_operations_list()
@@ -218,6 +319,8 @@ class OperationsViewMixin:
         return False
 
     def _refresh_operations_list(self) -> None:
+        model, selected = self.operations_tree.get_selection().get_selected()
+        selected_key = model[selected][4] if selected is not None else None
         self.operations_store.clear()
         lang = self.preferences.language
         for key, op in self._active_ops.items():
@@ -249,25 +352,23 @@ class OperationsViewMixin:
                 t(lang, "operations_empty_body"),
                 icon_name="system-run-symbolic",
             )
-        def can_cancel(op):
-            cancel = op.get("cancel_fn")
-            owner = getattr(cancel, "__self__", None)
-            runner = getattr(owner, "_stream_runner", owner)
-            return bool(cancel and getattr(runner, "_cancel_allowed", False))
-
-        has_cancellable = any(can_cancel(op) for op in self._active_ops.values())
-        self.operations_cancel_btn.set_visible(has_cancellable)
-        self.operations_cancel_btn.set_sensitive(False)
+        if selected_key:
+            for row in self.operations_store:
+                if row[4] == selected_key:
+                    self.operations_tree.get_selection().select_iter(row.iter)
+                    break
+        self._sync_cancel_capabilities()
 
     def _on_operations_selection_changed(self, selection: Gtk.TreeSelection) -> None:
         model, it = selection.get_selected()
         key = model.get_value(it, 4) if it is not None else ""
         operation = self._active_ops.get(key, {})
-        cancel = operation.get("cancel_fn")
-        owner = getattr(cancel, "__self__", None)
-        runner = getattr(owner, "_stream_runner", owner)
+        capabilities = self._operation_capabilities(operation)
         self.operations_pause_btn.set_sensitive(False)
-        self.operations_cancel_btn.set_sensitive(bool(cancel and getattr(runner, "_cancel_allowed", False)))
+        self.operations_cancel_btn.set_sensitive(bool(capabilities.get("can_cancel") or capabilities.get("can_request_cancel")))
+        label = "request_cancel" if capabilities.get("can_request_cancel") else "btn_cancel"
+        self.operations_cancel_btn.set_label(t(self.preferences.language, label))
+        self.operations_cancel_btn.set_tooltip_text(t(self.preferences.language, "cancel_pending" if capabilities.get("critical") else "btn_cancel"))
 
     def _on_operations_pause(self, *_args) -> None:
         return
@@ -278,10 +379,7 @@ class OperationsViewMixin:
         if it is None:
             return
         key = model.get_value(it, 4)
-        cancel = self._active_ops.get(key, {}).get("cancel_fn")
-        if cancel and not cancel():
-            self._show_error_dialog(t(self.preferences.language, "cancel_critical"))
-        self._refresh_operations_list()
+        self._request_operation_cancel(key)
 
     def _refresh_history(self):
         self.operations_history_expander.set_label(t(self.preferences.language, "operation_history"))

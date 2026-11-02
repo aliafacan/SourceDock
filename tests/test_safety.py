@@ -568,6 +568,7 @@ class TestProcessSafety(unittest.TestCase):
                     "run",
                     side_effect=[
                         subprocess.CompletedProcess([], 1, "", ""),
+                        subprocess.CompletedProcess([], 0, "", ""),  # isolated sudo validation
                         subprocess.CompletedProcess([], code, "", "failure" if code else ""),
                     ],
                 ),

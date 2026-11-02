@@ -182,7 +182,7 @@ class TestDebianMatePrivilegeAuth(unittest.TestCase):
             self.runner.set_sudo_password("test_secret")
             result = subprocess.CompletedProcess(args=["sudo"], returncode=1, stdout="", stderr=msg)
             with self.assertRaises(AuthRequiredError):
-                self.runner._raise_for_privileged_result(result, ["apt-get", "install"])
+                self.runner._raise_for_privileged_result(result, ["sudo", "-v"], auth_only=True)
             self.assertIsNone(self.runner._sudo_password)
 
     def test_privileged_result_redacts_password_in_errors(self):

@@ -63,15 +63,13 @@ class StoreViewMixin:
         self.store_search_entry = Gtk.SearchEntry()
         self.store_search_entry.set_hexpand(True)
         self.store_search_entry.connect("activate", self.on_store_search)
-        self.store_search_entry.set_no_show_all(True)
-        self.store_search_entry.hide()
+        self.store_search_entry.connect("changed", self._on_store_search_changed)
         search_row.pack_start(self.store_search_entry, True, True, 0)
 
         self.store_search_btn = Gtk.Button()
         self.store_search_btn.get_style_context().add_class("suggested-action")
         self.store_search_btn.connect("clicked", self.on_store_search)
-        self.store_search_btn.set_no_show_all(True)
-        self.store_search_btn.hide()
+
         search_row.pack_start(self.store_search_btn, False, False, 0)
 
         filter_row = Gtk.FlowBox()
@@ -296,6 +294,21 @@ class StoreViewMixin:
         ):
             return
         query = self.store_search_entry.get_text().strip()
+        if self.header_search.get_text() != self.store_search_entry.get_text():
+            self._syncing_global_search = True
+            try:
+                self.header_search.set_text(self.store_search_entry.get_text())
+            finally:
+                self._syncing_global_search = False
+        if getattr(self, "_updating_category_buttons", False):
+            return
+        # Typing invalidates in-flight results even before the next submission.
+        active = getattr(self, "_active_store_search_key", None)
+        if active and active[0] != query:
+            self._store_search_generation += 1
+            self._active_store_search_key = None
+            self.store_busy = False
+        self.store_search_btn.set_sensitive(True)
         category_queries = {"office", "editor", "browser", "graphics", "system"}
         if query not in category_queries:
             self._updating_category_buttons = True
@@ -364,14 +377,14 @@ class StoreViewMixin:
         generation = self._store_search_generation
         self.store_busy = True
         self.store_state.show_state(t(self.preferences.language, "store_searching"), loading=True)
-        self.store_search_btn.set_sensitive(False)
+        self.store_search_btn.set_sensitive(True)
         self.store_search_entry.set_sensitive(True)
         self._set_store_status(t(self.preferences.language, "store_searching"), "#666666")
         self.store_results_store.clear()
 
         def worker():
             try:
-                sources = None if self.store_filter_source == "all" else {self.store_filter_source}
+                sources = None if filter_source == "all" else {filter_source}
                 published = False
 
                 def publish(results, complete):
@@ -401,7 +414,7 @@ class StoreViewMixin:
         if complete or error:
             self._active_store_search_key = None
         self.store_busy = not complete
-        self.store_search_btn.set_sensitive(complete)
+        self.store_search_btn.set_sensitive(True)
         self.store_search_entry.set_sensitive(True)
         if error:
             self.store_state.show_state(
@@ -513,7 +526,7 @@ class StoreViewMixin:
         classic_flag = "--classic " if classic else ""
         op_cmd = f"{result.source} install {classic_flag}{remote} {result.app_id}"
         op_id = f"op_store_{self._active_op_seq}_{int(time.monotonic() * 1000)}"
-        cancel_action = lambda: self.store_registry.cancel_current(target=op_id)
+        cancel_action = lambda: self._request_operation_cancel(op_key)
 
         self._register_active_op(
             op_key,
@@ -522,6 +535,8 @@ class StoreViewMixin:
             self._get_store_pixbuf(result),
             download_size=result.download_size_str or "",
             cancel_fn=cancel_action,
+            runner=self.store_registry.runner,
+            op_id=op_id,
         )
 
         progress_dialog = OperationProgressWindow(
@@ -638,6 +653,12 @@ class StoreViewMixin:
         retry_key: str = "store_password_retry",
         classic: bool = False,
     ) -> bool:
+        if not self.store_busy:
+            return False
+        if int(retry) >= 3:
+            self.clear_cached_sudo_password()
+            self._finish_store_install(False, t(self.preferences.language, "auth_retry_limit"))
+            return False
         if retry or getattr(exc, "password_failed", False):
             if hasattr(self, "clear_cached_sudo_password"):
                 self.clear_cached_sudo_password()
@@ -662,7 +683,7 @@ class StoreViewMixin:
             self._cached_sudo_password = password
         self.store_registry.set_sudo_password(password)
         self.store_busy = False
-        self._run_store_install(result, retry=True, classic=classic)
+        self._run_store_install(result, retry=int(retry) + 1, classic=classic)
         return False
 
     def _finish_store_install(self, success: bool, message: str) -> bool:

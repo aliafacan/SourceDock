@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from sourcedock.ui.components.view_state import ApplicationViewState
+
 from collections.abc import Callable
 from dataclasses import replace
 import os
@@ -68,6 +70,7 @@ class InstalledAppCard(Gtk.Button):
 
     def __init__(self, application: UnifiedApplication, pixbuf, on_details, language: str) -> None:
         super().__init__()
+        self.application_id = application.id
         self.get_style_context().add_class("app-card")
         self.set_size_request(240, 160)
         self.set_hexpand(True)
@@ -1024,24 +1027,27 @@ class InstalledViewMixin:
             "first_meaningful_ms": None,
             "complete_ms": None,
         }
-        self.installed_state.show_state(t(self.preferences.language, "applications_loading"), loading=True)
+        if not self.applications:
+            self.installed_state.show_state(t(self.preferences.language, "applications_loading"), loading=True)
         self._set_application_controls_sensitive(False)
         self._set_applications_status(t(self.preferences.language, "applications_loading"), "#666666")
-        threading.Thread(target=self._load_applications_worker, daemon=True).start()
+        self._application_load_generation = getattr(self, "_application_load_generation", 0) + 1
+        generation = self._application_load_generation
+        threading.Thread(target=self._load_applications_worker, args=(generation,), daemon=True).start()
 
-    def _load_applications_worker(self) -> None:
+    def _load_applications_worker(self, generation=None) -> None:
         def publish(snapshot, complete):
-            GLib.idle_add(self._finish_applications_load, snapshot, complete)
+            GLib.idle_add(self._finish_applications_load, snapshot, complete, generation)
 
         progressive_loader = getattr(self.application_registry, "load_progressive", None)
         try:
             if callable(progressive_loader):
                 progressive_loader(publish, include_updates=False)
             else:
-                GLib.idle_add(self._finish_applications_load, self.application_registry.load(), True)
+                GLib.idle_add(self._finish_applications_load, self.application_registry.load(), True, generation)
         except Exception as exc:
             failed = ApplicationSnapshot([], provider_errors=[str(exc)])
-            GLib.idle_add(self._finish_applications_load, failed, True)
+            GLib.idle_add(self._finish_applications_load, failed, True, generation)
 
     def _load_update_status_for_installed(self) -> None:
         """Load update metadata only when the user asks for that filter."""
@@ -1157,7 +1163,12 @@ class InstalledViewMixin:
         self._set_applications_status(t(self.preferences.language, status_key), "#666666")
         return False
 
-    def _finish_applications_load(self, snapshot: ApplicationSnapshot, complete: bool = True) -> bool:
+    def _finish_applications_load(self, snapshot: ApplicationSnapshot, complete: bool = True, generation=None) -> bool:
+        if generation is not None and generation != getattr(self, "_application_load_generation", None):
+            return False
+        # Keep a complete existing inventory visible while providers rescan.
+        if self.applications and not complete:
+            return False
         if not hasattr(self, "_application_load_started_at"):
             self._application_load_started_at = time.perf_counter()
         if self.application_load_metrics.get("first_snapshot_ms") is None:
@@ -1254,7 +1265,7 @@ class InstalledViewMixin:
         op_key = f"app_{self._active_op_seq}"
         op_id = f"op_installed_{self._active_op_seq}_{int(time.monotonic() * 1000)}"
         runner = self.application_registry.runner
-        cancel_action = lambda: runner.cancel_current(target=op_id)
+        cancel_action = lambda: self._request_operation_cancel(op_key)
 
         self._register_active_op(
             op_key,
@@ -1262,6 +1273,8 @@ class InstalledViewMixin:
             progress_message or action_name,
             None,
             cancel_fn=cancel_action,
+            runner=runner,
+            op_id=op_id,
         )
 
         progress_dialog = OperationProgressWindow(
@@ -1369,6 +1382,12 @@ class InstalledViewMixin:
         progress_message: str,
         retry: bool,
     ) -> bool:
+        if not self.applications_busy:
+            return False
+        if int(retry) >= 3:
+            self.clear_cached_sudo_password()
+            self._finish_application_task(False, t(self.preferences.language, "auth_retry_limit"), False)
+            return False
         if retry or exc.password_failed:
             if hasattr(self, "clear_cached_sudo_password"):
                 self.clear_cached_sudo_password()
@@ -1393,7 +1412,7 @@ class InstalledViewMixin:
             progress_title_key=progress_title_key,
             refresh_after=refresh_after,
             progress_message=progress_message,
-            retry=True,
+            retry=int(retry) + 1,
         )
         return False
 
@@ -1455,31 +1474,31 @@ class InstalledViewMixin:
         if not hasattr(self, "applications_store") or self.applications_store is None:
             return
 
-        # Capture current scroll positions and selected item before clearing
-        saved_table_scroll = 0.0
-        if hasattr(self, "apps_scroller") and self.apps_scroller is not None:
-            vadj = self.apps_scroller.get_vadjustment()
-            if vadj:
-                saved_table_scroll = vadj.get_value()
-        saved_cards_scroll = 0.0
-        if hasattr(self, "cards_scroll") and self.cards_scroll is not None:
-            vadj = self.cards_scroll.get_vadjustment()
-            if vadj:
-                saved_cards_scroll = vadj.get_value()
-
-        selected_app_id = None
-        if hasattr(self, "applications_tree") and self.applications_tree is not None:
-            selection = self.applications_tree.get_selection()
-            if selection:
-                model, paths = selection.get_selected_rows()
-                if paths:
-                    try:
-                        it = model.get_iter(paths[0])
-                        app = model.get_value(it, 9)
-                        if app:
-                            selected_app_id = getattr(app, "id", None)
-                    except Exception:
-                        pass
+        self._application_render_generation = getattr(self, "_application_render_generation", 0) + 1
+        generation = self._application_render_generation
+        is_grid = self.applications_view_stack.get_visible_child_name() == "cards"
+        scroller = self.cards_scroll if is_grid else self.apps_scroller
+        adjustment = scroller.get_vadjustment()
+        state = ApplicationViewState(scroll_value=adjustment.get_value())
+        model, paths = self.applications_tree.get_selection().get_selected_rows()
+        state.selected_ids = {model[path][9].id for path in paths}
+        if is_grid:
+            children = self.applications_cards.get_children()
+            state.ordered_ids = [child.application_id for child in children]
+            for child in children:
+                area = child.get_allocation()
+                if area.y + area.height > state.scroll_value:
+                    state.anchor_id = child.application_id
+                    state.anchor_offset = area.y - state.scroll_value
+                    break
+        else:
+            state.ordered_ids = [row[9].id for row in model]
+            visible = self.applications_tree.get_visible_range()
+            if visible:
+                path = visible[0]
+                state.anchor_id = model[path][9].id
+                area = self.applications_tree.get_background_area(path, None)
+                state.anchor_offset = self.applications_tree.convert_bin_window_to_tree_coords(0, area.y)[1] - state.scroll_value
 
         self.applications_store.clear()
         filtered = self._filtered_application_items()
@@ -1520,28 +1539,57 @@ class InstalledViewMixin:
                     language=self.preferences.language,
                 )
                 self.applications_cards.add(card)
+            # GTK exposes FlowBoxChild wrappers from get_children(); mirror
+            # the stable card identity on the wrapper so anchor capture and
+            # restoration do not depend on widget internals.
+            for child in self.applications_cards.get_children():
+                card = child.get_child()
+                if card is not None and hasattr(card, "application_id"):
+                    child.application_id = card.application_id
             self.applications_cards.show_all()
 
-        def _restore_scroll_and_selection():
-            if hasattr(self, "apps_scroller") and self.apps_scroller is not None:
-                vadj = self.apps_scroller.get_vadjustment()
-                if vadj:
-                    max_scroll = max(0.0, vadj.get_upper() - vadj.get_page_size())
-                    vadj.set_value(min(saved_table_scroll, max_scroll))
-            if hasattr(self, "cards_scroll") and self.cards_scroll is not None:
-                vadj = self.cards_scroll.get_vadjustment()
-                if vadj:
-                    max_scroll = max(0.0, vadj.get_upper() - vadj.get_page_size())
-                    vadj.set_value(min(saved_cards_scroll, max_scroll))
-            if selected_app_id and hasattr(self, "applications_tree") and self.applications_store:
-                for row in self.applications_store:
-                    app = row[9]
-                    if app and getattr(app, "id", None) == selected_app_id:
-                        self.applications_tree.get_selection().select_iter(row.iter)
+        selection = self.applications_tree.get_selection()
+        for row in self.applications_store:
+            if row[9].id in state.selected_ids:
+                selection.select_iter(row.iter)
+        anchor = state.surviving_anchor({row[9].id for row in self.applications_store})
+        # Wait for GTK's allocation, not just model population. A newer render
+        # invalidates this callback; user scroll events invalidate it too.
+        epoch = getattr(self, "_application_scroll_epoch", 0)
+        if not getattr(self, "_application_scroll_hooks", False):
+            def user_scroll(*_args):
+                self._application_scroll_epoch = getattr(self, "_application_scroll_epoch", 0) + 1
+                return False
+            for widget in (self.apps_scroller, self.cards_scroll):
+                widget.connect("scroll-event", user_scroll)
+                widget.connect("button-press-event", user_scroll)
+                widget.connect("key-press-event", user_scroll)
+            self._application_scroll_hooks = True
+        frames = 0
+
+        def restore(widget, _clock):
+            nonlocal frames
+            if generation != self._application_render_generation or epoch != getattr(self, "_application_scroll_epoch", 0):
+                return False
+            frames += 1
+            if frames < 2:
+                return True
+            value = state.scroll_value
+            if is_grid:
+                for child in self.applications_cards.get_children():
+                    if child.application_id == anchor:
+                        value = child.get_allocation().y - state.anchor_offset
                         break
+            else:
+                for row in self.applications_store:
+                    if row[9].id == anchor:
+                        area = self.applications_tree.get_background_area(row.path, None)
+                        value = self.applications_tree.convert_bin_window_to_tree_coords(0, area.y)[1] - state.anchor_offset
+                        break
+            adjustment.set_value(max(0.0, min(value, adjustment.get_upper() - adjustment.get_page_size())))
             return False
 
-        GLib.idle_add(_restore_scroll_and_selection)
+        scroller.add_tick_callback(restore)
 
         total = len(self._application_items_with_update_status())
 
@@ -1852,6 +1900,7 @@ class InstalledViewMixin:
             return
         current = self.applications_category_combo.get_active_id() or "__all__"
         cats = sorted({app.category for app in self.applications if app.category})
+        self._updating_application_categories = True
         self.applications_category_combo.remove_all()
         lang = self.preferences.language
         self.applications_category_combo.append("__all__", t(lang, "applications_category_all"))
@@ -1862,8 +1911,12 @@ class InstalledViewMixin:
             self.applications_category_combo.set_active_id(current)
         else:
             self.applications_category_combo.set_active(0)
+        self._updating_application_categories = False
+        self.application_filter_category = self.applications_category_combo.get_active_id() or "__all__"
 
     def _on_category_filter_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if getattr(self, "_updating_application_categories", False):
+            return
         active_id = combo.get_active_id() or "__all__"
         self.application_filter_category = active_id
         self._render_applications_list()

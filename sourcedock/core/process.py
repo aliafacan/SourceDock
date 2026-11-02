@@ -146,7 +146,7 @@ def stream_process(
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
             while selector.get_map():
-                if cancelled and cancelled():
+                if not critical and cancelled and cancelled():
                     if cancellation_deadline is None:
                         cancellation_deadline = time.monotonic() + 0.5
                     elif time.monotonic() >= cancellation_deadline:
