@@ -1456,19 +1456,10 @@ class InstalledViewMixin:
         return None
 
     def _get_app_date_fallback(self, app: UnifiedApplication) -> tuple[str, str]:
-        inst_date = app.installed_date
-        last_upd = app.last_updated
-        if not inst_date and not last_upd and app.desktop_file and os.path.isfile(app.desktop_file):
-            try:
-                mtime = os.path.getmtime(app.desktop_file)
-                from datetime import datetime
-
-                d = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-                inst_date = d
-                last_upd = d
-            except OSError:
-                pass
-        return inst_date or "-", last_upd or inst_date or "-"
+        unknown = t(self.preferences.language, "date_unknown")
+        # Desktop files are replaced by normal package upgrades. Their mtime is
+        # therefore neither an installation date nor a verified update date.
+        return app.installed_date or unknown, app.last_updated or unknown
 
     def _render_applications_list(self) -> None:
         if not hasattr(self, "applications_store") or self.applications_store is None:
@@ -2080,21 +2071,54 @@ class InstalledViewMixin:
         selected_apps = [app for app in selected_apps if app.source != SOURCE_FIRMWARE]
         if not selected_apps:
             return
-        dialog = Gtk.MessageDialog(
+        dialog = Gtk.Dialog(
+            title=t(lang, "bulk_remove_title").format(count=len(selected_apps)),
             transient_for=self,
             modal=True,
             destroy_with_parent=True,
-            type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.NONE,
-            text=t(lang, "bulk_remove_title").format(count=len(selected_apps)),
         )
         make_window_movable(dialog)
         dialog.get_style_context().add_class("icon-settings-window")
-        dialog.format_secondary_text("\n".join(f"{app.name} ({app.source.upper()})" for app in selected_apps))
+        screen = Gdk.Screen.get_default()
+        if screen is not None:
+            parent_window = self.get_window()
+            monitor = (
+                screen.get_monitor_at_window(parent_window)
+                if parent_window is not None
+                else screen.get_primary_monitor()
+            )
+            geometry = screen.get_monitor_geometry(monitor)
+            height = min(560, max(360, geometry.height - 120))
+        else:
+            height = 500
+        dialog.set_default_size(600, height)
         dialog.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         del_btn = dialog.add_button(t(lang, "applications_remove_selected"), Gtk.ResponseType.OK)
         del_btn.get_style_context().add_class("destructive-action")
-        add_sensitive_removal_confirmation(dialog.get_content_area(), del_btn, selected_apps, lang)
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
+
+        selected_label = Gtk.Label(
+            label="\n".join(f"{app.name} ({app.source.upper()})" for app in selected_apps),
+            xalign=0,
+        )
+        selected_label.set_selectable(True)
+        selected_label.set_line_wrap(True)
+        selected_label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        selected_label.set_valign(Gtk.Align.START)
+        selected_scroll = Gtk.ScrolledWindow()
+        selected_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        selected_scroll.set_min_content_height(80)
+        selected_scroll.set_max_content_height(320)
+        selected_scroll.set_vexpand(True)
+        selected_scroll.add(selected_label)
+        content.pack_start(selected_scroll, True, True, 0)
+
+        add_sensitive_removal_confirmation(content, del_btn, selected_apps, lang)
         dialog.show_all()
         if dialog.run() == Gtk.ResponseType.OK:
             dialog.destroy()

@@ -2115,9 +2115,7 @@ sys.exit(0)
             self.assertTrue(dlg.result_container.get_visible())
 
     def test_regression_p_apt_upgradable_queries_use_lock_timeout_zero(self):
-        """APT list --upgradable queries must use DPkg::Lock::Timeout=0 and 10s timeout,
-        failing fast or filtering errors gracefully so concurrent operations/store searches
-        never block or crash when dpkg/apt lock is held."""
+        """APT update checks stay read-only and never turn command failure into all-clear."""
         from sourcedock.backend.apt import AptProvider
 
         runner = MagicMock()
@@ -2135,7 +2133,7 @@ sys.exit(0)
         cmd_called = runner.run.call_args[0][0]
         timeout_called = runner.run.call_args[1].get("timeout")
         self.assertEqual(cmd_called, ["apt", "-o", "DPkg::Lock::Timeout=0", "list", "--upgradable", "-q"])
-        self.assertEqual(timeout_called, 10)
+        self.assertEqual(timeout_called, 45)
 
         runner.run.return_value = subprocess.CompletedProcess(
             args=["apt"],
@@ -2143,8 +2141,10 @@ sys.exit(0)
             stdout="",
             stderr="E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 12345 (apt)\nW: Some index files failed to download.\nError: Failed to fetch\n",
         )
-        self.assertEqual(provider._upgradable_packages(), set())
-        self.assertEqual(provider._upgradable_packages_with_versions(), {})
+        with self.assertRaises(BackendError):
+            provider._upgradable_packages()
+        with self.assertRaises(BackendError):
+            provider._upgradable_packages_with_versions()
 
 if __name__ == "__main__":
     unittest.main()

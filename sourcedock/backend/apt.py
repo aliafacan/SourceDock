@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+import bz2
 import glob
 import gzip
+import lzma
 import os
 from pathlib import Path
+import re
 
 from sourcedock.core.models import (
     APT_LOCK_NOWAIT,
@@ -35,6 +38,48 @@ def _safe_int(value: str) -> int | None:
         return None
 
 
+_APT_UPGRADABLE_LINE = re.compile(
+    r"^(?P<name>[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9-]*)?)/\S+\s+"
+    r"(?P<version>\S+)(?:\s+|$)",
+    re.IGNORECASE,
+)
+
+
+def _base_package_name(name: str) -> str:
+    """Return the Debian source name without discarding normal name punctuation."""
+    return name.rsplit(":", 1)[0] if ":" in name else name
+
+
+def _parse_apt_upgradable_output(output: str) -> dict[str, str]:
+    """Parse machine-shaped fields from ``apt list --upgradable`` output.
+
+    Headers and warnings are deliberately ignored instead of matching their
+    translated prose. A slash-bearing package row is structural and must be
+    valid; otherwise the inventory is incomplete and must not look like zero
+    updates.
+    """
+    rows: list[tuple[str, str, str]] = []
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or "/" not in line:
+            continue
+        match = _APT_UPGRADABLE_LINE.match(line)
+        if not match:
+            raise BackendError(f"APT güncelleme çıktısı ayrıştırılamadı: {line[:200]}")
+        fields = line.split()
+        architecture = fields[2] if len(fields) >= 3 else ""
+        rows.append((match.group("name"), match.group("version"), architecture))
+    versions: dict[str, str] = {}
+    duplicate_names = {
+        name for name, _version, _architecture in rows
+        if sum(candidate == name for candidate, _v, _a in rows) > 1
+    }
+    for name, version, architecture in rows:
+        key = f"{name}:{architecture}" if name in duplicate_names and ":" not in name and architecture else name
+        versions[key] = version
+    return versions
+
+
 def _parse_dpkg_history_lines(lines) -> tuple[dict[str, str], dict[str, str]]:
     """Parse dpkg events and retain dates for the current installation.
 
@@ -45,13 +90,16 @@ def _parse_dpkg_history_lines(lines) -> tuple[dict[str, str], dict[str, str]]:
 
     installed_at: dict[str, str] = {}
     last_updated: dict[str, str] = {}
-    for line in lines:
+    # Rotated logs can overlap and glob order is not guaranteed. dpkg's
+    # timestamp is ISO-like, so a stable lexical ordering is chronological.
+    ordered_lines = sorted(enumerate(lines), key=lambda item: (" ".join(item[1].split()[:2]), item[0]))
+    for _index, line in ordered_lines:
         parts = line.split()
         if len(parts) < 4:
             continue
         date_str = parts[0]
         action = parts[2]
-        pkg = parts[3].split(":")[0]
+        pkg = parts[3]
         if not pkg:
             continue
         if action == "install":
@@ -68,8 +116,16 @@ def _parse_dpkg_history_lines(lines) -> tuple[dict[str, str], dict[str, str]]:
                 last_updated[pkg] = date_str
         elif action in ("remove", "purge"):
             installed_at.pop(pkg, None)
+            last_updated.pop(pkg, None)
         elif action == "upgrade":
             last_updated[pkg] = date_str
+    for history in (installed_at, last_updated):
+        bases: dict[str, list[str]] = {}
+        for package in list(history):
+            bases.setdefault(_base_package_name(package), []).append(package)
+        for base, qualified in bases.items():
+            if base not in history and len(qualified) == 1:
+                history[base] = history[qualified[0]]
     return installed_at, last_updated
 
 
@@ -81,6 +137,7 @@ class AptProvider(BaseNativeProvider):
 
     def __init__(self, runner: CommandRunner, scanner: DesktopEntryScanner):
         super().__init__(runner, scanner)
+        self._last_update_query_error = ""
 
     def is_available(self) -> bool:
         return self.runner.command_exists("dpkg-query") or self.runner.command_exists("apt")
@@ -114,9 +171,12 @@ class AptProvider(BaseNativeProvider):
         if include_updates:
             try:
                 upgradable = self._upgradable_packages()
-            except (BackendError, OSError):
+                self._last_update_query_error = ""
+            except (BackendError, OSError) as exc:
+                self._last_update_query_error = str(exc)
                 upgradable = set()
         else:
+            self._last_update_query_error = ""
             upgradable = set()
         # Dpkg history and the stat fan-out are secondary metadata. They are
         # intentionally skipped by the fast installed-app inventory and are
@@ -159,12 +219,15 @@ class AptProvider(BaseNativeProvider):
 
     def _owning_packages(self, paths: list[str]) -> dict[str, str]:
         result = self.runner.run(["dpkg-query", "-S", *paths], timeout=30)
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
+            raise BackendError(f"dpkg dosya sahipliği sorgusu başarısız: {detail}")
         owners: dict[str, str] = {}
         for line in result.stdout.splitlines():
-            if ":" not in line:
+            if ": " not in line:
                 continue
-            package_part, owned_path = line.split(":", 1)
-            package = package_part.split(",", 1)[0].strip().split(":", 1)[0]
+            package_part, owned_path = line.split(": ", 1)
+            package = package_part.split(",", 1)[0].strip()
             path = owned_path.strip()
             if package and path:
                 owners[path] = package
@@ -177,12 +240,15 @@ class AptProvider(BaseNativeProvider):
             ["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${Installed-Size}\n", *packages],
             timeout=30,
         )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
+            raise BackendError(f"dpkg paket bilgisi sorgusu başarısız: {detail}")
         metadata: dict[str, tuple[str, int | None]] = {}
         for line in result.stdout.splitlines():
             parts = line.split("\t")
             if len(parts) < 2:
                 continue
-            package = parts[0].split(":", 1)[0]
+            package = parts[0]
             version = parts[1]
             size = _safe_int(parts[2]) if len(parts) > 2 else None
             if size is None or size == 0:
@@ -191,7 +257,8 @@ class AptProvider(BaseNativeProvider):
         return metadata
 
     def _calc_package_disk_size(self, package: str) -> int | None:
-        for suffix in ("", ":amd64", ":arm64", ":i386"):
+        suffixes = ("",) if ":" in package else ("", ":amd64", ":arm64", ":i386")
+        for suffix in suffixes:
             list_file = f"/var/lib/dpkg/info/{package}{suffix}.list"
             if os.path.exists(list_file):
                 total_bytes = 0
@@ -211,27 +278,7 @@ class AptProvider(BaseNativeProvider):
         return None
 
     def _upgradable_packages(self) -> set[str]:
-        if not self.runner.command_exists("apt"):
-            return set()
-        result = self.runner.run(
-            ["apt", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "list", "--upgradable", "-q"],
-            timeout=10,
-        )
-        packages: set[str] = set()
-        for line in (result.stdout + result.stderr).splitlines():
-            if "/" not in line:
-                continue
-            name = line.split("/", 1)[0].strip()
-            if (
-                name
-                and not name.lower().startswith("warning")
-                and not name.lower().startswith("listing")
-                and not name.lower().startswith("error")
-                and not name.lower().startswith("e:")
-                and not name.lower().startswith("w:")
-            ):
-                packages.add(name)
-        return packages
+        return set(self._upgradable_packages_with_versions())
 
     def _get_system_install_date(self) -> str:
         for p in ("/var/log/installer/media-info", "/var/log/installer"):
@@ -261,11 +308,14 @@ class AptProvider(BaseNativeProvider):
         all_lines = []
         for fn in log_files:
             try:
-                fh = (
-                    gzip.open(fn, "rt", encoding="utf-8", errors="ignore")
-                    if fn.endswith(".gz")
-                    else open(fn, "rt", encoding="utf-8", errors="ignore")
-                )
+                if fn.endswith(".gz"):
+                    fh = gzip.open(fn, "rt", encoding="utf-8", errors="ignore")
+                elif fn.endswith(".bz2"):
+                    fh = bz2.open(fn, "rt", encoding="utf-8", errors="ignore")
+                elif fn.endswith((".xz", ".lzma")):
+                    fh = lzma.open(fn, "rt", encoding="utf-8", errors="ignore")
+                else:
+                    fh = open(fn, "rt", encoding="utf-8", errors="ignore")
                 with fh:
                     all_lines.extend(fh)
             except Exception:
@@ -278,78 +328,37 @@ class AptProvider(BaseNativeProvider):
             return {}, {}
 
         dpkg_installed, dpkg_last = self._parse_dpkg_history()
-        sys_install_date = self._get_system_install_date()
-
-        # Dpkg .list mtime'ları son güncelleme için kesin referanstır
-        paths = []
-        for pkg in packages:
-            for suffix in ("", ":amd64", ":arm64", ":i386"):
-                paths.append(f"/var/lib/dpkg/info/{pkg}{suffix}.list")
-
-        result = self.runner.run(["stat", "-c", "%n\t%Y", *paths], timeout=20)
-        path_times: dict[str, int] = {}
-        for line in result.stdout.splitlines():
-            if "\t" not in line:
-                continue
-            path_part, ts_part = line.split("\t", 1)
-            try:
-                path_times[path_part.strip()] = int(ts_part.strip())
-            except ValueError:
-                pass
 
         installed_dates: dict[str, str] = {}
         last_updated_dates: dict[str, str] = {}
 
+        def history_value(history: dict[str, str], package: str) -> str:
+            if package in history:
+                return history[package]
+            base = _base_package_name(package)
+            matches = [value for key, value in history.items() if _base_package_name(key) == base]
+            return matches[0] if len(matches) == 1 else ""
+
         for pkg in packages:
-            file_mtime_date = ""
-            for suffix in ("", ":amd64", ":arm64", ":i386"):
-                key = f"/var/lib/dpkg/info/{pkg}{suffix}.list"
-                if key in path_times:
-                    file_mtime_date = datetime.fromtimestamp(path_times[key]).strftime("%Y-%m-%d")
-                    break
-
-            # Dpkg history records the package action date. The .list mtime is
-            # only a fallback because upgrades rewrite that file and can make
-            # installation and update dates appear identical.
-            last_updated_dates[pkg] = dpkg_last.get(pkg, "") or file_mtime_date
-
-            # Geçerli kurulum: remove/purge sonrası yeni install tarihi; yoksa
-            # sistem kurulum tarihi veya .list mtime.
-            if pkg in dpkg_installed:
-                installed_dates[pkg] = dpkg_installed[pkg]
-            elif sys_install_date:
-                installed_dates[pkg] = sys_install_date
-            else:
-                installed_dates[pkg] = file_mtime_date
+            # Only dpkg actions are verified evidence. Both .list and desktop
+            # mtimes are rewritten by upgrades and therefore cannot establish
+            # the start of the current installation instance.
+            installed_dates[pkg] = history_value(dpkg_installed, pkg)
+            last_updated_dates[pkg] = history_value(dpkg_last, pkg)
 
         return installed_dates, last_updated_dates
 
     def _upgradable_packages_with_versions(self) -> dict[str, str]:
         if not self.runner.command_exists("apt"):
-            return {}
+            raise BackendError("APT güncelleme sorgusu kullanılamıyor: apt komutu bulunamadı.")
         result = self.runner.run(
             ["apt", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "list", "--upgradable", "-q"],
-            timeout=10,
+            timeout=45,
         )
-        versions: dict[str, str] = {}
-        for line in (result.stdout + result.stderr).splitlines():
-            if "/" not in line:
-                continue
-            name = line.split("/", 1)[0].strip()
-            if (
-                not name
-                or name.lower().startswith("warning")
-                or name.lower().startswith("listing")
-                or name.lower().startswith("error")
-                or name.lower().startswith("e:")
-                or name.lower().startswith("w:")
-            ):
-                continue
-            parts = line.split()
-            new_ver = parts[1] if len(parts) >= 2 else ""
-            if name and new_ver:
-                versions[name] = new_ver
-        return versions
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
+            raise BackendError(f"APT güncelleme sorgusu başarısız (kod {result.returncode}): {detail}")
+        return _parse_apt_upgradable_output(result.stdout)
 
     def list_all_packages(self) -> list[PackageInfo]:
         if not self.runner.command_exists("dpkg-query"):
@@ -362,6 +371,9 @@ class AptProvider(BaseNativeProvider):
             ],
             timeout=60,
         )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
+            raise BackendError(f"Kurulu APT paketleri okunamadı (kod {result.returncode}): {detail}")
         packages: dict[str, PackageInfo] = {}
         for line in result.stdout.splitlines():
             parts = line.split("\t")
@@ -386,9 +398,17 @@ class AptProvider(BaseNativeProvider):
             )
         upgradable = self._upgradable_packages_with_versions()
         for name, new_ver in upgradable.items():
-            if name in packages:
-                packages[name].update_available = True
-                packages[name].new_version = new_ver
+            package = packages.get(name)
+            if package is None and ":" not in name:
+                matches = [item for key, item in packages.items() if _base_package_name(key) == name]
+                package = matches[0] if len(matches) == 1 else None
+            if package is not None:
+                package.update_available = True
+                package.new_version = new_ver
+            else:
+                raise BackendError(
+                    f"APT {name} paketini güncellenebilir bildirdi ancak kurulu dpkg envanterinde eşleşme bulunamadı."
+                )
         return sorted(packages.values(), key=lambda p: p.name)
 
     def search_store(self, query: str) -> list[StoreResult]:

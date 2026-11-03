@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.4.9 - 2026-11-03
+
+### APT update reliability
+
+- Made the installed dpkg inventory plus `apt list --upgradable` the authoritative APT update source, including kernel, library, command-line, multiarch and third-party repository packages without requiring a `.desktop` launcher.
+- Validate APT/dpkg exit status and structured package rows, retain architecture-qualified identities, and report timeouts, command failures or malformed output as an incomplete update check instead of “up to date”.
+- Increased the read-only APT query timeout from 10 to 45 seconds, invalidated the installed-application cache on manual update refresh, and kept repository metadata refresh (`apt update`) separate and privilege-free unless explicitly requested.
+
+### Store search
+
+- Added an exact Debian package-name lookup through the configured APT candidate database when broad `apt-cache search` misses a package such as Notepadqq.
+- Only show APT search entries with a real candidate, keep exact matches first, and preserve provider failure, timeout, partial-result and cached-result states instead of treating them as genuine zero results.
+
+### Installation dates
+
+- Parse current, rotated and compressed dpkg history chronologically with architecture-aware install, upgrade, remove and purge handling.
+- Preserve the verified installation date across upgrades and establish a new date only after a verified reinstall.
+- Removed dpkg `.list` and `.desktop` modification-time fallbacks; unavailable installation history is now shown as a localized unknown value rather than an invented update date.
+- Versioned the installed-application cache so dates inferred by older releases are not reused.
+
+### Installed applications UI
+
+- Made bulk-removal confirmation dialogs screen-bounded with a scrollable selected-application list, preventing large selections from extending beyond the screen.
+
+### Tests
+
+- Added v1.4.9 regressions for six/zero APT updates, failures and timeouts, multiarch, kernel/library/CLI/third-party packages, held/phased annotations, stale inventories, exact/fallback/unavailable searches, provider partial failures and dpkg installation lifecycles.
+
 ## 1.4.8 - 2026-11-02
 
 ### Stability and safe package operations
