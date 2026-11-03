@@ -58,6 +58,10 @@ _TECHNICAL_PACKAGE_SUFFIXES = (
     "-doc",
     "-translations",
 )
+_EXACT_APT_PACKAGE = re.compile(
+    r"^[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9-]*)?$",
+    re.IGNORECASE,
+)
 
 
 def _looks_like_desktop_package(result: StoreResult, allow_transitional: bool = False) -> bool:
@@ -674,21 +678,32 @@ class StoreRegistry:
     def _apt_candidate_versions(self, pkg_names: list[str]) -> dict[str, str]:
         if not pkg_names:
             return {}
-        try:
-            result = self._run(["apt-cache", "policy", "--"] + pkg_names, timeout=30)
-            versions: dict[str, str] = {}
-            current_pkg = ""
+        result = self._run(["apt-cache", "policy", "--"] + pkg_names, timeout=30)
+        if result.returncode != 0:
+            raise BackendError(result.stderr or result.stdout or "APT candidate query failed.")
+        versions: dict[str, str] = {}
+        current_pkg = ""
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if not line.startswith(" ") and stripped.endswith(":"):
+                current_pkg = stripped[:-1]
+            elif current_pkg and stripped.startswith("Candidate:"):
+                ver = stripped.split(":", 1)[1].strip()
+                if ver and ver != "(none)":
+                    versions[current_pkg] = ver
+        return versions
+
+    def _apt_exact_description(self, package: str) -> str:
+        result = self._run(
+            ["apt-cache", "show", "--no-all-versions", "--", package], timeout=30
+        )
+        if result.returncode != 0:
+            return ""
+        for key in ("Description-en:", "Description:"):
             for line in result.stdout.splitlines():
-                stripped = line.strip()
-                if not line.startswith(" ") and stripped.endswith(":"):
-                    current_pkg = stripped[:-1]
-                elif current_pkg and stripped.startswith("Candidate:"):
-                    ver = stripped.split(":", 1)[1].strip()
-                    if ver and ver != "(none)":
-                        versions[current_pkg] = ver
-            return versions
-        except Exception:
-            return {}
+                if line.startswith(key):
+                    return line.split(":", 1)[1].strip()
+        return ""
 
     def _search_apt(self, query: str) -> list[StoreResult]:
         if not self._command_exists("apt-cache"):
@@ -710,6 +725,8 @@ class StoreRegistry:
                     continue
                 raw_results.append((pkg_name, description))
                 pkg_names.append(pkg_name)
+            if result.stdout.strip() and not raw_results:
+                raise BackendError("APT search returned malformed output.")
             raw_results.sort(
                 key=lambda item: (
                     item[0].casefold() != query.casefold(),
@@ -720,8 +737,20 @@ class StoreRegistry:
             )
             raw_results = raw_results[:60]
             pkg_names = [name for name, _description in raw_results]
-            versions = self._apt_candidate_versions(pkg_names)
+            exact_name = query.casefold() if _EXACT_APT_PACKAGE.fullmatch(query) else ""
+            candidate_names = list(pkg_names)
+            if exact_name and not any(name.casefold() == exact_name.casefold() for name in candidate_names):
+                candidate_names.insert(0, exact_name)
+            versions = self._apt_candidate_versions(candidate_names)
+            if exact_name and exact_name in versions and not any(
+                name.casefold() == exact_name.casefold() for name, _description in raw_results
+            ):
+                raw_results.insert(0, (exact_name, self._apt_exact_description(exact_name)))
             for pkg_name, description in raw_results:
+                # apt-cache can return virtual names and stale text-index rows.
+                # Only a concrete candidate is installable.
+                if pkg_name not in versions:
+                    continue
                 item = StoreResult(
                     name=pkg_name,
                     app_id=pkg_name,

@@ -466,14 +466,25 @@ class UpdatesViewMixin:
 
         def worker():
             try:
+                # Refresh means a fresh read of installed providers and their
+                # update flags. It does not run ``apt update`` or request
+                # privileges; repository metadata refresh remains explicit.
+                self.application_registry.invalidate_application_cache()
                 snapshot = self.application_registry.load()
-                packages = self.application_registry.list_packages()
+                package_errors = []
+                try:
+                    packages = self.application_registry.list_packages()
+                except Exception as exc:
+                    packages = []
+                    package_errors.append(
+                        f"{self.application_registry.native_provider.source}: {exc}"
+                    )
                 items = build_update_catalog(
                     snapshot.applications, packages, self.application_registry.native_provider.source
                 )
                 GLib.idle_add(
                     self._finish_updates_load, items,
-                    snapshot.provider_errors + snapshot.provider_notices, None,
+                    snapshot.provider_errors + package_errors + snapshot.provider_notices, None,
                 )
             except Exception as exc:
                 GLib.idle_add(self._finish_updates_load, [], [], str(exc))
@@ -510,8 +521,15 @@ class UpdatesViewMixin:
                     )
                 except Exception:
                     pass
+        elif provider_errors:
+            self.updates_state.show_state(
+                t(lang, "updates_incomplete"),
+                t(lang, "updates_incomplete_body"),
+                error=True,
+                retry_callback=self._reload_updates_async,
+                retry_label=t(lang, "retry_action"),
+            )
         else:
-
             self.updates_state.show_state(t(lang, "updates_empty"), t(lang, "updates_empty_body"))
         reboot_required = Path("/var/run/reboot-required").exists()
         self.updates_reboot_banner.set_text(t(lang, "updates_reboot_required") if reboot_required else "")
