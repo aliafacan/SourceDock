@@ -43,6 +43,10 @@ _APT_UPGRADABLE_LINE = re.compile(
     r"(?P<version>\S+)(?:\s+|$)",
     re.IGNORECASE,
 )
+_APT_HISTORY_PACKAGE = re.compile(
+    r"(?P<name>[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9+.-]*)?)\s+\([^)]*\)",
+    re.IGNORECASE,
+)
 
 
 def _base_package_name(name: str) -> str:
@@ -126,6 +130,41 @@ def _parse_dpkg_history_lines(lines) -> tuple[dict[str, str], dict[str, str]]:
         for base, qualified in bases.items():
             if base not in history and len(qualified) == 1:
                 history[base] = history[qualified[0]]
+    return installed_at, last_updated
+
+
+def _parse_apt_history_lines(lines) -> tuple[dict[str, str], dict[str, str]]:
+    """Parse apt transaction history for packages absent from dpkg.log.
+
+    apt history records transactions as ``Install:``/``Upgrade:`` lists with
+    one transaction date, which supplies verified dates for packages installed
+    before the retained dpkg log range.
+    """
+
+    installed_at: dict[str, str] = {}
+    last_updated: dict[str, str] = {}
+    transaction_date = ""
+    for raw_line in lines:
+        line = raw_line.strip()
+        if line.startswith("Start-Date:"):
+            transaction_date = line.split(":", 1)[1].strip().split()[0]
+            continue
+        if not transaction_date:
+            continue
+        if line.startswith(("Install:", "Upgrade:")):
+            action = line.split(":", 1)[0]
+            for match in _APT_HISTORY_PACKAGE.finditer(line.split(":", 1)[1]):
+                package = match.group("name")
+                if action == "Install":
+                    installed_at[package] = transaction_date
+                last_updated[package] = transaction_date
+        elif line.startswith(("Remove:", "Purge:")):
+            for match in _APT_HISTORY_PACKAGE.finditer(line.split(":", 1)[1]):
+                package = match.group("name")
+                installed_at.pop(package, None)
+                last_updated.pop(package, None)
+        elif line.startswith("End-Date:"):
+            transaction_date = ""
     return installed_at, last_updated
 
 
@@ -321,11 +360,41 @@ class AptProvider(BaseNativeProvider):
 
         return _parse_dpkg_history_lines(all_lines)
 
+    def _parse_apt_history(self) -> tuple[dict[str, str], dict[str, str]]:
+        log_files = glob.glob("/var/log/apt/history.log*")
+        def _sort_key(fn: str) -> int:
+            suffix = fn.split("history.log")[-1].lstrip(".")
+            if not suffix:
+                return 0
+            try:
+                return int(suffix.split(".")[0])
+            except ValueError:
+                return 999
+
+        log_files.sort(key=_sort_key, reverse=True)
+        all_lines = []
+        for fn in log_files:
+            try:
+                if fn.endswith(".gz"):
+                    fh = gzip.open(fn, "rt", encoding="utf-8", errors="ignore")
+                elif fn.endswith(".bz2"):
+                    fh = bz2.open(fn, "rt", encoding="utf-8", errors="ignore")
+                elif fn.endswith((".xz", ".lzma")):
+                    fh = lzma.open(fn, "rt", encoding="utf-8", errors="ignore")
+                else:
+                    fh = open(fn, "rt", encoding="utf-8", errors="ignore")
+                with fh:
+                    all_lines.extend(fh)
+            except OSError:
+                continue
+        return _parse_apt_history_lines(all_lines)
+
     def _collect_package_dates(self, packages: list[str]) -> tuple[dict[str, str], dict[str, str]]:
         if not packages:
             return {}, {}
 
         dpkg_installed, dpkg_last = self._parse_dpkg_history()
+        apt_installed, apt_last = self._parse_apt_history()
 
         installed_dates: dict[str, str] = {}
         last_updated_dates: dict[str, str] = {}
@@ -341,8 +410,8 @@ class AptProvider(BaseNativeProvider):
             # Only dpkg actions are verified evidence. Both .list and desktop
             # mtimes are rewritten by upgrades and therefore cannot establish
             # the start of the current installation instance.
-            installed_dates[pkg] = history_value(dpkg_installed, pkg)
-            last_updated_dates[pkg] = history_value(dpkg_last, pkg)
+            installed_dates[pkg] = history_value(dpkg_installed, pkg) or history_value(apt_installed, pkg)
+            last_updated_dates[pkg] = history_value(dpkg_last, pkg) or history_value(apt_last, pkg)
 
         return installed_dates, last_updated_dates
 

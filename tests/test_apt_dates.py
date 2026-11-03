@@ -8,10 +8,39 @@ import gzip
 from pathlib import Path
 import tempfile
 
-from sourcedock.backend.apt import AptProvider, _parse_dpkg_history_lines
+from sourcedock.backend.apt import (
+    AptProvider,
+    _parse_apt_history_lines,
+    _parse_dpkg_history_lines,
+)
 
 
 class TestAptInstallationDates(unittest.TestCase):
+    def test_apt_history_fills_missing_dpkg_install_dates(self):
+        installed, updated = _parse_apt_history_lines([
+            "Start-Date: 2026-04-06  10:00:00\n",
+            "Install: demo:amd64 (1.0), helper:all (2.0)\n",
+            "End-Date: 2026-04-06  10:00:02\n",
+        ])
+        self.assertEqual(installed["demo:amd64"], "2026-04-06")
+        self.assertEqual(installed["helper:all"], "2026-04-06")
+        self.assertEqual(updated["demo:amd64"], "2026-04-06")
+
+    def test_apt_history_upgrade_and_remove_follow_transaction_state(self):
+        installed, updated = _parse_apt_history_lines([
+            "Start-Date: 2026-04-01  10:00:00\n",
+            "Install: demo:amd64 (1.0)\n",
+            "End-Date: 2026-04-01  10:00:01\n",
+            "Start-Date: 2026-04-05  10:00:00\n",
+            "Upgrade: demo:amd64 (1.0, 2.0)\n",
+            "End-Date: 2026-04-05  10:00:01\n",
+            "Start-Date: 2026-04-10  10:00:00\n",
+            "Remove: demo:amd64 (2.0)\n",
+            "End-Date: 2026-04-10  10:00:01\n",
+        ])
+        self.assertNotIn("demo:amd64", installed)
+        self.assertNotIn("demo:amd64", updated)
+
     def test_reinstall_uses_latest_install_date(self):
         lines = [
             "2026-01-01 10:00:00 install demo:amd64 1.0",
