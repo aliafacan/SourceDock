@@ -179,6 +179,8 @@ class ApplicationRegistry:
             return None
         try:
             raw = json.loads(cache_path.read_text(encoding="utf-8"))
+            if raw.get("version") != 2:
+                return None
             saved_at = float(raw.get("saved_at", 0))
             entries = raw.get("applications", [])
             if time.time() - saved_at > self.PERSISTED_CACHE_TTL_SECONDS or not isinstance(entries, list):
@@ -205,7 +207,11 @@ class ApplicationRegistry:
 
             write_json(
                 cache_path,
-                {"saved_at": time.time(), "applications": [asdict(app) for app in snapshot.applications]},
+                {
+                    "version": 2,
+                    "saved_at": time.time(),
+                    "applications": [asdict(app) for app in snapshot.applications],
+                },
             )
         except (OSError, TypeError, ValueError):
             # The disk cache is an optimisation; a read-only or full cache
@@ -353,6 +359,11 @@ class ApplicationRegistry:
         self, applications: list[UnifiedApplication], provider_errors: list[str], include_hidden: bool = True
     ) -> ApplicationSnapshot:
         errors = list(provider_errors)
+        native_update_error = getattr(self.native_provider, "_last_update_query_error", "")
+        if native_update_error:
+            diagnostic = f"{self.native_provider.source}: {native_update_error}"
+            if diagnostic not in errors:
+                errors.append(diagnostic)
         notices: list[str] = []
         if include_hidden:
             hidden = getattr(self.native_provider, "_hidden_upgradable", set())

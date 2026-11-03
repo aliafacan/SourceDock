@@ -418,8 +418,14 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             [
                 (t(self.language, "details_size"), _format_size(self.application.installed_size_kib)),
                 (t(self.language, "details_source"), source_name(self.language, self.application.source)),
-                (t(self.language, "details_install_date"), self.application.installed_date or "-"),
-                (t(self.language, "details_last_updated"), self.application.last_updated or "-"),
+                (
+                    t(self.language, "details_install_date"),
+                    self.application.installed_date or t(self.language, "date_unknown"),
+                ),
+                (
+                    t(self.language, "details_last_updated"),
+                    self.application.last_updated or t(self.language, "date_unknown"),
+                ),
                 (t(self.language, "details_executable"), self.application.executable or "-"),
                 (t(self.language, "details_install_path"), self.application.install_path or "-"),
                 (t(self.language, "details_desktop_file"), self.application.desktop_file or "-"),

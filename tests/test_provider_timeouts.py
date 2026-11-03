@@ -271,7 +271,6 @@ class TestProviderTimeouts(unittest.TestCase):
         items = registry._search_apt("firefox")
         enriched = registry._enrich_results(items, "firefox")
         exact = next(item for item in enriched if item.app_id == "firefox")
-        locale = next(item for item in enriched if item.app_id == "firefox-locale-tr")
 
         self.assertTrue(exact.is_application)
-        self.assertFalse(locale.is_application)
+        self.assertNotIn("firefox-locale-tr", {item.app_id for item in enriched})
