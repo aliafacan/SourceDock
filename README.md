@@ -62,14 +62,14 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 
 SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based distributions (Zorin OS, Ubuntu, Debian, Linux Mint, etc.).
 
-1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 1.4.8 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.8).
+1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 1.4.9 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9).
 2. Verify the package checksum:
    ```bash
-   sha256sum -c sourcedock_1.4.8_all.deb.sha256
+   sha256sum -c sourcedock_1.4.9_all.deb.sha256
    ```
 3. Install the package via APT:
    ```bash
-   sudo apt install ./sourcedock_1.4.8_all.deb
+   sudo apt install ./sourcedock_1.4.9_all.deb
    ```
 4. Launch SourceDock:
    ```bash
@@ -77,6 +77,25 @@ SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based
    ```
 
 *(Note: The `voltapp` command remains available as a backward-compatibility alias.)*
+
+### Uninstallation
+
+To remove SourceDock while keeping user settings:
+```bash
+sudo apt remove sourcedock
+```
+
+To remove SourceDock, its system package configuration, and local cache:
+```bash
+sudo apt purge sourcedock
+rm -rf ~/.cache/sourcedock ~/.config/sourcedock
+sudo apt autoremove
+```
+
+If the legacy package is installed, remove it separately:
+```bash
+sudo apt purge voltapp
+```*
 
 ### GNOME Shell Desktop Integration (Optional)
 

@@ -62,14 +62,14 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 
 SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint vb.) için standart Debian paketi (`.deb`) olarak dağıtılmaktadır.
 
-1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.8 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.8) sayfasından indirin.
+1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.9 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
-   sha256sum -c sourcedock_1.4.8_all.deb.sha256
+   sha256sum -c sourcedock_1.4.9_all.deb.sha256
    ```
 3. Paketi APT ile kurun:
    ```bash
-   sudo apt install ./sourcedock_1.4.8_all.deb
+   sudo apt install ./sourcedock_1.4.9_all.deb
    ```
 4. Uygulamayı başlatın:
    ```bash
@@ -77,6 +77,25 @@ SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint 
    ```
 
 *(Not: `voltapp` komutu geriye dönük uyumluluk için alias olarak korunmaktadır.)*
+
+### Kaldırma
+
+SourceDock’u ayarları koruyarak kaldırmak için:
+```bash
+sudo apt remove sourcedock
+```
+
+SourceDock’u sistem yapılandırması ve yerel cache ile birlikte tamamen kaldırmak için:
+```bash
+sudo apt purge sourcedock
+rm -rf ~/.cache/sourcedock ~/.config/sourcedock
+sudo apt autoremove
+```
+
+Eski `voltapp` paketi kuruluysa ayrıca kaldırın:
+```bash
+sudo apt purge voltapp
+```
 
 ### GNOME Shell Masaüstü Entegrasyonu (İsteğe Bağlı)
 

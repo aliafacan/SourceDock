@@ -36,15 +36,34 @@ As imagens são nomeadas por visão, tema, idioma e resolução 1366×768:
 
 ## Instalação
 
-Baixe o [SourceDock 1.4.8](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.8) e o checksum:
+Baixe o [SourceDock 1.4.9](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9) e o checksum:
 
 ```bash
-sha256sum -c sourcedock_1.4.8_all.deb.sha256
-sudo apt install ./sourcedock_1.4.8_all.deb
+sha256sum -c sourcedock_1.4.9_all.deb.sha256
+sudo apt install ./sourcedock_1.4.9_all.deb
 sourcedock
 ```
 
 Quando uma nova versão está disponível, o SourceDock pode baixar o DEB do GitHub, verificar o checksum e abrir o fluxo normal de pré-visualização e autorização. A instalação sempre exige confirmação do usuário; depois é necessário reiniciar o aplicativo.
+
+### Desinstalação
+
+Para remover o SourceDock mantendo as configurações do usuário:
+```bash
+sudo apt remove sourcedock
+```
+
+Para remover completamente o SourceDock, a configuração do pacote e o cache local:
+```bash
+sudo apt purge sourcedock
+rm -rf ~/.cache/sourcedock ~/.config/sourcedock
+sudo apt autoremove
+```
+
+Se o pacote antigo `voltapp` estiver instalado:
+```bash
+sudo apt purge voltapp
+```
 
 ## Compatibilidade
 
