@@ -36,15 +36,34 @@ Die Bilder sind nach Ansicht, Theme, Sprache und 1366×768-Auflösung benannt:
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.8](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.8). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 1.4.9](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.8_all.deb.sha256
-sudo apt install ./sourcedock_1.4.8_all.deb
+sha256sum -c sourcedock_1.4.9_all.deb.sha256
+sudo apt install ./sourcedock_1.4.9_all.deb
 sourcedock
 ```
 
 SourceDock kann neue Releases melden und die geprüfte DEB-Datei anschließend im bestehenden Paket- und Berechtigungsdialog öffnen. Die Installation erfolgt niemals still im Hintergrund; nach der Installation ist ein Neustart erforderlich.
+
+### Deinstallation
+
+SourceDock mit beibehaltenen Benutzereinstellungen entfernen:
+```bash
+sudo apt remove sourcedock
+```
+
+SourceDock einschließlich Paketkonfiguration und lokalem Cache vollständig entfernen:
+```bash
+sudo apt purge sourcedock
+rm -rf ~/.cache/sourcedock ~/.config/sourcedock
+sudo apt autoremove
+```
+
+Falls das alte `voltapp`-Paket installiert ist:
+```bash
+sudo apt purge voltapp
+```
 
 ## Kompatibilität
 
