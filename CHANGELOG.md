@@ -23,6 +23,7 @@
 ### Installed applications UI
 
 - Made bulk-removal confirmation dialogs screen-bounded with a scrollable selected-application list, preventing large selections from extending beyond the screen.
+- Invalidate persisted installed-application inventories when refreshing or installing a new application version, so stale Flatpak/Snap-only snapshots cannot hide the APT provider.
 
 ### Tests
 

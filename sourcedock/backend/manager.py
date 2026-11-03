@@ -15,6 +15,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import time
 
 from sourcedock.core.errors import BackendError
+from sourcedock.constants import APP_VERSION
 from sourcedock.core.models import (
     APT_LOCK_NOWAIT,
     APT_LOCK_NOWAIT_VALUE,
@@ -161,7 +162,7 @@ class ApplicationRegistry:
     def set_sudo_password(self, password: str) -> None:
         self.runner.set_sudo_password(password)
 
-    def invalidate_application_cache(self, *, clear_persisted: bool = False) -> None:
+    def invalidate_application_cache(self, *, clear_persisted: bool = True) -> None:
         """Force the next read-only application load to query providers."""
         with self._application_cache_lock:
             self._application_cache = None
@@ -179,7 +180,7 @@ class ApplicationRegistry:
             return None
         try:
             raw = json.loads(cache_path.read_text(encoding="utf-8"))
-            if raw.get("version") != 2:
+            if raw.get("version") != 3 or raw.get("app_version") != APP_VERSION:
                 return None
             saved_at = float(raw.get("saved_at", 0))
             entries = raw.get("applications", [])
@@ -208,7 +209,8 @@ class ApplicationRegistry:
             write_json(
                 cache_path,
                 {
-                    "version": 2,
+                    "version": 3,
+                    "app_version": APP_VERSION,
                     "saved_at": time.time(),
                     "applications": [asdict(app) for app in snapshot.applications],
                 },
