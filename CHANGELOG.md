@@ -24,6 +24,7 @@
 
 - Made bulk-removal confirmation dialogs screen-bounded with a scrollable selected-application list, preventing large selections from extending beyond the screen.
 - Invalidate persisted installed-application inventories when refreshing or installing a new application version, so stale Flatpak/Snap-only snapshots cannot hide the APT provider.
+- Debian package revision is now `1.4.9-1` so reinstalling the hotfix cannot be skipped as the same package version.
 
 ### Tests
 
