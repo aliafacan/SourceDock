@@ -84,6 +84,37 @@ class TestAptUpdateInventory149(unittest.TestCase):
             {"/usr/share/applications/editor.desktop": "dpkg-owner"},
         )
 
+    def test_initial_installed_scan_keeps_dpkg_dates_when_updates_are_skipped(self):
+        provider = AptProvider(MagicMock(), MagicMock())
+        provider.runner.command_exists.return_value = True
+        provider.scanner.list_entries.return_value = [
+            type(
+                "Entry",
+                (),
+                {
+                    "visible": True,
+                    "path": "/usr/share/applications/editor.desktop",
+                    "flatpak_id": "",
+                    "snap_name": "",
+                    "appimage_path": "",
+                    "exec_command": "editor",
+                    "name": "Editor",
+                    "icon": "",
+                    "categories": "",
+                },
+            )()
+        ]
+        provider._owning_packages = MagicMock(
+            return_value={"/usr/share/applications/editor.desktop": "editor"}
+        )
+        provider._package_metadata = MagicMock(return_value={"editor": ("1.0", 10)})
+        provider._collect_package_dates = MagicMock(
+            return_value=({"editor": "2026-04-06"}, {"editor": "2026-08-23"})
+        )
+        applications = provider.list_applications(include_updates=False)
+        self.assertEqual(applications[0].installed_date, "2026-04-06")
+        self.assertEqual(applications[0].last_updated, "2026-08-23")
+
     def test_zero_updates_is_a_successful_empty_inventory(self):
         provider = self.provider([completed("demo\t1\t10\tdemo\tinstalled"), completed("Listeleme...\n")])
         packages = provider.list_all_packages()

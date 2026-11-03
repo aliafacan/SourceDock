@@ -178,15 +178,12 @@ class AptProvider(BaseNativeProvider):
         else:
             self._last_update_query_error = ""
             upgradable = set()
-        # Dpkg history and the stat fan-out are secondary metadata. They are
-        # intentionally skipped by the fast installed-app inventory and are
-        # populated by the regular update/details paths when needed.
-        if include_updates:
-            try:
-                installed_dates, last_updated_dates = self._collect_package_dates(packages)
-            except (BackendError, OSError):
-                installed_dates, last_updated_dates = {}, {}
-        else:
+        # Installation/update dates come from read-only local dpkg history and
+        # are required by the installed-applications view even during its
+        # initial scan, which intentionally skips the slower update query.
+        try:
+            installed_dates, last_updated_dates = self._collect_package_dates(packages)
+        except (BackendError, OSError):
             installed_dates, last_updated_dates = {}, {}
         listed_packages: set[str] = set()
         applications: list[UnifiedApplication] = []
