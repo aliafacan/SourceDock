@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 PACKAGE="sourcedock"
 VERSION="$(PYTHONPATH="$PROJECT_DIR" python3 -c 'from sourcedock.constants import APP_VERSION; print(APP_VERSION)')"
-DEB_VERSION="${VERSION}-1"
+DEB_VERSION="${VERSION}-2"
 EXTENSION_UUID="sourcedock-menu@aliafacan.dev"
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf -- "$BUILD_DIR"' EXIT
