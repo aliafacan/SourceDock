@@ -99,6 +99,25 @@ class TestApplicationCacheContracts149(unittest.TestCase):
             registry._persisted_application_cache_path = cache
             self.assertIsNone(registry._read_persisted_application_cache())
 
+    def test_cache_from_previous_schema_or_app_version_is_invalidated(self):
+        registry = ApplicationRegistry.__new__(ApplicationRegistry)
+        registry.PERSISTED_CACHE_TTL_SECONDS = 3600
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory) / "installed-applications.json"
+            cache.write_text(
+                json.dumps({
+                    "version": 2,
+                    "app_version": "1.4.8",
+                    "saved_at": 9_999_999_999,
+                    "applications": [{
+                        "id": "apt:demo", "name": "Demo", "source": SOURCE_APT,
+                    }],
+                }),
+                encoding="utf-8",
+            )
+            registry._persisted_application_cache_path = cache
+            self.assertIsNone(registry._read_persisted_application_cache())
+
 
 if __name__ == "__main__":
     unittest.main()
