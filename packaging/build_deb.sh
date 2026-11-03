@@ -5,13 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 PACKAGE="sourcedock"
 VERSION="$(PYTHONPATH="$PROJECT_DIR" python3 -c 'from sourcedock.constants import APP_VERSION; print(APP_VERSION)')"
+DEB_VERSION="$VERSION"
 EXTENSION_UUID="sourcedock-menu@aliafacan.dev"
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf -- "$BUILD_DIR"' EXIT
-DEB_ROOT="$BUILD_DIR/${PACKAGE}_${VERSION}_all"
+DEB_ROOT="$BUILD_DIR/${PACKAGE}_${DEB_VERSION}_all"
 OUTPUT_DIR="${1:-$SCRIPT_DIR}"
 
-echo "⚡ SourceDock .deb Paketi Hazırlanıyor (v$VERSION)..."
+echo "⚡ SourceDock .deb Paketi Hazırlanıyor (v$DEB_VERSION, uygulama v$VERSION)..."
 
 # 1. Dizin hiyerarşisi
 mkdir -p "$DEB_ROOT/DEBIAN"
@@ -120,7 +121,7 @@ fi
 INSTALLED_SIZE="$(du -sk "$DEB_ROOT/usr" | awk '{print $1}')"
 cat > "$DEB_ROOT/DEBIAN/control" <<EOF
 Package: $PACKAGE
-Version: $VERSION
+Version: $DEB_VERSION
 Replaces: voltapp
 Breaks: voltapp (<< 1.3.0)
 Provides: voltapp
@@ -176,7 +177,7 @@ chmod 644 "$DEB_ROOT/DEBIAN/control"
 
 # 9. Paket oluşturma
 mkdir -p "$OUTPUT_DIR"
-DEB_OUT="$OUTPUT_DIR/${PACKAGE}_${VERSION}_all.deb"
+DEB_OUT="$OUTPUT_DIR/${PACKAGE}_${DEB_VERSION}_all.deb"
 if command -v desktop-file-validate >/dev/null 2>&1; then
     desktop-file-validate "$DEB_ROOT/usr/share/applications/sourcedock.desktop"
 fi
@@ -187,7 +188,7 @@ echo "==> dpkg-deb çalıştırılıyor..."
 dpkg-deb --build --root-owner-group "$DEB_ROOT" "$DEB_OUT"
 (
     cd "$OUTPUT_DIR"
-    sha256sum "${PACKAGE}_${VERSION}_all.deb" > "${PACKAGE}_${VERSION}_all.deb.sha256"
+    sha256sum "${PACKAGE}_${DEB_VERSION}_all.deb" > "${PACKAGE}_${DEB_VERSION}_all.deb.sha256"
 )
 if command -v lintian >/dev/null 2>&1; then
     lintian "$DEB_OUT"

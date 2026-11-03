@@ -23,6 +23,9 @@
 ### Installed applications UI
 
 - Made bulk-removal confirmation dialogs screen-bounded with a scrollable selected-application list, preventing large selections from extending beyond the screen.
+- Invalidate persisted installed-application inventories when refreshing or installing a new application version, so stale Flatpak/Snap-only snapshots cannot hide the APT provider.
+- The final Debian package is published as `1.4.9` after removing intermediate hotfix revision assets from the release.
+- APT installation and last-update dates are now loaded during the initial installed-applications scan, not only during update checks.
 
 ### Tests
 
