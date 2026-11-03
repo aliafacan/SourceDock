@@ -219,9 +219,7 @@ class AptProvider(BaseNativeProvider):
 
     def _owning_packages(self, paths: list[str]) -> dict[str, str]:
         result = self.runner.run(["dpkg-query", "-S", *paths], timeout=30)
-        if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
-            raise BackendError(f"dpkg dosya sahipliği sorgusu başarısız: {detail}")
+        requested_paths = set(paths)
         owners: dict[str, str] = {}
         for line in result.stdout.splitlines():
             if ": " not in line:
@@ -229,8 +227,11 @@ class AptProvider(BaseNativeProvider):
             package_part, owned_path = line.split(": ", 1)
             package = package_part.split(",", 1)[0].strip()
             path = owned_path.strip()
-            if package and path:
+            if package and path in requested_paths:
                 owners[path] = package
+        if not owners:
+            detail = result.stderr.strip() or result.stdout.strip() or "bilinmeyen hata"
+            raise BackendError(f"dpkg dosya sahipliği sorgusu başarısız: {detail}")
         return owners
 
     def _package_metadata(self, packages: list[str]) -> dict[str, tuple[str, int | None]]:

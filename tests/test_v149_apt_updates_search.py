@@ -62,6 +62,28 @@ class TestAptUpdateInventory149(unittest.TestCase):
         )
         self.assertEqual(len(visible), 6)
 
+    def test_unowned_desktop_file_does_not_hide_owned_apt_applications(self):
+        runner = MagicMock()
+        runner.command_exists.return_value = True
+        runner.run.return_value = completed(
+            stdout="dpkg-owner: /usr/share/applications/editor.desktop\n",
+            stderr="dpkg-query: no path found matching pattern /usr/share/applications/vendor.desktop\n",
+            returncode=1,
+        )
+        provider = AptProvider(runner, MagicMock())
+
+        owners = provider._owning_packages(
+            [
+                "/usr/share/applications/editor.desktop",
+                "/usr/share/applications/vendor.desktop",
+            ]
+        )
+
+        self.assertEqual(
+            owners,
+            {"/usr/share/applications/editor.desktop": "dpkg-owner"},
+        )
+
     def test_zero_updates_is_a_successful_empty_inventory(self):
         provider = self.provider([completed("demo\t1\t10\tdemo\tinstalled"), completed("Listeleme...\n")])
         packages = provider.list_all_packages()
