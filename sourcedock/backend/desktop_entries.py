@@ -27,13 +27,13 @@ def electron_desktop_exec(executable, wm_class):
     return desktop_exec(executable).removesuffix(" %U") + f" --class={wm_class} %U"
 
 
-def render_desktop_entry(name, executable, icon, directory="", appimage_path="", startup_wm_class="", force_wm_class=False):
+def render_desktop_entry(name, executable, icon, directory="", appimage_path="", startup_wm_class="", force_wm_class=False, launch_wm_class=""):
     parser = ConfigParser(interpolation=None)
     parser.optionxform = str
     fields = {
         "Type": "Application",
         "Name": _string(name),
-        "Exec": electron_desktop_exec(executable, startup_wm_class) if force_wm_class else desktop_exec(executable),
+        "Exec": electron_desktop_exec(executable, launch_wm_class or startup_wm_class) if force_wm_class else desktop_exec(executable),
         "Icon": _string(icon),
         "Terminal": "false",
         "StartupNotify": "true",

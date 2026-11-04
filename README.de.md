@@ -18,6 +18,7 @@ SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen P
 
 ## Neu in 1.4.10
 
+- **Schnellerer Start:** unveränderte Paketdatenbanken und Installationszeiger erlauben die Wiederverwendung der gespeicherten Liste. Externe Änderungen, ein abgelaufener Cache oder F5 lösen eine neue Suche aus. Antigravity wird anhand seiner endgültigen Fensterklasse zugeordnet.
 - **Stabile Anwendungslisten:** nach Installation, Entfernung oder Update wird nur die betroffene Quelle abgeglichen, ohne die Seite neu zu laden oder Updates erneut zu prüfen.
 - **Eigener Systemfilter:** installierte Flatpak-Laufzeitumgebungen und Snap-Basispakete bleiben unabhängig von Updates sichtbar. Gemeinsam genutzte Komponenten benötigen eine Warnung und die Eingabe des Paketnamens zur Entfernung.
 - **Während Vorgängen weiterarbeiten:** Suche und Quellenfilter bleiben bedienbar. Verschiedene Paketverwaltungen können parallel arbeiten; Änderungen derselben Paketdatenbank werden sicher eingereiht.

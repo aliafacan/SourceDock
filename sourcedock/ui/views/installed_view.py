@@ -1031,6 +1031,7 @@ class InstalledViewMixin:
         self.packages = [package for package in self.packages if package.name not in native_names]
         self.update_items = [item for item in self.update_items if keep(item.application)]
         self.application_registry.invalidate_application_cache()
+        self.application_registry.remember_inventory(self.applications, self.application_provider_errors)
         self.store_registry.invalidate_search_cache()
         self._refresh_inventory_views(selected_updates)
         return False
@@ -1175,24 +1176,22 @@ class InstalledViewMixin:
         self._inventory_removals = {key: removed_at for key, removed_at in removals.items()
                                     if removed_at >= generation}
         self.application_provider_errors = snapshot.provider_errors + ([package_error] if package_error else [])
+        self.application_registry.remember_inventory(self.applications, self.application_provider_errors)
         self._render_application_diagnostics()
         self._refresh_inventory_views()
         if self.applications:
             self.installed_state.show_content()
         return False
 
-    def reload_applications_async(self) -> None:
+    def reload_applications_async(self, *, startup=False) -> None:
         if self.applications_loading:
             return
         self._quiet_refresh_generation = getattr(self, "_quiet_refresh_generation", 0) + 1
-        invalidate = getattr(self.application_registry, "invalidate_application_cache", None)
-        if callable(invalidate):
-            invalidate()
         self.applications_loading = True
         self._application_update_scan_token += 1
         self.application_updates_loading = False
         self.application_updates_scanned = False
-        self._application_initial_load_needs_updates = True
+        self._application_initial_load_needs_updates = not startup
         self.application_update_only_items = []
         self._application_load_started_at = time.perf_counter()
         self.application_load_metrics = {
@@ -1206,15 +1205,17 @@ class InstalledViewMixin:
         self._set_applications_status(t(self.preferences.language, "applications_loading"), "#666666")
         self._application_load_generation = getattr(self, "_application_load_generation", 0) + 1
         generation = self._application_load_generation
-        threading.Thread(target=self._load_applications_worker, args=(generation,), daemon=True).start()
+        threading.Thread(target=self._load_applications_worker, args=(generation, startup), daemon=True).start()
 
-    def _load_applications_worker(self, generation=None) -> None:
+    def _load_applications_worker(self, generation=None, startup=False) -> None:
         def publish(snapshot, complete):
             GLib.idle_add(self._finish_applications_load, snapshot, complete, generation)
 
         progressive_loader = getattr(self.application_registry, "load_progressive", None)
         try:
-            if callable(progressive_loader):
+            if startup:
+                self.application_registry.load_startup(publish)
+            elif callable(progressive_loader):
                 progressive_loader(publish, include_updates=False)
             else:
                 GLib.idle_add(self._finish_applications_load, self.application_registry.load(), True, generation)

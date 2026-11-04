@@ -22,6 +22,7 @@ SourceDock is a modern, modular, and distro-agnostic Linux desktop software mana
 
 ## What’s new in 1.4.10
 
+- **Faster restarts:** reuse the saved inventory when package databases and deployment pointers are unchanged. External changes or an expired cache trigger discovery; F5 always requests a fresh scan. Antigravity launchers match the final window class after Electron startup.
 - **Steady installed lists:** completed installs, removals and updates reconcile the affected source without restarting the page or repeating update checks.
 - **A separate System filter:** installed Flatpak runtimes and Snap bases remain visible regardless of update availability. Removing shared components requires a clear warning and typed package-name confirmation.
 - **Work while operations run:** search and source filters stay usable. Different package managers can run concurrently; mutations of the same package database wait safely in a queue.

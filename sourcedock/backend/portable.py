@@ -27,7 +27,7 @@ LEGACY_PORTABLE_APPS_ROOT_NAME = "apps"
 
 
 def repair_electron_launcher(application):
-    """Migrate an owned Electron shortcut to a desktop-ID window class."""
+    """Match both Electron's startup class and its final product window class."""
     item = load_portable_registry().get(application.id)
     if not isinstance(item, dict) or item.get("desktop_file") != application.desktop_file:
         return False
@@ -49,8 +49,18 @@ def repair_electron_launcher(application):
         entry = parser["Desktop Entry"]
         if entry.get("X-SourceDock-Managed") != "true":
             return False
+        from sourcedock.backend.local_packages import _read_electron_product
+
+        product = _read_electron_product(executable)
+        if not product:
+            return False
         entry["Exec"] = electron_desktop_exec(executable, desktop.stem)
-        entry["StartupWMClass"] = desktop.stem
+        # Respect a bundled class; older generated classes need migration.
+        old_class = entry.get("StartupWMClass", "")
+        app_name = product.get("applicationName") or executable.stem
+        generated_classes = {desktop.stem, app_name, app_name[:1].upper() + app_name[1:], ""}
+        if old_class in generated_classes:
+            entry["StartupWMClass"] = product.get("nameShort") or app_name[:1].upper() + app_name[1:]
         buffer = StringIO()
         parser.write(buffer, space_around_delimiters=False)
         updated = buffer.getvalue()
@@ -288,6 +298,7 @@ class PortableProvider:
                     last_updated=item.get("last_updated", ""),
                 )
             )
+            repair_electron_launcher(apps[-1])
 
         if changed:
             save_portable_registry(reg)

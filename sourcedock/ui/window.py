@@ -142,7 +142,7 @@ class MainWindow(
         self._setup_drag_and_drop()
         if "--updates" in sys.argv:
             self.pages.set_current_page(4)
-        self.reload_applications_async()
+        self.reload_applications_async(startup=True)
         preferred = self.store_filter_buttons.get(self.preferences.preferred_source)
         if preferred:
             preferred.set_active(True)
