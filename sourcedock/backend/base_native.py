@@ -39,7 +39,7 @@ class BaseNativeProvider(ABC):
         pass
 
     @abstractmethod
-    def list_all_packages(self) -> list[PackageInfo]:
+    def list_all_packages(self, *, include_updates: bool = True) -> list[PackageInfo]:
         """Sistemde kurulu tüm paketleri (kütüphaneler, CLI araçları dahil) listeler."""
         pass
 

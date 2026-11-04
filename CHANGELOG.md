@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.4.10 - 2026-11-04
+
+### Updates, search and operation details
+
+- Validate exact APT package names before privileged batch updates and separate operands from command options.
+- Preserve user and system Flatpak installations when deduplicating selected updates.
+- Refilter existing store results immediately after changing technical-package visibility, with clarified labels in all six languages.
+- Add regression coverage for preference persistence, operation-detail windows, exact technical searches and mixed update sources.
+- Refuse manual installation with incomplete sources, missing system Python/GTK dependencies or symbolic-link destinations before replacing installed files.
+- Keep file-chooser sidebar selections readable in both themes.
+- Remove confirmed uninstalls from the current lists without a full reload or update scan; retain failures and other Flatpak scopes.
+- Prefer Electron product launcher artwork, use stable absolute icon paths and match its actual X11 window class for portable applications.
+- Reconcile installed metadata quietly after installation and updates for every provider, retaining current filters and unrelated update selections without triggering update discovery.
+- Keep internal sudo checks out of transaction logs, and report authorization, active package-manager phases, measured percentages and elapsed time for silent operations.
+- Preserve portable desktop identity when launching through GIO and keep suggested-action text readable on the accent background.
+
+- List installed Flatpak runtimes and Snap bases independently of update discovery, with a dedicated System filter and explicit typed removal warnings.
+- Keep installed filters usable during operations; allow different package managers to mutate concurrently while serializing a shared database, including lingering processes.
+- Reconcile only touched providers and retain unrelated inventories and update selections.
+- Delay archive inspection dialogs to avoid flashing during fast previews, release modal installation previews during work and show one Flatpak percentage bar.
+- Match Electron window classes to managed desktop IDs and repair existing owned launchers before launch.
+
+### Search during package operations
+
+- Give remote Snap searches a 15-second budget while continuing to publish faster provider results independently.
+- Keep command-level timeouts in provider diagnostics and show localized retry messages instead of raw commands or subprocess errors.
+- Keep useful partial results visible on a late provider failure, capture source diagnostics with each queued UI callback, and isolate errors between overlapping searches.
+- Starting a store search no longer invalidates background post-operation inventory reconciliation.
+
+### Application source switching
+
+- Show an application's installed source on store cards and details, even when browsing another provider.
+- Share conservative package/AppStream/desktop identities across native, Flatpak and Snap results; keep Chrome, Chromium and Chrome Beta distinct.
+- Offer separate install-alongside and source-switch actions with an explicit choice of the old installation to remove.
+- Verify the destination after installation and again under a mutation lock before removing only the selected old package without purge.
+- Preserve the source-switch plan across authorization/classic retries; cancellation or failed verification never triggers old-package removal.
+- Explain that profiles and sessions are not transferred automatically, with labels in all six languages.
+
+### Portable replacement
+
+- Detect a matching native application when inspecting a portable archive or AppImage.
+- Offer an explicit opt-in flow that installs the portable version first and removes the matching APT installation only after success.
+- Keep the existing native installation untouched when the replacement option is not selected or portable installation fails.
+- Add localized replacement labels and regression coverage.
+- Make archive inspection readable, report extraction and integration phases, and improve portable desktop taskbar identity.
+- Prefer application icons over screenshots and keep portable version metadata separate from update status.
+- Move the optional source archive to the desktop Trash after successful installation instead of permanently deleting it.
+- Keep the archive in place when Trash integration is unavailable or fails.
+- Batch selected native updates by provider so multiple APT packages use one privileged transaction and duplicate selections are ignored.
+- Keep exact technical APT package searches such as `wireshark-doc` available while preserving the default application-focused store view.
+- Add a persistent preference to open operation logs by default for installation, update and removal workflows.
+
 ## 1.4.9 - 2026-11-03
 
 ### APT update reliability

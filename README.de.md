@@ -16,13 +16,38 @@
 
 SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen Paketdateien in einer einzigen, responsiven Oberfläche. Die Anwendung arbeitet asynchron, zeigt Anbieterfehler transparent an und fordert erhöhte Rechte erst für die jeweilige bestätigte Aktion an.
 
+## Neu in 1.4.10
+
+- **Stabile Anwendungslisten:** nach Installation, Entfernung oder Update wird nur die betroffene Quelle abgeglichen, ohne die Seite neu zu laden oder Updates erneut zu prüfen.
+- **Eigener Systemfilter:** installierte Flatpak-Laufzeitumgebungen und Snap-Basispakete bleiben unabhängig von Updates sichtbar. Gemeinsam genutzte Komponenten benötigen eine Warnung und die Eingabe des Paketnamens zur Entfernung.
+- **Während Vorgängen weiterarbeiten:** Suche und Quellenfilter bleiben bedienbar. Verschiedene Paketverwaltungen können parallel arbeiten; Änderungen derselben Paketdatenbank werden sicher eingereiht.
+- **Anwendungsquelle wechseln:** passende native, Flatpak- und Snap-Installationen werden erkannt. Wählen Sie eine zusätzliche Installation oder einen Quellenwechsel. Erst nach Installation und Prüfung der neuen Quelle wird die gewählte alte Kopie ohne purge entfernt. Profile und Sitzungen werden nicht automatisch übertragen.
+- **Klarer Fortschritt:** ein gemessener Fortschrittsbalken, optionale Detailprotokolle, lesbare Dateiauswahl und verbesserte Symbole sowie Desktop-Zuordnung portabler Electron-Anwendungen.
+- **Robuste Store-Suche:** Snap hat ein Zeitbudget von 15 Sekunden; schnellere Ergebnisse anderer Quellen erscheinen sofort. Zeitüberschreitungen zeigen übersetzte Wiederholungshinweise statt Rohbefehlen.
+
+Mit [build.sh](build.sh) lassen sich die aktuellen Quellen paketieren und installieren. Das Skript prüft die Prüfsumme und installiert oder reinstalliert das Paket über APT; Administratorrechte werden nur zur Installation benötigt.
+
+```bash
+./build.sh
+```
+
 ## Screenshots
 
-Die Bilder sind nach Ansicht, Theme, Sprache und 1366×768-Auflösung benannt:
+Neue Aufnahmen aus Version 1.4.10: Hauptfenster mit 1366×768 Pixeln, Dialoge in ihrer eigenen Größe.
 
-![Store und Entdecken](docs/screenshots/discover-light-de-100-1366x768.png)
-![Installierte Anwendungen](docs/screenshots/installed-dark-de-100-1366x768.png)
-![Update-Zentrale](docs/screenshots/updates-dark-de-100-1366x768.png)
+![Store und Entdecken](docs/screenshots/v1.4.10/discover-light-de-100-1366x768.png)
+![Installierte Anwendungen](docs/screenshots/v1.4.10/installed-dark-de-100-1366x768.png)
+![Update-Zentrale](docs/screenshots/v1.4.10/updates-dark-de-100-1366x768.png)
+
+### Anwendungsquelle wechseln
+
+![Anwendungsquelle wechseln](docs/screenshots/v1.4.10/source-switch-dark-de.png)
+
+### Gemeinsam genutzte Systemkomponenten
+
+![Gemeinsam genutzte Systemkomponenten](docs/screenshots/v1.4.10/system-dark-de.png)
+
+Aufgenommen mit SourceDock 1.4.10 und ausschließlich gelesenen Systemmetadaten; keine Paketvorgänge wurden ausgeführt.
 
 ## Funktionen
 
@@ -36,11 +61,11 @@ Die Bilder sind nach Ansicht, Theme, Sprache und 1366×768-Auflösung benannt:
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.9](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 1.4.10](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.9_all.deb.sha256
-sudo apt install ./sourcedock_1.4.9_all.deb
+sha256sum -c sourcedock_1.4.10_all.deb.sha256
+sudo apt install ./sourcedock_1.4.10_all.deb
 sourcedock
 ```
 

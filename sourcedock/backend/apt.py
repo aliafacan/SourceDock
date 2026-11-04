@@ -427,7 +427,7 @@ class AptProvider(BaseNativeProvider):
             raise BackendError(f"APT güncelleme sorgusu başarısız (kod {result.returncode}): {detail}")
         return _parse_apt_upgradable_output(result.stdout)
 
-    def list_all_packages(self) -> list[PackageInfo]:
+    def list_all_packages(self, *, include_updates: bool = True) -> list[PackageInfo]:
         if not self.runner.command_exists("dpkg-query"):
             return []
         result = self.runner.run(
@@ -463,7 +463,7 @@ class AptProvider(BaseNativeProvider):
                 update_available=False,
                 new_version="",
             )
-        upgradable = self._upgradable_packages_with_versions()
+        upgradable = self._upgradable_packages_with_versions() if include_updates else {}
         for name, new_ver in upgradable.items():
             package = packages.get(name)
             if package is None and ":" not in name:

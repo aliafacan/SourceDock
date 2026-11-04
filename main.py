@@ -307,6 +307,7 @@ def main() -> None:
         try:
             pkg_info = registry.inspect_local_package(target_file)
             pkg_status = registry.get_local_package_status(pkg_info)
+            replacement = registry.find_native_replacement(pkg_info)
         except Exception as exc:
             err_dialog = Gtk.MessageDialog(
                 title=APP_TITLE,
@@ -326,6 +327,7 @@ def main() -> None:
             pkg_status=pkg_status,
             registry=registry,
             standalone=True,
+            replacement_application=replacement,
         )
         installer.show_all()
         Gtk.main()

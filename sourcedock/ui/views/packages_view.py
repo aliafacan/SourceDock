@@ -313,7 +313,7 @@ class PackagesViewMixin:
         return model.get_value(model.get_iter(paths[0]), _PC_PKG)
 
     def _on_packages_tree_activated(self, tree: Gtk.TreeView, path: Gtk.TreePath, _column) -> None:
-        if self.packages_loading or self.applications_busy:
+        if self.packages_loading:
             return
         model = tree.get_model()
         package = model.get_value(model.get_iter(path), _PC_PKG)
@@ -356,12 +356,12 @@ class PackagesViewMixin:
 
     def _on_packages_details_clicked(self, *_args) -> None:
         package = self._selected_package()
-        if package is not None and not self.packages_loading and not self.applications_busy:
+        if package is not None and not self.packages_loading:
             self.on_show_application_details(None, self._application_for_package(package))
 
     def _on_packages_remove_clicked(self, *_args) -> None:
         package = self._selected_package()
-        if package is not None and not self.packages_loading and not self.applications_busy:
+        if package is not None and not self.packages_loading:
             self.on_remove_application(None, self._application_for_package(package))
 
     def on_packages_tree_button_press(self, _tree: Gtk.TreeView, event) -> bool:
@@ -473,6 +473,11 @@ class PackagesViewMixin:
             "packages_update_selected",
             True,
             t(self.preferences.language, "updates_count", count=len(names)),
+            updated_applications=[
+                UnifiedApplication(f"{self.application_registry.native_provider.source}:{name}", name,
+                                   self.application_registry.native_provider.source, package_name=name)
+                for name in names
+            ],
         )
 
     def _set_packages_status(self, message: str, color: str) -> None:

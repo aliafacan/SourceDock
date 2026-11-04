@@ -20,10 +20,24 @@ if command -v dpkg-query >/dev/null 2>&1 && { [ "$(dpkg-query -W -f='${db:Status
     echo "SourceDock is managed by APT. Build a .deb and install it with apt instead of overwriting package-owned files."
     exit 1
 fi
-if [ -L "$INSTALL_LIB" ] || [ -L "$INSTALL_EXTENSION" ]; then
-    echo "Refusing to install through a symbolic link."
-    exit 1
-fi
+for destination in "$INSTALL_LIB" "$INSTALL_EXTENSION" "$INSTALL_BIN" "$LEGACY_BIN" \
+    "$INSTALL_DESKTOP" "$LEGACY_DESKTOP" \
+    /usr/share/icons/hicolor/scalable/apps/sourcedock.svg \
+    /usr/share/icons/hicolor/{48x48,64x64,128x128}/apps/sourcedock.png; do
+    if [ -L "$destination" ]; then
+        echo "Refusing to install through a symbolic link: $destination"
+        exit 1
+    fi
+done
+
+# Check the source before removing any part of an existing installation.
+for source_file in main.py sourcedock/__init__.py sourcedock/constants.py \
+    packaging/sourcedock.desktop; do
+    if [ ! -f "$SCRIPT_DIR/$source_file" ]; then
+        echo "❌ Hata: Kurulum kaynağı eksik: $source_file"
+        exit 1
+    fi
+done
 
 echo "=========================================================="
 echo "⚡ SourceDock Sistem Kurulumu Başlatılıyor..."
@@ -31,14 +45,19 @@ echo "=========================================================="
 
 # 1. Bağımlılık kontrolü
 echo "==> Bağımlılıklar denetleniyor..."
-if ! command -v python3 &>/dev/null; then
-    echo "❌ Hata: python3 bulunamadı. Lütfen Python 3 yükleyin."
+if [ ! -x /usr/bin/python3 ]; then
+    echo "❌ Hata: /usr/bin/python3 bulunamadı. Lütfen sistem Python 3 paketini yükleyin."
     exit 1
 fi
 
-python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" 2>/dev/null || {
-    echo "⚠️  Uyarı: GTK 3 Python bağlamaları (python3-gi / gir1.2-gtk-3.0) eksik olabilir."
-    echo "   Ubuntu/Debian için: sudo apt install python3-gi gir1.2-gtk-3.0"
+/usr/bin/python3 -c "import sys; sys.exit(sys.version_info < (3, 10))" || {
+    echo "❌ Hata: Python 3.10 veya üzeri gereklidir."
+    exit 1
+}
+/usr/bin/python3 -c "import gi; gi.require_version('Gtk', '3.0'); gi.require_version('GdkPixbuf', '2.0'); from gi.repository import Gtk, GdkPixbuf; import cairo; import gi.repository.Gdk" 2>/dev/null || {
+    echo "❌ Hata: Sistem Python'u için GTK 3 bağımlılıkları eksik."
+    echo "   Ubuntu/Debian için: sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0"
+    exit 1
 }
 
 # 2. Dizinleri oluştur

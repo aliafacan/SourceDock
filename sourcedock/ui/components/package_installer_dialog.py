@@ -17,11 +17,12 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
-from sourcedock.core.models import InstalledPackageStatus, LocalPackageInfo
+from sourcedock.core.models import InstalledPackageStatus, LocalPackageInfo, UnifiedApplication
 from sourcedock.backend.manager import ApplicationRegistry
 from sourcedock.backend.local_packages import launch_local_package
 from sourcedock.backend.mime_integration import get_icon_path
 from sourcedock.i18n import t, translate_backend_message
+from sourcedock.preferences import PreferencesStore
 from sourcedock.ui.components.common import make_window_movable, prepare_dialog, set_status
 from sourcedock.backend.previews import preview_install_plan
 
@@ -39,6 +40,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         registry: ApplicationRegistry | None = None,
         standalone: bool = False,
         on_finished: Callable[[], None] | None = None,
+        replacement_application: UnifiedApplication | None = None,
     ):
         super().__init__(
             title=t(language, "package_installer_title"),
@@ -48,9 +50,11 @@ class PackageInstallerDialog(Gtk.Dialog):
         )
         self.info = info or LocalPackageInfo(file_path="", format="deb", name="")
         self.language = language
+        self.preferences = PreferencesStore().load()
         self.registry = registry or ApplicationRegistry()
         self.standalone = standalone
         self.on_finished = on_finished
+        self.replacement_application = replacement_application
 
         self.pkg_status = pkg_status or InstalledPackageStatus(
             is_installed=is_installed,
@@ -79,6 +83,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.create_desktop_check: Gtk.CheckButton | None = None
         self.copy_to_apps_check: Gtk.CheckButton | None = None
         self.delete_after_check: Gtk.CheckButton | None = None
+        self.replace_native_check: Gtk.CheckButton | None = None
         self.flatpak_scope_user_radio: Gtk.RadioButton | None = None
         self.flatpak_scope_system_radio: Gtk.RadioButton | None = None
 
@@ -348,6 +353,20 @@ class PackageInstallerDialog(Gtk.Dialog):
             scope_box.pack_start(self.flatpak_scope_system_radio, False, False, 0)
             self.options_box.pack_start(scope_box, False, False, 0)
 
+        if self.replacement_application is not None:
+            self.replace_native_check = Gtk.CheckButton(
+                label=t(
+                    self.language,
+                    "package_installer_replace_native",
+                    name=self.replacement_application.name,
+                    version=self.replacement_application.version,
+                )
+            )
+            self.replace_native_check.set_tooltip_text(
+                t(self.language, "tooltip_installer_replace_native")
+            )
+            self.options_box.pack_start(self.replace_native_check, False, False, 0)
+
         # 3. İlerleme Alanı (Kurulum sırasında görünür)
         self.progress_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.progress_container.set_no_show_all(True)
@@ -363,7 +382,9 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         # Detaylar / Log Expander
         self.log_expander = Gtk.Expander(label=t(self.language, "package_installer_details"))
-        self.log_expander.set_expanded(False)
+        self.log_expander.set_expanded(
+            getattr(self.preferences, "show_operation_details_by_default", False)
+        )
         log_scroll = Gtk.ScrolledWindow()
         log_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         log_scroll.set_min_content_height(110)
@@ -448,6 +469,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         if not self.trust_check.get_active() or self._is_installing:
             return
         self._is_installing = True
+        self.set_modal(False)
         self._current_op_id = f"op_pkg_{id(self)}_{int(time.monotonic() * 1000)}"
 
         # UI durumunu güncelle
@@ -506,9 +528,12 @@ class PackageInstallerDialog(Gtk.Dialog):
         def _cleanup_file_if_requested() -> bool:
             if delete_after and os.path.exists(self.info.file_path):
                 try:
-                    os.remove(self.info.file_path)
-                    return True
-                except OSError:
+                    runner = self.registry.runner
+                    if not runner.command_exists("gio"):
+                        return False
+                    runner.run(["gio", "trash", self.info.file_path], timeout=10, check=True)
+                    return not os.path.exists(self.info.file_path)
+                except (BackendError, OSError):
                     return False
             return False
 
@@ -522,6 +547,9 @@ class PackageInstallerDialog(Gtk.Dialog):
                 scope=scope,
                 reinstall=reinstall,
             )
+
+            if self.should_replace_native and self.replacement_application is not None:
+                self.registry.remove(self.replacement_application)
 
             deleted = _cleanup_file_if_requested()
             self.registry.runner.set_output_callback(None, op_id=self._current_op_id)
@@ -683,6 +711,11 @@ class PackageInstallerDialog(Gtk.Dialog):
 
     def _append_log(self, line: str) -> None:
         """Terminal çıktısını textview ve durum etiketine yazar."""
+        if line.startswith("SOURCEDOCK_PHASE "):
+            self.progress_status_label.set_text(t(
+                self.language, {"queued": "progress_queued", "authorizing": "progress_authorizing"}.get(line.split()[1], "progress_running")
+            ))
+            return
         end_iter = self.log_buffer.get_end_iter()
         self.log_buffer.insert(end_iter, line + "\n")
         self.log_view.scroll_to_iter(self.log_buffer.get_end_iter(), 0.0, False, 0.0, 0.0)
@@ -856,3 +889,7 @@ class PackageInstallerDialog(Gtk.Dialog):
     @property
     def should_delete_installer(self) -> bool:
         return self.delete_after_check.get_active() if self.delete_after_check else False
+
+    @property
+    def should_replace_native(self) -> bool:
+        return self.replace_native_check.get_active() if self.replace_native_check else False

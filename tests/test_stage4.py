@@ -10,7 +10,7 @@ import tempfile
 import unittest
 import zipfile
 
-from sourcedock.core.models import SOURCE_PORTABLE, LocalPackageInfo
+from sourcedock.core.models import SOURCE_PORTABLE, LocalPackageInfo, UnifiedApplication
 from sourcedock.core.runner import CommandRunner
 from sourcedock.backend.local_packages import (
     detect_package_format,
@@ -22,6 +22,7 @@ from sourcedock.backend.local_packages import (
 )
 from sourcedock.backend.portable import (
     PortableProvider,
+    find_portable_app,
     load_portable_registry,
     register_portable_app,
     unregister_portable_app,
@@ -86,6 +87,63 @@ class TestFlatpakrefInspection(unittest.TestCase):
 
 
 class TestArchiveInstallationAndPortableProvider(unittest.TestCase):
+    def test_electron_archive_uses_product_artwork_and_window_identity(self):
+        import json
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"XDG_DATA_HOME": directory}):
+            root = Path(directory)
+            archive = root / "Antigravity IDE.zip"
+            prefix = "Antigravity IDE/"
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr(prefix + "antigravity-ide", "#!/bin/sh\nexit 0\n")
+                package.writestr(prefix + "resources/app/product.json", json.dumps({"nameShort": "Antigravity IDE", "applicationName": "antigravity-ide"}))
+                package.writestr(prefix + "resources/app/resources/linux/code.png", b"product-artwork")
+                package.writestr(prefix + "resources/app/extensions/unrelated/icon.svg", b"x" * 10000)
+            runner = CommandRunner()
+            install_local_archive(runner, str(archive), extract_dir=str(root / "apps"))
+            app = PortableProvider(runner).list_applications()[0]
+            self.assertEqual(app.name, "Antigravity IDE")
+            self.assertEqual(Path(app.icon).read_bytes(), b"product-artwork")
+            self.assertTrue(Path(app.icon).is_absolute())
+            desktop = Path(app.desktop_file).read_text()
+            self.assertIn("StartupWMClass=sourcedock-portable-antigravity_ide", desktop)
+            self.assertIn(" --class=sourcedock-portable-antigravity_ide %U", desktop)
+            self.assertIn(f"Icon={app.icon}", desktop)
+            from sourcedock.backend.portable import repair_electron_launcher
+            shortcut = Path(app.desktop_file)
+            shortcut.write_text(desktop.replace(" --class=sourcedock-portable-antigravity_ide", "")
+                                .replace("StartupWMClass=sourcedock-portable-antigravity_ide", "StartupWMClass=Antigravity-ide"))
+            self.assertTrue(repair_electron_launcher(app))
+            self.assertIn(" --class=sourcedock-portable-antigravity_ide %U", shortcut.read_text())
+            self.assertFalse(repair_electron_launcher(app))
+            unmanaged = shortcut.read_text().replace("X-SourceDock-Managed=true", "X-SourceDock-Managed=false")
+            shortcut.write_text(unmanaged)
+            self.assertFalse(repair_electron_launcher(app))
+            self.assertEqual(shortcut.read_text(), unmanaged)
+
+    def test_icon_copy_failure_uses_final_path_instead_of_staging(self):
+        from unittest.mock import patch
+        from sourcedock.backend.local_packages import _install_archive_icon
+
+        with tempfile.TemporaryDirectory() as directory:
+            icon = Path(directory) / "logo.png"
+            icon.write_bytes(b"fixture")
+            with patch("sourcedock.backend.local_packages.shutil.copy2", side_effect=OSError("read only")):
+                self.assertEqual(
+                    _install_archive_icon(str(icon), "demo", fallback_path="/final/app/logo.png"),
+                    "/final/app/logo.png",
+                )
+
+    def test_archive_icon_selection_ignores_screenshots(self):
+        from sourcedock.backend.local_packages import _find_archive_icon
+
+        with tempfile.TemporaryDirectory() as tmp_root:
+            root = Path(tmp_root)
+            (root / "screenshot.png").write_bytes(b"x" * 10000)
+            (root / "logo.png").write_bytes(b"x")
+            self.assertEqual(_find_archive_icon(root, "antigravity_ide"), str(root / "logo.png"))
+
     def test_archive_lifecycle(self):
         runner = CommandRunner()
         with tempfile.TemporaryDirectory() as tmp_root:
@@ -103,11 +161,18 @@ class TestArchiveInstallationAndPortableProvider(unittest.TestCase):
 
                     tar.addfile(ti, io.BytesIO(bin_data))
 
-                    # 2. Desktop file
-                    desktop_data = b"[Desktop Entry]\nName=Super Editor\nType=Application\n"
+                    # 2. Bundled desktop metadata and application icon
+                    desktop_data = (
+                        b"[Desktop Entry]\nName=Super Editor\nType=Application\n"
+                        b"StartupWMClass=super-editor-window\n"
+                    )
                     ti2 = tarfile.TarInfo(name="super-editor/super-editor.desktop")
                     ti2.size = len(desktop_data)
                     tar.addfile(ti2, io.BytesIO(desktop_data))
+                    icon_data = b"png-test-icon"
+                    ti3 = tarfile.TarInfo(name="super-editor/logo.png")
+                    ti3.size = len(icon_data)
+                    tar.addfile(ti3, io.BytesIO(icon_data))
 
                 # İnceleme testi
                 info = inspect_local_package(runner, archive_path)
@@ -133,6 +198,12 @@ class TestArchiveInstallationAndPortableProvider(unittest.TestCase):
                 self.assertTrue(len(installed) >= 1)
                 app = installed[0]
                 self.assertEqual(app.source, SOURCE_PORTABLE)
+                self.assertEqual(find_portable_app("Super Editor").id, app.id)
+                self.assertIsNone(find_portable_app("Missing Application"))
+                desktop_text = Path(app.desktop_file).read_text(encoding="utf-8")
+                self.assertIn("StartupWMClass=super-editor-window", desktop_text)
+                self.assertIn(f"Icon={app.icon}", desktop_text)
+                self.assertTrue(Path(app.icon).is_file())
 
                 # Kaldırma testi
                 provider.remove(app)
@@ -149,6 +220,39 @@ class TestApplicationRegistryIntegration(unittest.TestCase):
         registry = ApplicationRegistry()
         sources = [p.source for p in registry.providers]
         self.assertIn(SOURCE_PORTABLE, sources)
+
+    def test_archive_can_offer_native_replacement_without_matching_portable_apps(self):
+        from unittest.mock import patch
+
+        registry = ApplicationRegistry.__new__(ApplicationRegistry)
+        snapshot = type("Snapshot", (), {})()
+        snapshot.applications = [
+            UnifiedApplication(
+                id="apt:antigravity",
+                name="Antigravity IDE",
+                source="apt",
+                version="2.5.5",
+                package_name="antigravity",
+            ),
+            UnifiedApplication(
+                id="portable:antigravity_ide",
+                name="Antigravity IDE",
+                source=SOURCE_PORTABLE,
+                version="2.6.0",
+            ),
+        ]
+        info = LocalPackageInfo(
+            file_path="/tmp/Antigravity IDE.tar.gz",
+            format="archive",
+            name="Antigravity IDE",
+            version="2.6.0",
+        )
+        registry.native_provider = type("Provider", (), {"source": "apt"})()
+        with patch.object(registry, "load_sources", return_value=snapshot) as load:
+            replacement = registry.find_native_replacement(info)
+        load.assert_called_once_with({"apt"})
+        self.assertIsNotNone(replacement)
+        self.assertEqual(replacement.package_name, "antigravity")
 
 
 class TestPackageInstallerDialog(unittest.TestCase):

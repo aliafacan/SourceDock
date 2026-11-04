@@ -14,7 +14,7 @@ from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import time
 
-from sourcedock.core.errors import BackendError
+from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.constants import APP_VERSION
 from sourcedock.core.models import (
     APT_LOCK_NOWAIT,
@@ -39,6 +39,7 @@ from sourcedock.core.models import (
     is_native_source,
 )
 from sourcedock.core.runner import CommandRunner
+from sourcedock.core.transactions import serialized_resource
 from sourcedock.backend.base_native import BaseNativeProvider
 from sourcedock.backend.distro import DistroInfo, detect_distro
 from sourcedock.backend.scanner import (
@@ -56,7 +57,7 @@ from sourcedock.backend.flatpak import FlatpakProvider
 from sourcedock.backend.snap import SnapProvider
 from sourcedock.backend.firmware import FirmwareProvider
 from sourcedock.backend.appimage import AppImageProvider
-from sourcedock.backend.portable import PortableProvider
+from sourcedock.backend.portable import PortableProvider, repair_electron_launcher
 
 
 def _apt_command(*args: str) -> list[str]:
@@ -258,6 +259,9 @@ class ApplicationRegistry:
         try:
             if provider.source in {
                 SOURCE_APT,
+                SOURCE_DNF,
+                SOURCE_PACMAN,
+                SOURCE_ZYPPER,
                 SOURCE_FLATPAK,
                 SOURCE_SNAP,
                 SOURCE_FIRMWARE,
@@ -284,6 +288,7 @@ class ApplicationRegistry:
         timeout_seconds: float | None = None,
         include_updates: bool = True,
         on_provider_result: Callable[[str, list[UnifiedApplication], str | None], None] | None = None,
+        providers=None,
     ) -> tuple[list[UnifiedApplication], list[str]]:
         """Collect independent read-only scans without waiting on a stalled provider.
 
@@ -296,10 +301,11 @@ class ApplicationRegistry:
         provider_metrics: dict[str, float] = {}
         timed_out: list[str] = []
         timeout = self.PROVIDER_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
-        executor = ThreadPoolExecutor(max_workers=max(1, min(6, len(self.providers))))
+        selected_providers = self.providers if providers is None else providers
+        executor = ThreadPoolExecutor(max_workers=max(1, min(6, len(selected_providers))))
         future_to_provider = {
             executor.submit(self._load_provider, provider, include_updates): provider
-            for provider in self.providers
+            for provider in selected_providers
         }
         pending = set(future_to_provider)
         started_at = time.perf_counter()
@@ -383,6 +389,15 @@ class ApplicationRegistry:
             provider_errors=errors,
             provider_notices=notices,
         )
+
+    def load_sources(self, sources):
+        """Reconcile only the providers touched by a completed mutation."""
+        providers = [provider for provider in self.providers if provider.source in sources]
+        applications, errors = self._collect_provider_results(
+            include_updates=False, providers=providers,
+        )
+        return ApplicationSnapshot(applications=self._merge_applications(applications),
+                                   issues=[], provider_errors=errors)
 
     def load(
         self,
@@ -483,14 +498,20 @@ class ApplicationRegistry:
         on_snapshot(snapshot, True)
         return snapshot
 
-    def list_packages(self) -> list[PackageInfo]:
-        return self.native_provider.list_all_packages()
+    def list_packages(self, *, include_updates: bool = True) -> list[PackageInfo]:
+        return self.native_provider.list_all_packages(include_updates=include_updates)
 
     def _update_native_packages_for_provider(self, prov: BaseNativeProvider, names: list[str]) -> None:
         if not names:
             return
         if prov.source == SOURCE_APT:
-            self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", *names), timeout=1800)
+            if any(
+                not isinstance(name, str)
+                or not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9-]*)?", name)
+                for name in names
+            ):
+                raise BackendError("Invalid APT package name.")
+            self.runner.run_privileged(_apt_command("install", "--only-upgrade", "-y", "--", *names), timeout=1800)
         elif prov.source == SOURCE_DNF:
             self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
         elif prov.source == SOURCE_PACMAN:
@@ -518,6 +539,10 @@ class ApplicationRegistry:
             self.runner.spawn([application.install_path])
             return
         if application.source == SOURCE_PORTABLE:
+            repair_electron_launcher(application)
+            if application.desktop_file and os.path.isfile(application.desktop_file) and self.runner.command_exists("gio"):
+                self.runner.spawn(["gio", "launch", application.desktop_file], desktop_file=application.desktop_file)
+                return
             if application.executable and os.path.exists(application.executable):
                 self.runner.spawn([application.executable])
                 return
@@ -656,14 +681,19 @@ class ApplicationRegistry:
         if native_apps:
             native_by_src: dict[str, list[str]] = {}
             for app in native_apps:
-                native_by_src.setdefault(app.source, []).append(app.package_name)
+                if app.package_name or app.source == SOURCE_APT:
+                    native_by_src.setdefault(app.source, [])
+                    if app.package_name not in native_by_src[app.source]:
+                        native_by_src[app.source].append(app.package_name)
             for src, names in native_by_src.items():
                 prov = self.get_native_provider(src)
                 if prov and prov.is_available():
                     try:
                         self._update_native_packages_for_provider(prov, names)
+                    except AuthRequiredError:
+                        raise
                     except Exception as exc:
-                        failures.append(f"{prov.display_name} ({', '.join(names)}): {exc}")
+                        failures.append(f"{prov.display_name} ({', '.join(map(str, names))}): {exc}")
 
         flatpak_apps = [app for app in applications if app.source == SOURCE_FLATPAK]
         if flatpak_apps and self.runner.command_exists("flatpak"):
@@ -684,6 +714,8 @@ class ApplicationRegistry:
             for app in snap_apps:
                 try:
                     self.runner.run_privileged(["snap", "refresh", app.package_name], timeout=1800)
+                except AuthRequiredError:
+                    raise
                 except Exception as exc:
                     failures.append(f"Snap ({app.name}): {exc}")
 
@@ -863,6 +895,23 @@ class ApplicationRegistry:
 
         return get_installed_package_status(self.runner, info)
 
+    def find_native_replacement(self, info: LocalPackageInfo, snapshot: ApplicationSnapshot | None = None) -> UnifiedApplication | None:
+        """Find a native install with the same display name as a local archive."""
+        if info.format not in ("archive", "appimage"):
+            return None
+        package_name = _normalize_name(info.name)
+        if not package_name:
+            return None
+        if snapshot is None:
+            snapshot = self.load_sources({self.native_provider.source})
+        matches = [
+            application
+            for application in snapshot.applications
+            if is_native_source(application.source)
+            and _normalize_name(application.name) == package_name
+        ]
+        return matches[0] if matches else None
+
     def launch_local_package(self, info: LocalPackageInfo) -> bool:
         from sourcedock.backend.local_packages import launch_local_package
 
@@ -1000,6 +1049,7 @@ class ApplicationRegistry:
             application.name.lower(),
         )
 
+    @serialized_resource("sourcedock-appimage")
     def _remove_appimage(self, application: UnifiedApplication) -> None:
         if application.install_path and os.path.exists(application.install_path):
             os.remove(application.install_path)

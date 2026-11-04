@@ -16,13 +16,38 @@
 
 O SourceDock reúne a busca, instalação, atualização e remoção de aplicativos APT, Flatpak, Snap e pacotes locais em uma interface responsiva. As consultas são assíncronas e os erros de cada provedor são mostrados separadamente.
 
+## Novidades da versão 1.4.10
+
+- **Listas estáveis:** após instalar, remover ou atualizar, apenas a fonte afetada é reconciliada, sem recarregar a página ou repetir a busca de atualizações.
+- **Filtro Sistema separado:** runtimes Flatpak e pacotes base Snap instalados ficam visíveis mesmo sem atualizações. Sua remoção exige aviso claro e confirmação digitando o nome do pacote.
+- **Continuar durante operações:** a busca e os filtros permanecem disponíveis. Gerenciadores diferentes podem trabalhar em paralelo; alterações na mesma base de pacotes entram em fila.
+- **Alterar a fonte de um aplicativo:** instalações nativas, Flatpak e Snap equivalentes são reconhecidas. Instale em paralelo ou altere a fonte. A nova instalação é verificada antes de remover apenas a cópia antiga escolhida, sem purge. Perfis e sessões não são transferidos automaticamente.
+- **Progresso mais claro:** uma única barra de progresso medido, registros detalhados opcionais, seletor de arquivos legível e melhores ícones e integração de janelas Electron portáteis.
+- **Busca robusta:** Snap recebe até 15 segundos; resultados rápidos de outras fontes aparecem sem esperar. Tempos esgotados exibem mensagens traduzidas para tentar novamente, em vez de comandos internos.
+
+Use [build.sh](build.sh) para empacotar e instalar as fontes atuais. O script verifica o checksum e instala ou reinstala com APT; solicita privilégios de administrador apenas para instalar.
+
+```bash
+./build.sh
+```
+
 ## Capturas de tela
 
-As imagens são nomeadas por visão, tema, idioma e resolução 1366×768:
+Novas capturas da versão 1.4.10: janelas principais em 1366×768 e diálogos em seu tamanho próprio.
 
-![Loja e descoberta](docs/screenshots/discover-light-pt_BR-100-1366x768.png)
-![Aplicativos instalados](docs/screenshots/installed-dark-pt_BR-100-1366x768.png)
-![Central de atualizações](docs/screenshots/updates-dark-pt_BR-100-1366x768.png)
+![Loja e descoberta](docs/screenshots/v1.4.10/discover-light-pt_BR-100-1366x768.png)
+![Aplicativos instalados](docs/screenshots/v1.4.10/installed-dark-pt_BR-100-1366x768.png)
+![Central de atualizações](docs/screenshots/v1.4.10/updates-dark-pt_BR-100-1366x768.png)
+
+### Alterar a fonte de um aplicativo
+
+![Alterar a fonte de um aplicativo](docs/screenshots/v1.4.10/source-switch-dark-pt_BR.png)
+
+### Componentes compartilhados do sistema
+
+![Componentes compartilhados do sistema](docs/screenshots/v1.4.10/system-dark-pt_BR.png)
+
+Capturas do SourceDock 1.4.10 com metadados reais consultados em modo somente leitura; nenhuma operação de pacotes foi executada.
 
 ## Recursos
 
@@ -36,11 +61,11 @@ As imagens são nomeadas por visão, tema, idioma e resolução 1366×768:
 
 ## Instalação
 
-Baixe o [SourceDock 1.4.9](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9) e o checksum:
+Baixe o [SourceDock 1.4.10](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10) e o checksum:
 
 ```bash
-sha256sum -c sourcedock_1.4.9_all.deb.sha256
-sudo apt install ./sourcedock_1.4.9_all.deb
+sha256sum -c sourcedock_1.4.10_all.deb.sha256
+sudo apt install ./sourcedock_1.4.10_all.deb
 sourcedock
 ```
 

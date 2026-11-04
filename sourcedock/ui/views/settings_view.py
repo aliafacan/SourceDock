@@ -111,9 +111,20 @@ class SettingsViewMixin:
         show_technical_check.set_active(getattr(self.preferences, "show_technical_packages", False))
         form.attach(show_technical_check, 0, 7, 2, 1)
 
+        operation_details_check = Gtk.CheckButton(
+            label=t(lang, "settings_show_operation_details_by_default")
+        )
+        operation_details_check.set_tooltip_text(
+            t(lang, "settings_show_operation_details_by_default_desc")
+        )
+        operation_details_check.set_active(
+            getattr(self.preferences, "show_operation_details_by_default", False)
+        )
+        form.attach(operation_details_check, 0, 8, 2, 1)
+
         sources_button = Gtk.Button(label=t(lang, "settings_sources"))
         sources_button.connect("clicked", self.on_open_sources)
-        form.attach(sources_button, 0, 8, 2, 1)
+        form.attach(sources_button, 0, 9, 2, 1)
 
         # Sistem Entegrasyonu & Varsayılan Paket Yükleyici
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
@@ -176,6 +187,7 @@ class SettingsViewMixin:
                 notifications_enabled=notifications_check.get_active(),
                 detailed_table_default=detailed_table_check.get_active(),
                 show_technical_packages=show_technical_check.get_active(),
+                show_operation_details_by_default=operation_details_check.get_active(),
             )
             self.preferences_store.save(self.preferences)
             self._apply_theme()
@@ -189,5 +201,6 @@ class SettingsViewMixin:
             button = self.store_filter_buttons.get(self.preferences.preferred_source)
             if button:
                 button.set_active(True)
+            self._render_store_results(self.store_results)
         dialog.destroy()
 

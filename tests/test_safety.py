@@ -981,6 +981,37 @@ class TestProcessSafety(unittest.TestCase):
             self.assertIn("vlc", cmd)
             self.assertIn("gedit", cmd)
 
+    def test_selected_apt_updates_use_one_transaction_for_five_and_fifteen_packages(self):
+        from sourcedock.backend.manager import ApplicationRegistry as ApplicationManager
+        from sourcedock.core.models import UnifiedApplication, SOURCE_APT
+        from sourcedock.backend.distro import DistroInfo
+
+        for count in (5, 15):
+            with self.subTest(count=count):
+                runner = MagicMock()
+                runner.command_exists.return_value = True
+                manager = ApplicationManager(
+                    distro_info=DistroInfo(native_manager=SOURCE_APT), runner=runner
+                )
+                applications = [
+                    UnifiedApplication(
+                        id=f"apt:package-{index}",
+                        name=f"Package {index}",
+                        source=SOURCE_APT,
+                        package_name=f"package-{index}",
+                    )
+                    for index in range(count)
+                ]
+                applications.append(applications[0])
+                manager.update_all(applications)
+                self.assertEqual(runner.run_privileged.call_count, 1)
+                command = runner.run_privileged.call_args.args[0]
+                self.assertEqual(command[0], "apt-get")
+                self.assertIn("install", command)
+                self.assertIn("--only-upgrade", command)
+                self.assertIn("-y", command)
+                self.assertEqual(command[-count:], [f"package-{index}" for index in range(count)])
+
     def test_update_all_error_handling_and_per_provider_execution(self):
         """update_all() başarısız dönüş kodlarını sessizce yutmaz ve BackendError fırlatır."""
         from sourcedock.backend.manager import ApplicationRegistry as ApplicationManager
@@ -1824,6 +1855,18 @@ sys.exit(42)
             file_path1 = tf.name
         self.assertTrue(os.path.exists(file_path1))
 
+        # Emulate desktop Trash in the fake runner, never invoke the host's gio.
+        trash_path = file_path1 + ".trash"
+        self.addCleanup(lambda: os.path.exists(trash_path) and os.unlink(trash_path))
+
+        def trash(command, **kwargs):
+            self.assertEqual(command, ["gio", "trash", file_path1])
+            os.rename(file_path1, trash_path)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        reg.runner.command_exists.return_value = True
+        reg.runner.run.side_effect = trash
+
         info1 = LocalPackageInfo(file_path1, 'deb', 'Pkg1', version='1.0')
         ctx1 = OperationContext('op_pkg_test_1', allow_cancel=False)
         ctx1.lingering = True
@@ -1849,6 +1892,8 @@ sys.exit(42)
             pump_glib()
 
         self.assertFalse(os.path.exists(file_path1))
+        self.assertTrue(os.path.exists(trash_path))
+        reg.runner.run.assert_called_once_with(["gio", "trash", file_path1], timeout=10, check=True)
         self.assertEqual(success_calls, [True])
         self.assertEqual(failure_calls, [])
 
@@ -1864,6 +1909,7 @@ sys.exit(42)
         ctx2.completed_event.set()
 
         reg.runner.get_operation_context.return_value = ctx2
+        reg.runner.run.reset_mock()
         success_calls.clear()
         failure_calls.clear()
 
@@ -1880,6 +1926,7 @@ sys.exit(42)
             pump_glib()
 
         self.assertTrue(os.path.exists(file_path2))
+        reg.runner.run.assert_not_called()
         try:
             os.remove(file_path2)
         except OSError:
@@ -2043,6 +2090,7 @@ sys.exit(0)
         reg = MagicMock()
         with patch.object(PackageInstallerDialog, "__init__", lambda self, *a, **kw: None):
             dlg = PackageInstallerDialog()
+            Gtk.Dialog.__init__(dlg)
             dlg.language = "tr"
             dlg.info = info
             dlg.registry = reg

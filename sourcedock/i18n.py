@@ -129,6 +129,7 @@ def source_name(language: str, source: str) -> str:
 
 
 def translate_backend_message(language: str, message: str) -> str:
+    message = message.replace("Invalid APT package name.", t(language, "error_invalid_apt_package"))
     if "Komut basarisiz oldu:" in message or "Komut başarısız oldu:" in message:
         suffix = message.split(":", 1)[1].strip() if ":" in message else ""
         return f"{t(language, 'error_command')} {suffix}".strip()

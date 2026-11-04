@@ -93,7 +93,7 @@ class StoreRegistry:
     # native package indexes while refreshing its remote metadata, so allow a
     # full provider window without delaying fast partial results.
     PROVIDER_TIMEOUT_SECONDS = 30.0
-    SNAP_SEARCH_TIMEOUT_SECONDS = 2.0
+    SNAP_SEARCH_TIMEOUT_SECONDS = 15.0
     PARTIAL_CACHE_TTL_SECONDS = 15.0
     SEARCH_CACHE_TTL_SECONDS = 15 * 60
     SEARCH_PARTIAL_CACHE_TTL_SECONDS = 60
@@ -360,6 +360,8 @@ class StoreRegistry:
                 return list(partial_results)
             self._partial_search_cache.pop(cache_key, None)
 
+        provider_errors = []
+        missing_sources = []
         self.provider_errors = []
         self.missing_sources = []
         commands = {
@@ -438,10 +440,12 @@ class StoreRegistry:
                     source, found, error, missing, duration_ms = future.result()
                     source_timings[source] = round(duration_ms, 1)
                     if missing:
-                        self.missing_sources.append(source)
+                        missing_sources.append(source)
                         source_states[source] = "unavailable"
                     elif error:
-                        self._record_provider_error(f"{source.upper()}: {error}")
+                        provider_errors.append(f"{source.upper()}: {error}")
+                        if any(token in error.casefold() for token in ("timeout", "timed out", "zaman aşımı")):
+                            timed_out_sources.append(source)
                         source_states[source] = "unavailable"
                     else:
                         results.extend(found)
@@ -450,7 +454,11 @@ class StoreRegistry:
                     # previous query's provider state. This keeps a fast
                     # APT/Flatpak result from being labelled unavailable while
                     # another provider is still running.
+                    self.provider_errors = list(provider_errors)
+                    self.missing_sources = list(missing_sources)
                     self.last_search_source_states = dict(source_states)
+                    self.last_search_metrics = {"timed_out_sources": list(timed_out_sources),
+                                                "source_states": dict(source_states)}
                     if on_partial:
                         on_partial(self._enrich_results(results, normalized_query), False)
             if pending:
@@ -461,7 +469,7 @@ class StoreRegistry:
                         (time.perf_counter() - source_started_at[source]) * 1000, 1
                     )
                     source_states[source] = "unavailable"
-                    self._record_provider_error(
+                    provider_errors.append(
                         f"{source.upper()}: timeout after {timeout:g}s"
                         if timeout is not None
                         else f"{source.upper()}: timeout"
@@ -473,6 +481,8 @@ class StoreRegistry:
             # Running workers are read-only and are not reused after this search.
             executor.shutdown(wait=False, cancel_futures=True)
 
+        self.provider_errors = list(provider_errors)
+        self.missing_sources = list(missing_sources)
         enrich_started = time.perf_counter()
         enriched = self._enrich_results(results, normalized_query)
         enrich_ms = round((time.perf_counter() - enrich_started) * 1000, 1)
@@ -484,15 +494,15 @@ class StoreRegistry:
             "timeout_seconds": timeout,
             "timed_out": bool(timed_out_sources),
             "timed_out_sources": timed_out_sources,
-            "provider_errors": list(self.provider_errors),
+            "provider_errors": list(provider_errors),
             "source_states": dict(source_states),
         }
         self.last_search_source_states = dict(source_states)
-        if not results and self.provider_errors:
-            raise BackendError("\n".join(self.provider_errors))
+        if not results and provider_errors:
+            raise BackendError("\n".join(provider_errors))
         # Displaying partial results is useful, but an errored provider response
         # must not be stored as a successful cache hit.
-        if not self.provider_errors:
+        if not provider_errors:
             if len(self._search_cache) >= self.SEARCH_CACHE_MAX_ENTRIES:
                 self._search_cache.pop(next(iter(self._search_cache)))
             self._search_cache[cache_key] = list(enriched)
@@ -519,7 +529,7 @@ class StoreRegistry:
             self._partial_search_cache[cache_key] = (
                 time.monotonic() + self.PARTIAL_CACHE_TTL_SECONDS,
                 list(enriched),
-                list(self.provider_errors),
+                list(provider_errors),
                 dict(self.last_search_metrics),
                 dict(source_states),
             )
