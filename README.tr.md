@@ -22,6 +22,7 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 
 ## 1.4.10 ile gelenler
 
+- **Daha hızlı açılış:** paket kayıtları ve kurulum işaretçileri değişmediyse son liste doğrudan kullanılır. Dışarıdan yapılan değişikliklerde veya önbellek eskidiğinde tarama yapılır; F5 her zaman yeni tarama başlatır. Antigravity kısayolu, Electron açılışından sonraki gerçek pencere kimliğiyle eşleşir.
 - **Sayfa yenilenmeden güncel liste:** kurulum, kaldırma ve güncelleme bitince yalnızca ilgili kaynak uzlaştırılır; sayfa baştan yüklenmez ve güncellemeler tekrar taranmaz.
 - **Ayrı Sistem filtresi:** kurulu Flatpak çalışma ortamları ve Snap taban paketleri güncelleme durumundan bağımsız görünür. Paylaşılan bileşenlerin kaldırılmasında açık uyarı ve paket adını yazarak onay gerekir.
 - **İşlem sürerken kullanım:** arama ve kaynak filtreleri açık kalır. Farklı paket yöneticileri paralel çalışabilir; aynı paket veritabanına yazan işler güvenli biçimde sıraya girer.

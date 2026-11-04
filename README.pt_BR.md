@@ -18,6 +18,7 @@ O SourceDock reúne a busca, instalação, atualização e remoção de aplicati
 
 ## Novidades da versão 1.4.10
 
+- **Inicialização mais rápida:** a lista salva é reutilizada quando os bancos de pacotes e os indicadores de instalação não mudam. Alterações externas, cache expirado ou F5 iniciam uma nova varredura. O Antigravity é associado à classe definitiva da janela.
 - **Listas estáveis:** após instalar, remover ou atualizar, apenas a fonte afetada é reconciliada, sem recarregar a página ou repetir a busca de atualizações.
 - **Filtro Sistema separado:** runtimes Flatpak e pacotes base Snap instalados ficam visíveis mesmo sem atualizações. Sua remoção exige aviso claro e confirmação digitando o nome do pacote.
 - **Continuar durante operações:** a busca e os filtros permanecem disponíveis. Gerenciadores diferentes podem trabalhar em paralelo; alterações na mesma base de pacotes entram em fila.

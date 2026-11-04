@@ -16,6 +16,7 @@ import time
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.constants import APP_VERSION
+from sourcedock.backend.inventory_cache import inventory_fingerprint
 from sourcedock.core.models import (
     APT_LOCK_NOWAIT,
     APT_LOCK_NOWAIT_VALUE,
@@ -196,23 +197,28 @@ class ApplicationRegistry:
                 applications.append(UnifiedApplication(**values))
             if not applications:
                 return None
+            self._persisted_inventory_fingerprint = raw.get("inventory_fingerprint")
             return self._build_snapshot(applications, [])
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return None
 
-    def _write_persisted_application_cache(self, snapshot: ApplicationSnapshot) -> None:
+    def _write_persisted_application_cache(self, snapshot: ApplicationSnapshot, *, expected_fingerprint=...) -> None:
         cache_path = getattr(self, "_persisted_application_cache_path", None)
         if cache_path is None:
             return
         try:
             from sourcedock.core.json_store import write_json
 
+            fingerprint = inventory_fingerprint()
+            if expected_fingerprint is not ... and fingerprint != expected_fingerprint:
+                fingerprint = None  # A package database changed during discovery.
             write_json(
                 cache_path,
                 {
                     "version": 3,
                     "app_version": APP_VERSION,
                     "saved_at": time.time(),
+                    "inventory_fingerprint": fingerprint,
                     "applications": [asdict(app) for app in snapshot.applications],
                 },
             )
@@ -220,6 +226,25 @@ class ApplicationRegistry:
             # The disk cache is an optimisation; a read-only or full cache
             # directory must never make application discovery fail.
             return
+
+    def remember_inventory(self, applications, errors=()) -> None:
+        """Save the reconciled full inventory after a successful local operation."""
+        if not errors:
+            self._write_persisted_application_cache(ApplicationSnapshot(list(applications)))
+
+    def load_startup(self, on_snapshot) -> ApplicationSnapshot:
+        """Reuse an unchanged inventory across restarts; F5 still forces discovery."""
+        persisted = self._read_persisted_application_cache()
+        fingerprint = inventory_fingerprint()
+        if (persisted is not None and fingerprint is not None
+                and fingerprint == getattr(self, "_persisted_inventory_fingerprint", None)):
+            for application in persisted.applications:
+                if application.source == SOURCE_PORTABLE:
+                    repair_electron_launcher(application)
+            self.last_provider_metrics = {"startup_cache": True}
+            on_snapshot(persisted, True)
+            return persisted
+        return self.load_progressive(on_snapshot, include_updates=False)
 
     def refresh_update_cache(self) -> None:
         if self.native_provider.is_available():
@@ -419,6 +444,7 @@ class ApplicationRegistry:
         ):
             self.applications = cached.applications
             return cached
+        fingerprint = inventory_fingerprint()
         applications, provider_errors = self._collect_provider_results(
             timeout_seconds=provider_timeout_seconds,
             include_updates=include_updates,
@@ -429,7 +455,7 @@ class ApplicationRegistry:
                 self._application_cache = snapshot
                 self._application_cache_at = time.monotonic()
                 self._application_cache_includes_updates = include_updates
-            self._write_persisted_application_cache(snapshot)
+            self._write_persisted_application_cache(snapshot, expected_fingerprint=fingerprint)
         return snapshot
 
     def load_progressive(
@@ -442,6 +468,7 @@ class ApplicationRegistry:
         """Load providers concurrently and publish each completed snapshot."""
         applications: list[UnifiedApplication] = []
         provider_errors: list[str] = []
+        fingerprint = inventory_fingerprint()
 
         persisted = self._read_persisted_application_cache()
         applications_by_source: dict[str, list[UnifiedApplication]] = {}
@@ -494,7 +521,7 @@ class ApplicationRegistry:
                 self._application_cache = snapshot
                 self._application_cache_at = time.monotonic()
                 self._application_cache_includes_updates = include_updates
-            self._write_persisted_application_cache(snapshot)
+            self._write_persisted_application_cache(snapshot, expected_fingerprint=fingerprint)
         on_snapshot(snapshot, True)
         return snapshot
 

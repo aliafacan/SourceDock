@@ -119,5 +119,34 @@ class TestApplicationCacheContracts149(unittest.TestCase):
             self.assertIsNone(registry._read_persisted_application_cache())
 
 
+class TestStartupViewContracts(unittest.TestCase):
+    def test_startup_keeps_disk_cache_and_does_not_schedule_an_implicit_update_scan(self):
+        view = InstalledViewMixin()
+        view.applications_loading = False
+        view.applications = []
+        view._application_update_scan_token = 0
+        view.preferences = SimpleNamespace(language="en")
+        view.application_registry = MagicMock()
+        view.installed_state = MagicMock()
+        view._set_application_controls_sensitive = MagicMock()
+        view._set_applications_status = MagicMock()
+        view._load_applications_worker = MagicMock()
+        with patch("sourcedock.ui.views.installed_view.threading.Thread") as thread:
+            view.reload_applications_async(startup=True)
+        view.application_registry.invalidate_application_cache.assert_not_called()
+        self.assertFalse(view._application_initial_load_needs_updates)
+        self.assertEqual(thread.call_args.kwargs["args"], (1, True))
+
+    def test_startup_worker_uses_cache_but_manual_refresh_requests_fresh_discovery(self):
+        view = InstalledViewMixin()
+        view.application_registry = MagicMock()
+        view._load_applications_worker(1, startup=True)
+        view.application_registry.load_startup.assert_called_once()
+        view.application_registry.load_progressive.assert_not_called()
+        view._load_applications_worker(2)
+        view.application_registry.load_progressive.assert_called_once()
+        self.assertFalse(view.application_registry.load_progressive.call_args.kwargs["include_updates"])
+
+
 if __name__ == "__main__":
     unittest.main()

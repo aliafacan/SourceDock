@@ -646,14 +646,12 @@ def install_local_archive(
         product_values = _read_electron_product(staged_exec)
         bundled_name = bundled_values.get("Name", "").strip() or product_values.get("nameShort") or info.name
         startup_wm_class = bundled_values.get("StartupWMClass", "").strip()
-        if product_values and desktop_file:
-            startup_wm_class = desktop_file.stem
         if not startup_wm_class:
             if product_values:
-                # Electron's X11 resource class capitalizes applicationName,
-                # which can differ from the human-readable product name.
+                # VS Code-derived apps reset WM_CLASS after startup to nameShort,
+                # overriding Chromium's --class (including spaces and case).
                 application_name = product_values.get("applicationName") or staged_exec.stem
-                startup_wm_class = application_name[:1].upper() + application_name[1:]
+                startup_wm_class = product_values.get("nameShort") or application_name[:1].upper() + application_name[1:]
             else:
                 startup_wm_class = _guess_wm_class(staged_exec)
         icon_name = _install_archive_icon(
@@ -669,6 +667,7 @@ def install_local_archive(
                 target_app_dir,
                 startup_wm_class=startup_wm_class,
                 force_wm_class=bool(product_values),
+                launch_wm_class=desktop_file.stem if desktop_file else "",
             )
             if desktop_file
             else ""
