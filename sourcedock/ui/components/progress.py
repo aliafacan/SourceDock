@@ -30,6 +30,7 @@ class OperationProgressWindow(Gtk.Window):
         on_progress: Callable[[float, str], None] | None = None,
         language: str = "tr",
         cancel_fn: Callable[[], bool] | None = None,
+        show_details_by_default: bool = False,
     ) -> None:
         super().__init__(title=title)
         self.language = language
@@ -44,6 +45,9 @@ class OperationProgressWindow(Gtk.Window):
         make_window_movable(self, independent=True)
         self.get_style_context().add_class("icon-settings-window")
         self._last_measurement = 0.0
+        self._phase_started = time.monotonic()
+        self._last_output_at = self._phase_started
+        self._running_provider = ""
         self._progress_watch = GLib.timeout_add_seconds(1, self._expire_measurement)
         self._done = False
         self._on_progress = on_progress
@@ -86,7 +90,7 @@ class OperationProgressWindow(Gtk.Window):
         content.pack_start(self._status_label, False, False, 0)
 
         self._details_expander = Gtk.Expander(label=t(self.language, "progress_details"))
-        self._details_expander.set_expanded(False)
+        self._details_expander.set_expanded(show_details_by_default)
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_min_content_height(180)
@@ -150,6 +154,12 @@ class OperationProgressWindow(Gtk.Window):
         if self._last_measurement and time.monotonic() - self._last_measurement > 5:
             self._start_pulse()
             self._last_measurement = 0.0
+        if self._running_provider and time.monotonic() - self._last_output_at > 3:
+            elapsed = max(0, int(time.monotonic() - self._phase_started))
+            self._status_label.set_text(t(
+                self.language, "progress_running_elapsed", source=self._running_provider,
+                elapsed=f"{elapsed // 60}:{elapsed % 60:02d}",
+            ))
         return True
 
     def _pulse(self) -> bool:
@@ -176,7 +186,24 @@ class OperationProgressWindow(Gtk.Window):
     def append_log(self, line: str) -> None:
         if self._done or not line.strip():
             return
-        self._append_detail(line)
+        if line.startswith("SOURCEDOCK_PHASE "):
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "queued":
+                self._set_activity_phase(t(self.language, "progress_queued"), "")
+            elif len(parts) >= 2 and parts[1] == "authorizing":
+                self._set_activity_phase(t(self.language, "progress_authorizing"), "")
+            elif len(parts) >= 3 and parts[1] == "running":
+                self._running_provider = parts[2]
+                self._phase_started = time.monotonic()
+                self._last_output_at = self._phase_started
+                self._set_activity_phase(t(self.language, "progress_running"), self._running_provider)
+            return
+        self._last_output_at = time.monotonic()
+        # Terminal redraw bars are represented by the single GTK progress bar.
+        # Keep diagnostics, phases and errors, without repeating ASCII bars.
+        terminal_progress = bool(re.search(r"[█▉▊▋▌▍▎▏■░▒▓━═]{2,}|^\s*\d+(?:[.,]\d+)?%\s+.*(?:/s|\d+:\d+)", line))
+        if not terminal_progress:
+            self._append_detail(line)
         if self._consume_package_progress(line):
             self._fire_progress()
             return
@@ -195,12 +222,19 @@ class OperationProgressWindow(Gtk.Window):
             self._log_buf.delete(self._log_buf.get_start_iter(), self._log_buf.get_iter_at_line(500))
 
     def _consume_package_progress(self, line: str) -> bool:
-        clean = re.sub(r"\s+", " ", line).strip()
+        clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+        clean = re.sub(r"\s+", " ", clean).strip()
         lowered = clean.lower()
+        step = re.search(r"(?:Updating|Güncelleniyor|Installing|Kuruluyor)\s+\d+/\d+", clean, re.I)
+        if step:
+            self._title_label.set_text(step.group(0))
+
 
         # Each percentage belongs to its own phase. Get: reports the size
         # of an item being fetched, not the bytes actually received.
         phases = (
+            (r"Arşiv güvenli|çalıştırılabilir dosyası aranıyor", "progress_installing"),
+            (r"Uygulama menüsü|Portable uygulama kaydı", "progress_configuring"),
             (r"^(?:Preparing to unpack|Unpacking|Paket açılıyor)|paketi açılıyor", "progress_installing"),
             (r"^(?:Setting up|Processing triggers)|(?:ayarlanıyor|yapılandırılıyor|tetikleyiciler işleniyor)", "progress_configuring"),
             (r"^(?:Reading package lists|Building dependency tree|Reading state information|Paket listeleri okunuyor|Bağımlılık ağacı)", "progress_calculating_deps"),
@@ -223,6 +257,22 @@ class OperationProgressWindow(Gtk.Window):
             self._progress.set_show_text(True)
             return True
 
+        provider_percent = re.search(r"(?:^|\s)(\d{1,3}(?:\.\d+)?)\s*%", clean)
+        if self._running_provider and provider_percent:
+            percent = max(0.0, min(100.0, float(provider_percent.group(1))))
+            self._stop_pulse()
+            self._last_measurement = time.monotonic()
+            self._progress.set_fraction(percent / 100)
+            self._progress.set_text(f"%{percent:g}")
+            self._progress.set_show_text(True)
+            status = re.sub(r"[\[\]|█▉▊▋▌▍▎▏■░▒▓━═]+", " ", clean)
+            status = re.sub(r"(?:^|\s)\d{1,3}(?:\.\d+)?\s*%", " ", status)
+            self._status_label.set_text(re.sub(r"\s+", " ", status).strip()[:180])
+            return True
+
+        if step:
+            return True
+
         fp_bar = re.search(r"[\[|]\s*[=■▌█▇▆▅▄▃▂▁\s]*[\]|]\s*(\d{1,3})\s*%", clean)
         if fp_bar:
             percent = max(0, min(100, int(fp_bar.group(1))))
@@ -233,7 +283,7 @@ class OperationProgressWindow(Gtk.Window):
             self._progress.set_show_text(True)
             speed_match = re.search(r"(\d[\d.]*\s*(?:MB|KB|GB)/s)", clean, re.IGNORECASE)
             if speed_match:
-                self._status_label.set_text(f"%{percent} — {speed_match.group(1)}")
+                self._status_label.set_text(speed_match.group(1))
             return True
 
         fp_app = re.match(r"(?:Installing|Kuruluyor)\s+app/([^/\s]+)", clean, re.IGNORECASE)

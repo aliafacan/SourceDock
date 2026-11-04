@@ -215,7 +215,7 @@ class ContentState(Gtk.Stack):
 
 
 class AppCard(Gtk.Button):
-    def __init__(self, result, pixbuf, installed, action, language, variants=(), source_states=None):
+    def __init__(self, result, pixbuf, installed, action, language, variants=(), source_states=None, installed_label=""):
         from sourcedock.i18n import source_name, t
 
         super().__init__()
@@ -283,7 +283,7 @@ class AppCard(Gtk.Button):
             footer.pack_start(variant_label, True, True, 0)
         else:
             footer.pack_start(Gtk.Box(), True, True, 0)
-        action_label = (
+        action_label = installed_label or (
             t(language, "store_installed_badge") if installed else t(language, "store_open_details")
         )
         action_label_widget = Gtk.Label(label=action_label)

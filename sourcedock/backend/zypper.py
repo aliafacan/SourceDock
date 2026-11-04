@@ -14,6 +14,7 @@ from sourcedock.core.models import (
     UnifiedApplication,
 )
 from sourcedock.core.runner import CommandRunner
+from sourcedock.core.errors import BackendError
 from sourcedock.backend.base_native import BaseNativeProvider
 from sourcedock.backend.scanner import (
     DesktopEntryScanner,
@@ -42,7 +43,7 @@ class ZypperProvider(BaseNativeProvider):
     def is_available(self) -> bool:
         return self.runner.command_exists("zypper")
 
-    def list_applications(self) -> list[UnifiedApplication]:
+    def list_applications(self, *, include_updates: bool = True) -> list[UnifiedApplication]:
         if (
             not (self.runner.command_exists("zypper") or self.runner.command_exists("rpm"))
             or not self.scanner
@@ -65,7 +66,7 @@ class ZypperProvider(BaseNativeProvider):
 
         unique_packages = sorted(set(owners.values()))
         package_meta = self._package_metadata(unique_packages)
-        upgradable = self._upgradable_packages()
+        upgradable = self._upgradable_packages() if include_updates else {}
 
         applications: list[UnifiedApplication] = []
         for entry in desktop_entries:
@@ -159,14 +160,16 @@ class ZypperProvider(BaseNativeProvider):
                 upgradable[name] = new_ver
         return upgradable
 
-    def list_all_packages(self) -> list[PackageInfo]:
+    def list_all_packages(self, *, include_updates: bool = True) -> list[PackageInfo]:
         if not self.runner.command_exists("rpm"):
             return []
         result = self.runner.run(
             ["rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\t%{SIZE}\t%{SUMMARY}\n"],
             timeout=60,
         )
-        upgradable = self._upgradable_packages()
+        if not include_updates and result.returncode != 0:
+            raise BackendError(result.stderr or result.stdout or f"{self.source}: {result.returncode}")
+        upgradable = self._upgradable_packages() if include_updates else {}
         packages: list[PackageInfo] = []
         for line in result.stdout.splitlines():
             parts = line.split("\t")

@@ -110,6 +110,8 @@ button:disabled, button:disabled label, button:disabled image {{ color: @muted; 
 button:focus, entry:focus, checkbutton:focus, row:focus {{ outline: 2px solid @focus; outline-offset: 2px; }}
 button.suggested-action {{ background: @accent; border-color: @accent; color: @accent_text; font-weight: bold; }}
 button.suggested-action:hover {{ background: shade(@accent, 1.07); }}
+button.suggested-action label, button.suggested-action image,
+button.suggested-action box {{ color: @accent_text; }}
 button.suggested-action:disabled, button.suggested-action:disabled label {{ background: @surface; border-color: @border; color: @muted; }}
 button.destructive-action, button.outline-danger {{ color: @danger; border-color: @danger; }}
 button.icon-button {{ min-width: 22px; min-height: 22px; padding: 6px; }}
@@ -152,6 +154,13 @@ listbox, flowbox {{ background: transparent; }}
 flowboxchild {{ padding: 0; }}
 listbox row {{ background: transparent; border-bottom: 1px solid @border; border-radius: 0; padding: 12px; }}
 listbox row:hover {{ background: @surface_hover; }}
+/* GTK's PlacesSidebar otherwise keeps the system theme's pale selection while
+   our global label rule supplies light text in a dark file chooser. */
+filechooser placessidebar row:selected,
+filechooser placessidebar row:selected:hover,
+filechooser placessidebar row:selected:backdrop {{ background: @selection; color: @text; }}
+filechooser placessidebar row:selected label,
+filechooser placessidebar row:selected image {{ color: @text; opacity: 1; }}
 .app-card {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 16px; }}
 .app-card:hover {{ background: @surface_hover; }}
 .app-name {{ font-weight: bold; font-size: 12pt; }}

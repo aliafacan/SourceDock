@@ -18,6 +18,11 @@
   <categories><category>System</category><category>PackageManager</category></categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.4.10" date="2026-11-04" type="stable">
+      <description>
+        <p>Portable archive installations can explicitly replace a matching native application after successful installation.</p>
+      </description>
+    </release>
     <release version="1.4.9" date="2026-11-03" type="stable">
       <description>
         <p>Makes APT update detection authoritative for graphical, system, kernel, library, multiarch and third-party repository packages, with explicit incomplete-state diagnostics.</p>

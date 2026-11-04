@@ -254,6 +254,16 @@ class TestExactAptStoreSearch149(unittest.TestCase):
                 items = self.registry(run)._search_apt(query)
                 self.assertEqual([item.app_id for item in items], [query])
 
+    def test_exact_technical_package_remains_searchable(self):
+        def run(command, timeout=30):
+            if command[1] == "search":
+                return completed("wireshark-doc - documentation for Wireshark\n")
+            return completed("wireshark-doc:\n  Candidate: 4.2.0\n")
+
+        items = self.registry(run)._search_apt("Wireshark-Doc")
+        self.assertEqual([item.app_id for item in items], ["wireshark-doc"])
+        self.assertFalse(items[0].is_application)
+
 
 class TestStoreProviderOutcomes149(unittest.TestCase):
     def registry(self):

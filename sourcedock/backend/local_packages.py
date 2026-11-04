@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import configparser
+import json
 import os
 from pathlib import Path
 import re
@@ -23,9 +24,15 @@ from sourcedock.core.models import (
     LocalPackageInfo,
 )
 from sourcedock.core.runner import CommandRunner
-from sourcedock.backend.portable import register_portable_app, load_portable_registry, validate_portable_path
+from sourcedock.backend.portable import (
+    get_portable_apps_root,
+    load_portable_registry,
+    register_portable_app,
+    validate_portable_path,
+)
 from sourcedock.backend.archive_safety import safe_extract_archive
 from sourcedock.backend.desktop_entries import render_desktop_entry
+from sourcedock.core.transactions import serialized_resource
 
 
 SUPPORTED_EXTENSIONS = (
@@ -505,6 +512,7 @@ def install_local_deb(runner: CommandRunner, file_path: str) -> None:
     raise BackendError("Sistemde 'apt-get' veya 'dpkg' paket yoneticisi bulunamadi.")
 
 
+@serialized_resource("sourcedock-appimage")
 def install_local_appimage(
     runner: CommandRunner,
     file_path: str,
@@ -563,13 +571,14 @@ def _safe_extract_archive(archive_path: str, dest_dir: Path) -> None:
     safe_extract_archive(archive_path, dest_dir)
 
 
+@serialized_resource("sourcedock-portable")
 def install_local_archive(
     runner: CommandRunner,
     file_path: str,
     extract_dir: str | None = None,
     create_desktop: bool = True,
 ) -> tuple[str, str]:
-    """Taşınabilir arşivi ~/.local/share/sourcedock/apps altına açar ve sisteme kaydeder."""
+    """Install a portable archive under /opt or the user-level fallback root."""
     abs_path = os.path.abspath(file_path)
     if not os.path.exists(abs_path):
         raise BackendError(f"Dosya bulunamadi: {abs_path}")
@@ -577,9 +586,15 @@ def install_local_archive(
     info = inspect_archive(runner, abs_path)
     safe_slug = re.sub(r"[^a-zA-Z0-9_-]", "_", info.name.lower())
 
-    base_apps_dir = (
-        Path(extract_dir).expanduser() if extract_dir else _get_data_home() / "sourcedock" / "apps"
-    )
+    def report(message: str) -> None:
+        callback = getattr(runner, "_output_callback", None)
+        if callback is not None:
+            callback(message)
+
+    base_apps_dir = Path(extract_dir).expanduser() if extract_dir else get_portable_apps_root()
+    if not base_apps_dir.exists() and base_apps_dir == Path("/opt"):
+        # /opt is the preferred system location; a normal user may not create it.
+        base_apps_dir = Path.home() / ".local" / "opt"
     if base_apps_dir.is_symlink():
         raise BackendError("Portable destination is a symbolic link.")
     base_apps_dir.mkdir(parents=True, exist_ok=True)
@@ -615,8 +630,10 @@ def install_local_archive(
 
     # Validate a complete candidate before replacing the working installation.
     with tempfile.TemporaryDirectory(prefix=f".{safe_slug}-", dir=base_apps_dir) as staging:
+        report("Arşiv güvenli geçici alana açılıyor...")
         staged_dir = Path(staging) / "payload"
         _safe_extract_archive(abs_path, staged_dir)
+        report("Uygulamanın çalıştırılabilir dosyası aranıyor...")
         staged_exec = _find_main_executable(staged_dir, info.name)
         if not staged_exec:
             raise BackendError("No executable was found in the archive.")
@@ -624,13 +641,37 @@ def install_local_archive(
         staged_exec.chmod(0o755)
         main_exec = target_app_dir / exec_relative
         icon_candidate = _find_archive_icon(staged_dir, safe_slug)
-        icon_path = (
-            str(target_app_dir / Path(icon_candidate).relative_to(staged_dir))
-            if icon_candidate != "package-x-generic"
-            else icon_candidate
+        bundled_desktop = _find_bundled_desktop_entry(staged_dir)
+        bundled_values = _parse_desktop_entry(bundled_desktop) if bundled_desktop else {}
+        product_values = _read_electron_product(staged_exec)
+        bundled_name = bundled_values.get("Name", "").strip() or product_values.get("nameShort") or info.name
+        startup_wm_class = bundled_values.get("StartupWMClass", "").strip()
+        if product_values and desktop_file:
+            startup_wm_class = desktop_file.stem
+        if not startup_wm_class:
+            if product_values:
+                # Electron's X11 resource class capitalizes applicationName,
+                # which can differ from the human-readable product name.
+                application_name = product_values.get("applicationName") or staged_exec.stem
+                startup_wm_class = application_name[:1].upper() + application_name[1:]
+            else:
+                startup_wm_class = _guess_wm_class(staged_exec)
+        icon_name = _install_archive_icon(
+            icon_candidate, safe_slug,
+            fallback_path=str(target_app_dir / Path(icon_candidate).relative_to(staged_dir))
+            if icon_candidate != "package-x-generic" else "package-x-generic",
         )
         desktop_text = (
-            render_desktop_entry(info.name, main_exec, icon_path, target_app_dir) if desktop_file else ""
+            render_desktop_entry(
+                bundled_name,
+                main_exec,
+                icon_name,
+                target_app_dir,
+                startup_wm_class=startup_wm_class,
+                force_wm_class=bool(product_values),
+            )
+            if desktop_file
+            else ""
         )
         backup = Path(staging) / "previous"
         if target_app_dir.exists():
@@ -638,14 +679,16 @@ def install_local_archive(
         try:
             staged_dir.rename(target_app_dir)
             if desktop_file:
+                report("Uygulama menüsü ve görev çubuğu bağlantısı hazırlanıyor...")
                 desktop_file.write_text(desktop_text, encoding="utf-8")
+            report("Portable uygulama kaydı tamamlanıyor...")
             register_portable_app(
-                info.name,
+                bundled_name,
                 info.version,
                 str(target_app_dir),
                 str(main_exec),
                 str(desktop_file) if desktop_file else "",
-                icon=icon_path,
+                icon=icon_name,
                 managed_root=str(base_apps_dir),
             )
         except Exception:
@@ -710,7 +753,16 @@ def _find_main_executable(app_dir: Path, app_name: str) -> Path | None:
 
 
 def _find_archive_icon(app_dir: Path, slug: str) -> str:
-    """Arşiv içindeki en yüksek çözünürlüklü ikonu tespit eder ve sisteme kaydeder."""
+    """Choose a likely application icon instead of an arbitrary large artwork file."""
+    # VS Code/Electron distributions contain hundreds of extension icons. The
+    # product's Linux launcher artwork is authoritative, regardless of file size.
+    product_icons = sorted(
+        app_dir.glob("**/resources/app/resources/linux/code.png"),
+        key=lambda path: len(path.relative_to(app_dir).parts),
+    )
+    for path in product_icons:
+        if path.is_file() and (path.parents[2] / "product.json").is_file():
+            return str(path)
     icons: list[Path] = []
     for ext in ("*.png", "*.svg"):
         icons.extend(app_dir.glob(f"**/{ext}"))
@@ -718,11 +770,95 @@ def _find_archive_icon(app_dir: Path, slug: str) -> str:
     if not icons:
         return "package-x-generic"
 
-    # En büyük boyutlu ikonu al
-    icons.sort(key=lambda p: p.stat().st_size, reverse=True)
+    def score(path: Path) -> tuple[int, int]:
+        name = path.stem.casefold()
+        score_value = 0
+        if "node_modules" in path.parts or "extensions" in path.parts:
+            score_value -= 150
+        if name == slug.casefold() or name.replace("-", "_") == slug.casefold():
+            score_value += 100
+        if any(token in name for token in ("icon", "logo", "application", "app")):
+            score_value += 30
+        if any(token in name for token in ("screenshot", "preview", "splash", "background", "tray", "cursor")):
+            score_value -= 100
+        if path.suffix.casefold() == ".svg":
+            score_value += 5
+        return score_value, min(path.stat().st_size, 10_000_000)
+
+    icons.sort(key=score, reverse=True)
     best = icons[0]
 
     return str(best)
+
+
+def _find_bundled_desktop_entry(root: Path) -> Path | None:
+    candidates = sorted(
+        (path for path in root.rglob("*.desktop") if path.is_file()),
+        key=lambda path: (len(path.relative_to(root).parts), str(path)),
+    )
+    return candidates[0] if candidates else None
+
+
+def _parse_desktop_entry(path: Path | None) -> dict[str, str]:
+    if path is None:
+        return {}
+    values: dict[str, str] = {}
+    in_main_section = False
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return values
+    for raw_line in lines:
+        line = raw_line.strip()
+        if line.startswith("["):
+            in_main_section = line == "[Desktop Entry]"
+            continue
+        if in_main_section and "=" in line and not line.startswith("#"):
+            key, _, value = line.partition("=")
+            values[key.strip()] = value.strip()
+    return values
+
+
+def _guess_wm_class(executable: Path) -> str:
+    stem = executable.stem.lower()
+    for suffix in ("-bin", "-gui", "-launcher", "-stable"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+    return re.sub(r"[^a-zA-Z0-9_-]", "", stem)
+
+
+def _read_electron_product(executable: Path) -> dict[str, str]:
+    path = executable.parent / "resources" / "app" / "product.json"
+    try:
+        if path.stat().st_size > 1_000_000:
+            return {}
+        product = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(product, dict):
+            return {}
+        return {
+            key: value.strip() for key in ("nameShort", "nameLong", "applicationName")
+            if isinstance(value := product.get(key), str) and value.strip()
+        }
+    except (OSError, ValueError):
+        return {}
+
+
+def _install_archive_icon(icon_path: str, slug: str, fallback_path: str = "") -> str:
+    if icon_path == "package-x-generic":
+        return icon_path
+    source = Path(icon_path)
+    if not source.is_file():
+        return "application-x-executable"
+    icons_root = _get_data_home() / "icons" / "hicolor"
+    target_dir = icons_root / ("scalable" if source.suffix.lower() == ".svg" else "256x256") / "apps"
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{slug}{source.suffix.lower()}"
+        shutil.copy2(source, target)
+    except OSError:
+        return fallback_path or "application-x-executable"
+    # Absolute paths also work before a running desktop's icon-theme cache reloads.
+    return str(target)
 
 
 def install_local_flatpak(
@@ -832,10 +968,14 @@ def launch_local_package(runner: CommandRunner, info: LocalPackageInfo) -> bool:
 
     # 3. Archive
     if fmt == "archive":
-        from sourcedock.backend.portable import find_portable_app
+        from sourcedock.backend.portable import find_portable_app, repair_electron_launcher
 
         app = find_portable_app(info.name)
         if app and app.executable and os.path.exists(app.executable):
+            repair_electron_launcher(app)
+            if app.desktop_file and os.path.isfile(app.desktop_file) and runner.command_exists("gio"):
+                runner.spawn(["gio", "launch", app.desktop_file], desktop_file=app.desktop_file)
+                return True
             runner.spawn([app.executable])
             return True
 

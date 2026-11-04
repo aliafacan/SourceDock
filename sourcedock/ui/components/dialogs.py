@@ -17,7 +17,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
-from sourcedock.core.models import SOURCE_FLATPAK, SOURCE_SNAP, StoreResult, is_native_source
+from sourcedock.core.models import SOURCE_FLATPAK, SOURCE_SNAP, StoreResult, UnifiedApplication, is_native_source
+from sourcedock.core.app_identity import matching_installations, store_identity
 from sourcedock.core.icons import find_flatpak_icon_path, find_snap_icon_path
 from sourcedock.ui.components.common import display_store_name, prepare_dialog
 from sourcedock.i18n import source_name, t
@@ -25,12 +26,7 @@ from sourcedock.i18n import source_name, t
 
 def _store_variant_identity(result: StoreResult) -> str:
     """Normalize provider variants to the same selectable app identity."""
-    identity = re.sub(r"[^a-z0-9.+:-]+", "", (result.identity or "").casefold())
-    package_id = re.sub(r"[^a-z0-9.+:-]+", "", (result.app_id or "").casefold())
-    aliases = {
-        "firefox": "org.mozilla.firefox",
-    }
-    return aliases.get(identity or package_id, identity or package_id)
+    return store_identity(result)
 
 
 class AppDetailDialog(Gtk.Dialog):
@@ -44,6 +40,8 @@ class AppDetailDialog(Gtk.Dialog):
         install_callback: Callable[[StoreResult], None],
         language: str,
         parent: Gtk.Window,
+        installed_applications: list[UnifiedApplication] | None = None,
+        switch_callback: Callable[[StoreResult, list[UnifiedApplication]], None] | None = None,
     ) -> None:
         super().__init__(
             title=display_store_name(primary_result),
@@ -53,9 +51,13 @@ class AppDetailDialog(Gtk.Dialog):
         )
         prepare_dialog(self, width=720, height=380, independent=True)
 
+        self._inventory_owner = parent
         self._primary = primary_result
         self._installed_ids = installed_package_ids
         self._install_callback = install_callback
+        self._installed_applications = list(installed_applications or [])
+        self._all_results = list(all_results)
+        self._switch_callback = switch_callback
         self._language = language
         self._selected_result = primary_result
         self._source_combo: Gtk.ComboBoxText | None = None
@@ -163,6 +165,11 @@ class AppDetailDialog(Gtk.Dialog):
         self._install_btn.connect("clicked", self._on_install_clicked)
         btn_box.pack_start(self._install_btn, False, False, 0)
 
+        self._switch_btn = Gtk.Button(label=t(self._language, "source_switch_action"))
+        self._switch_btn.set_no_show_all(True)
+        self._switch_btn.connect("clicked", self._on_switch_clicked)
+        btn_box.pack_start(self._switch_btn, False, False, 0)
+
         if self._flatpak_app_id:
             flathub_url = f"https://flathub.org/apps/{self._flatpak_app_id}"
             open_btn = Gtk.LinkButton.new_with_label(flathub_url, t(self._language, "store_open_external"))
@@ -171,6 +178,11 @@ class AppDetailDialog(Gtk.Dialog):
 
         header_box.pack_start(btn_box, False, False, 0)
         main_box.pack_start(header_box, False, False, 0)
+        self._installed_elsewhere_label = Gtk.Label(xalign=0)
+        self._installed_elsewhere_label.set_line_wrap(True)
+        self._installed_elsewhere_label.set_no_show_all(True)
+        main_box.pack_start(self._installed_elsewhere_label, False, False, 0)
+        self._update_install_btn(self._primary)
         main_box.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 0)
         self._publisher_status_label = Gtk.Label(
             label=(
@@ -257,14 +269,27 @@ class AppDetailDialog(Gtk.Dialog):
         content.pack_start(outer_scroll, True, True, 0)
         self._set_source_metadata(self._primary)
 
+    def update_installed_state(self, applications, installed_ids):
+        self._installed_applications = list(applications)
+        self._installed_ids = set(installed_ids)
+        self._update_install_btn(self._selected_result)
+
     def _update_install_btn(self, result: StoreResult) -> None:
         is_installed = f"{result.source}:{result.app_id}" in self._installed_ids
+        matches = matching_installations(result, self._installed_applications, self._all_results)
+        elsewhere = [app for app in matches if app.source != result.source]
         if is_installed:
             self._install_btn.set_label(f"✓ {t(self._language, 'store_installed_badge')}")
             self._install_btn.set_sensitive(False)
         else:
-            self._install_btn.set_label(t(self._language, "store_install_btn"))
+            self._install_btn.set_label(t(self._language, "source_switch_install_alongside" if elsewhere else "store_install_btn"))
             self._install_btn.set_sensitive(True)
+        if hasattr(self, "_switch_btn"):
+            self._switch_btn.set_visible(bool(elsewhere and not is_installed and self._switch_callback))
+        if hasattr(self, "_installed_elsewhere_label"):
+            sources = ", ".join(sorted({source_name(self._language, app.source) for app in elsewhere}))
+            self._installed_elsewhere_label.set_text(t(self._language, "source_switch_installed_elsewhere", sources=sources))
+            self._installed_elsewhere_label.set_visible(bool(elsewhere))
 
     def _set_source_metadata(self, result: StoreResult) -> None:
         if hasattr(self, "_description_label"):
@@ -333,6 +358,13 @@ class AppDetailDialog(Gtk.Dialog):
     def _on_install_clicked(self, _btn: Gtk.Button) -> None:
         self.destroy()
         self._install_callback(self._selected_result)
+
+    def _on_switch_clicked(self, _btn: Gtk.Button) -> None:
+        matches = matching_installations(self._selected_result, self._installed_applications, self._all_results)
+        previous = [app for app in matches if app.source != self._selected_result.source]
+        if previous and self._switch_callback:
+            self.destroy()
+            self._switch_callback(self._selected_result, previous)
 
     def _load_icon(self, result: StoreResult, size: int) -> None:
         if result.icon_path:

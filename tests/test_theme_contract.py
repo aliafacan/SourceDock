@@ -34,6 +34,59 @@ def contrast_ratio(foreground: str, background: str) -> float:
 
 
 class TestThemeCssLoading(unittest.TestCase):
+    def test_suggested_action_label_keeps_dark_text_on_the_yellow_button(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest("A GTK display is required")
+        dialog = Gtk.Dialog()
+        button = Gtk.Button(label="Run")
+        button.get_style_context().add_class("suggested-action")
+        dialog.get_content_area().add(button)
+        provider = Gtk.CssProvider()
+        provider.load_from_data(get_theme_css("dark").encode())
+        screen = dialog.get_screen()
+        Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        try:
+            label = button.get_child()
+            color = label.get_style_context().get_color(Gtk.StateFlags.NORMAL)
+            self.assertAlmostEqual(color.red, int(PALETTES["dark"]["accent_text"][1:3], 16) / 255, places=2)
+        finally:
+            dialog.destroy()
+            Gtk.StyleContext.remove_provider_for_screen(screen, provider)
+
+    def test_filechooser_sidebar_selection_uses_the_application_palette(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest("A GTK display is required")
+
+        def descendants(widget):
+            yield widget
+            if isinstance(widget, Gtk.Container):
+                for child in widget.get_children():
+                    yield from descendants(child)
+
+        for theme in ("dark", "light"):
+            with self.subTest(theme=theme):
+                dialog = Gtk.FileChooserDialog(action=Gtk.FileChooserAction.OPEN)
+                provider = Gtk.CssProvider()
+                provider.load_from_data(get_theme_css(theme).encode())
+                screen = dialog.get_screen()
+                Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                try:
+                    sidebar = next(widget for widget in descendants(dialog) if isinstance(widget, Gtk.PlacesSidebar))
+                    box = next(widget for widget in descendants(sidebar) if isinstance(widget, Gtk.ListBox))
+                    row = box.get_row_at_index(0)
+                    box.select_row(row)
+                    state = Gtk.StateFlags.SELECTED
+                    background = row.get_style_context().get_background_color(state)
+                    expected = PALETTES[theme]["selection"].lstrip("#")
+                    self.assertAlmostEqual(background.red, int(expected[:2], 16) / 255, places=2)
+                    label = next(widget for widget in descendants(row) if isinstance(widget, Gtk.Label))
+                    foreground = label.get_style_context().get_color(state)
+                    expected_text = PALETTES[theme]["text"].lstrip("#")
+                    self.assertAlmostEqual(foreground.red, int(expected_text[:2], 16) / 255, places=2)
+                finally:
+                    dialog.destroy()
+                    Gtk.StyleContext.remove_provider_for_screen(screen, provider)
+
     def test_css_loads_for_every_palette_and_scale(self):
         for theme in ("dark", "light"):
             for scale in ("90", "100", "110", "125"):

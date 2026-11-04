@@ -119,6 +119,67 @@ class TestProviderTimeouts(unittest.TestCase):
         self.assertEqual(snap_calls, ["editor"])
         self.assertTrue(registry.last_search_metrics["partial_cache"])
 
+    def test_snap_remote_search_has_a_network_budget_beyond_two_seconds(self):
+        registry = StoreRegistry.__new__(StoreRegistry)
+        registry._command_exists = lambda _command: True
+        observed = []
+        def run(command, timeout):
+            observed.append(timeout)
+            if timeout <= 2:
+                raise BackendError("snap find timed out after 2.0 seconds")
+            return subprocess.CompletedProcess(command, 0, "Name Version Publisher Notes Summary\nchrome 1 publisher - Browser\n", "")
+        registry._run = run
+        results = registry._search_snap("google chrome")
+        self.assertEqual([item.app_id for item in results], ["chrome"])
+        self.assertGreaterEqual(observed[0], 10)
+        self.assertLessEqual(observed[0], registry.PROVIDER_TIMEOUT_SECONDS)
+
+    def test_overlapping_search_diagnostics_do_not_turn_failed_sources_into_full_cache(self):
+        from threading import Thread
+        registry = StoreRegistry.__new__(StoreRegistry)
+        registry.native_manager = SOURCE_APT
+        registry._search_cache = {}
+        registry._partial_search_cache = {}
+        registry._metadata = {}
+        registry._command_exists = lambda _command: True
+        registry._persist_search_cache = lambda: None
+        failed, second_finished, release_first = Event(), Event(), Event()
+        first_result = StoreResult("First", "first", "", SOURCE_APT, "1", "apt")
+        def apt(query):
+            if query == "first":
+                release_first.wait(2)
+            return [first_result]
+        def snap(_query):
+            raise BackendError("snap find timed out after 15.0 seconds")
+        def partial(_results, _complete):
+            if registry.last_search_source_states.get(SOURCE_SNAP) == "unavailable":
+                failed.set()
+                second_finished.wait(2)
+                release_first.set()
+        registry._search_apt = apt
+        registry._search_snap = snap
+        errors = []
+        def first():
+            try:
+                registry.search("first", sources={SOURCE_APT, SOURCE_SNAP}, on_partial=partial)
+            except Exception as exc:
+                errors.append(exc)
+        thread = Thread(target=first)
+        thread.start()
+        try:
+            self.assertTrue(failed.wait(1))
+            registry.search("second", sources={SOURCE_APT})
+        finally:
+            second_finished.set()
+            release_first.set()
+            thread.join(3)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(errors, [])
+        first_key = ("first", tuple(sorted((SOURCE_APT, SOURCE_SNAP))))
+        self.assertNotIn(first_key, registry._search_cache)
+        self.assertIn(first_key, registry._partial_search_cache)
+        self.assertIn("SNAP:", registry._partial_search_cache[first_key][2][0])
+
     def test_cached_results_expose_non_live_source_state(self):
         registry = StoreRegistry.__new__(StoreRegistry)
         registry.native_manager = SOURCE_APT

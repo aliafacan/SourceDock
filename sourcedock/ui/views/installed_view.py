@@ -42,7 +42,7 @@ from sourcedock.i18n import source_name, t, translate_backend_message, translate
 from sourcedock.ui.components.progress import OperationProgressWindow
 from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
 from sourcedock.ui.components.app_details_dialog import InstalledAppDetailsDialog
-from sourcedock.ui.components.removal import add_sensitive_removal_confirmation
+from sourcedock.ui.components.removal import add_sensitive_removal_confirmation, is_system_component
 from sourcedock.ui.components.common import (
     ContentState,
     icon_button,
@@ -221,6 +221,7 @@ class InstalledViewMixin:
             SOURCE_FLATPAK,
             SOURCE_SNAP,
             "other",
+            "system",
         ]
         for source in source_filters:
             button = Gtk.ToggleButton()
@@ -585,7 +586,7 @@ class InstalledViewMixin:
         self.reload_applications_async()
 
     def on_flatpak_cleanup(self, *_args) -> None:
-        if self.applications_busy or self.store_busy or getattr(self, "_cleanup_plan_loading", False):
+        if getattr(self, "_cleanup_plan_loading", False):
             return
         self._cleanup_plan_loading = True
         self.applications_flatpak_cleanup_btn.set_sensitive(False)
@@ -669,6 +670,7 @@ class InstalledViewMixin:
             success_message_key="applications_update_done",
             progress_title_key="applications_progress_update_all",
             refresh_after=True,
+            updated_applications=updateable,
         )
 
     def on_application_tree_activated(self, _tree: Gtk.TreeView, path, _col) -> None:
@@ -946,6 +948,7 @@ class InstalledViewMixin:
             progress_title_key="applications_progress_update",
             refresh_after=True,
             progress_message=application.name,
+            updated_applications=[application],
         )
 
     def on_open_application_location(self, _button, application: UnifiedApplication) -> None:
@@ -1005,13 +1008,183 @@ class InstalledViewMixin:
             worker_callable=lambda: self.application_registry.remove(application, purge=purge),
             success_message_key="applications_remove_done",
             progress_title_key="applications_progress_remove",
-            refresh_after=True,
+            refresh_after=False,
             progress_message=application.name,
+            on_success=lambda: self._forget_removed_applications([application]),
         )
+
+    def _forget_removed_applications(self, removed: list[UnifiedApplication]) -> bool:
+        """Apply confirmed removals to the visible inventory without a rescan."""
+        def identity(app):
+            return (app.source, app.package_name or app.id,
+                    app.install_path if app.source == SOURCE_FLATPAK else "")
+
+        removed_ids = {identity(app) for app in removed}
+        removals = getattr(self, "_inventory_removals", {})
+        removals.update({key: getattr(self, "_quiet_refresh_generation", 0) for key in removed_ids})
+        self._inventory_removals = removals
+        selected_updates = {identity(item.application) for item in self._selected_updates()}
+        keep = lambda app: identity(app) not in removed_ids
+        self.applications = [app for app in self.applications if keep(app)]
+        self.application_update_only_items = [app for app in self.application_update_only_items if keep(app)]
+        native_names = {app.package_name for app in removed if is_native_source(app.source)}
+        self.packages = [package for package in self.packages if package.name not in native_names]
+        self.update_items = [item for item in self.update_items if keep(item.application)]
+        self.application_registry.invalidate_application_cache()
+        self.store_registry.invalidate_search_cache()
+        self._refresh_inventory_views(selected_updates)
+        return False
+
+    @staticmethod
+    def _inventory_identity(app):
+        return (app.source, app.package_name or app.id,
+                app.install_path if app.source == SOURCE_FLATPAK else "")
+
+    def _refresh_inventory_views(self, selected_updates=None):
+        identity = self._inventory_identity
+        if selected_updates is None:
+            selected_updates = {identity(item.application) for item in self._selected_updates()}
+        self.installed_package_ids = {
+            f"{app.source}:{app.package_name}" for app in self.applications if app.package_name
+        }
+        self._update_category_combo()
+        self._render_applications_list()
+        self._render_packages_list()
+        self._render_updates_model()
+        def restore_update_selection(model, _path, iterator):
+            item = model.get_value(iterator, 5)
+            if item is not None and identity(item.application) in selected_updates:
+                model.set_value(iterator, 0, True)
+        self.updates_model.foreach(restore_update_selection)
+        self.updates_apply_btn.set_sensitive(bool(self._selected_updates()))
+        self._refresh_selection_summary()
+        for group, (_title, count_label, _key) in self.updates_stat_labels.items():
+            count_label.set_text(str(sum(item.group == group for item in self.update_items)))
+        self._refresh_update_count()
+        if not self.update_items and not self._updates_status_error and not self._updates_status_messages:
+            self.updates_state.show_state(
+                t(self.preferences.language, "updates_empty"),
+                t(self.preferences.language, "updates_empty_body"),
+            )
+        self._render_store_results(self.store_results)
+        if not self.applications:
+            self.installed_state.show_state(
+                t(self.preferences.language, "installed_empty"),
+                t(self.preferences.language, "installed_empty_body"),
+            )
+        return False
+
+    def _refresh_inventory_quietly(self, updated_applications=None, sources=None) -> None:
+        """Read installed metadata in the background without update discovery or a loading page."""
+        # An older startup/manual scan must not overwrite the post-operation
+        # inventory or launch its deferred update scan when it eventually ends.
+        self._application_load_generation = getattr(self, "_application_load_generation", 0) + 1
+        self._application_update_scan_token += 1
+        self.applications_loading = False
+        self.application_updates_loading = False
+        self._application_initial_load_needs_updates = False
+        self._quiet_refresh_generation = getattr(self, "_quiet_refresh_generation", 0) + 1
+        generation = self._quiet_refresh_generation
+        requested = set(sources or {app.source for app in (updated_applications or [])})
+        if not requested:
+            requested = {provider.source for provider in self.application_registry.providers}
+        dirty = getattr(self, "_quiet_dirty_sources", set()) | requested
+        self._quiet_dirty_sources = dirty
+        updated = getattr(self, "_quiet_updated_pending", set()) | {
+            self._inventory_identity(app) for app in (updated_applications or [])}
+        self._quiet_updated_pending = updated
+        self.application_registry.invalidate_application_cache()
+        self.store_registry.invalidate_search_cache()
+
+        def worker():
+            try:
+                snapshot = self.application_registry.load_sources(dirty)
+                package_error = None
+                try:
+                    packages = (self.application_registry.list_packages(include_updates=False)
+                                if dirty & NATIVE_SOURCES else None)
+                except Exception as exc:
+                    packages = None  # Retain the visible package inventory on query failure.
+                    package_error = str(exc)
+                GLib.idle_add(self._apply_quiet_inventory, generation, snapshot, packages, updated, package_error, dirty)
+            except Exception as exc:
+                GLib.idle_add(self._quiet_inventory_failed, generation, str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _quiet_inventory_failed(self, generation, error):
+        if not getattr(self, "_release_check_destroyed", False) and generation == getattr(self, "_quiet_refresh_generation", 0):
+            self.application_provider_errors = [error]
+            self._render_application_diagnostics()
+        return False
+
+    def _apply_quiet_inventory(self, generation, snapshot, packages, updated, package_error=None, sources=None):
+        if getattr(self, "_release_check_destroyed", False) or generation != getattr(self, "_quiet_refresh_generation", 0):
+            return False
+        self._quiet_dirty_sources = set()
+        self._quiet_updated_pending = set()
+        identity = self._inventory_identity
+        old_apps = {identity(app): app for app in self._application_items_with_update_status()}
+        candidates = {identity(item.application): item.new_version for item in self.update_items}
+        failed_sources = {error.split(":", 1)[0].strip() for error in snapshot.provider_errors}
+        refreshed = []
+        removals = getattr(self, "_inventory_removals", {})
+        for app in snapshot.applications:
+            if removals.get(identity(app), -1) >= generation:
+                continue
+            old = old_apps.get(identity(app))
+            resolved = identity(app) in updated or bool(candidates.get(identity(app)) and app.version == candidates[identity(app)])
+            if old is not None:
+                app = replace(app, update_available=old.update_available and not resolved,
+                              update_note=old.update_note if not resolved else "")
+            refreshed.append(app)
+        refreshed.extend(app for app in self.applications
+                         if app.source in failed_sources or (sources is not None and app.source not in sources))
+        self.applications = list({(app.id, app.install_path): app for app in refreshed}.values())
+        measured = {identity(app): app for app in self.applications}
+        if packages is not None:
+            removed_native = {key[1] for key, removed_at in removals.items()
+                              if is_native_source(key[0]) and removed_at >= generation}
+            packages = [pkg for pkg in packages if pkg.name not in removed_native]
+            old_packages = {pkg.name: pkg for pkg in self.packages}
+            updated_native = {key[1] for key in updated if is_native_source(key[0])}
+            for pkg in packages:
+                old = old_packages.get(pkg.name)
+                if old and pkg.name not in updated_native and pkg.version != old.new_version:
+                    pkg.update_available, pkg.new_version = old.update_available, old.new_version
+            ui_packages = {app.package_name for app in self.applications if is_native_source(app.source)}
+            self.packages = [pkg for pkg in packages if pkg.name not in ui_packages]
+        native_packages = {pkg.name: pkg for pkg in self.packages}
+        retained_updates = []
+        for item in self.update_items:
+            app = item.application
+            key = identity(app)
+            if key in updated:
+                continue
+            current = measured.get(key)
+            if current is None and is_native_source(app.source):
+                package = native_packages.get(app.package_name)
+                if package:
+                    current = replace(app, version=package.version, installed_size_kib=package.installed_size_kib)
+            if current is not None and (not item.new_version or current.version != item.new_version):
+                retained_updates.append(replace(item, application=current))
+        self.update_items = retained_updates
+        self.application_update_only_items = [
+            item.application for item in retained_updates if identity(item.application) not in measured
+        ]
+        self._inventory_removals = {key: removed_at for key, removed_at in removals.items()
+                                    if removed_at >= generation}
+        self.application_provider_errors = snapshot.provider_errors + ([package_error] if package_error else [])
+        self._render_application_diagnostics()
+        self._refresh_inventory_views()
+        if self.applications:
+            self.installed_state.show_content()
+        return False
 
     def reload_applications_async(self) -> None:
         if self.applications_loading:
             return
+        self._quiet_refresh_generation = getattr(self, "_quiet_refresh_generation", 0) + 1
         invalidate = getattr(self.application_registry, "invalidate_application_cache", None)
         if callable(invalidate):
             invalidate()
@@ -1192,6 +1365,8 @@ class InstalledViewMixin:
             f"{app.source}:{app.package_name}" for app in self.applications if app.package_name
         }
 
+        self._render_store_results(self.store_results)
+
         self.applications_loading = not complete
         self._set_application_controls_sensitive(True)
         self._update_category_combo()
@@ -1249,9 +1424,10 @@ class InstalledViewMixin:
         refresh_after: bool = False,
         progress_message: str = "",
         retry: bool = False,
+        on_success: Callable[[], None] | None = None,
+        updated_applications: list[UnifiedApplication] | None = None,
     ) -> None:
-        if self.applications_busy or self.store_busy:
-            return
+        self._application_task_count = getattr(self, "_application_task_count", 0) + 1
         self.applications_busy = True
         self._set_application_controls_sensitive(False)
         self._set_applications_status(t(self.preferences.language, "store_action_running"), "#666666")
@@ -1284,14 +1460,30 @@ class InstalledViewMixin:
             on_progress=lambda f, lbl: self._update_op_row(op_key, f, lbl),
             language=lang,
             cancel_fn=cancel_action,
+            show_details_by_default=getattr(
+                self.preferences, "show_operation_details_by_default", False
+            ),
         )
         runner.set_output_callback(
             lambda line: GLib.idle_add(progress_dialog.append_log, line),
             op_id=op_id,
         )
 
+        def finish_success(message):
+            if on_success is not None:
+                on_success()
+            if action_name == "check_updates":
+                self._finish_application_task(True, message, False)
+                self.reload_applications_async()
+                if self.pages.get_current_page() == 4:
+                    self._reload_updates_async()
+                return False
+            return self._finish_application_task(True, message, refresh_after, updated_applications)
+
         def worker():
             runner.bind_thread_op(op_id)
+            if cached_pwd:
+                runner.set_sudo_password(cached_pwd)
             try:
                 worker_callable()
             except AuthRequiredError as exc:
@@ -1308,6 +1500,8 @@ class InstalledViewMixin:
                     refresh_after,
                     progress_message,
                     retry,
+                    on_success,
+                    updated_applications,
                 )
             except BackendError as exc:
                 err_text = str(exc)
@@ -1325,13 +1519,13 @@ class InstalledViewMixin:
                             GLib.idle_add(self._unregister_active_op, op_key, True, t(lang, success_message_key))
                             msg = t(self.preferences.language, success_message_key)
                             GLib.idle_add(progress_dialog.finish, True, msg)
-                            GLib.idle_add(self._finish_application_task, True, msg, refresh_after)
+                            GLib.idle_add(finish_success, msg)
                         else:
                             fail_msg = f"{err_text} (Kod {retcode})"
                             GLib.idle_add(self._unregister_active_op, op_key, False, fail_msg)
                             msg = self._application_error_message(fail_msg)
                             GLib.idle_add(progress_dialog.finish, False, msg)
-                            GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
+                            GLib.idle_add(self._finish_application_task, False, msg, refresh_after, updated_applications)
 
                     wait_timeout = getattr(runner, "_lingering_wait_timeout", 1800)
                     completed = ctx.completed_event.wait(timeout=wait_timeout)
@@ -1353,19 +1547,19 @@ class InstalledViewMixin:
                 GLib.idle_add(self._unregister_active_op, op_key, False, str(exc))
                 msg = self._application_error_message(str(exc))
                 GLib.idle_add(progress_dialog.finish, False, msg)
-                GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
+                GLib.idle_add(self._finish_application_task, False, msg, refresh_after, updated_applications)
             except Exception as exc:
                 runner.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key, False, str(exc))
                 msg = str(exc)
                 GLib.idle_add(progress_dialog.finish, False, msg)
-                GLib.idle_add(self._finish_application_task, False, msg, refresh_after)
+                GLib.idle_add(self._finish_application_task, False, msg, refresh_after, updated_applications)
             else:
                 runner.set_output_callback(None, op_id=op_id)
                 GLib.idle_add(self._unregister_active_op, op_key, True, t(lang, success_message_key))
                 msg = t(self.preferences.language, success_message_key)
                 GLib.idle_add(progress_dialog.finish, True, msg)
-                GLib.idle_add(self._finish_application_task, True, msg, refresh_after)
+                GLib.idle_add(finish_success, msg)
             finally:
                 runner.unbind_thread_op(op_id)
 
@@ -1381,6 +1575,8 @@ class InstalledViewMixin:
         refresh_after: bool,
         progress_message: str,
         retry: bool,
+        on_success: Callable[[], None] | None = None,
+        updated_applications: list[UnifiedApplication] | None = None,
     ) -> bool:
         if not self.applications_busy:
             return False
@@ -1404,7 +1600,8 @@ class InstalledViewMixin:
         else:
             self._cached_sudo_password = password
         self.application_registry.set_sudo_password(password)
-        self.applications_busy = False
+        self._application_task_count = max(0, getattr(self, "_application_task_count", 1) - 1)
+        self.applications_busy = bool(self._application_task_count)
         self._run_application_task(
             action_name=action_name,
             worker_callable=worker_callable,
@@ -1413,28 +1610,19 @@ class InstalledViewMixin:
             refresh_after=refresh_after,
             progress_message=progress_message,
             retry=int(retry) + 1,
+            on_success=on_success,
+            updated_applications=updated_applications,
         )
         return False
 
-    def _finish_application_task(self, success: bool, message: str, refresh_after: bool) -> bool:
-        self.applications_busy = False
+    def _finish_application_task(self, success: bool, message: str, refresh_after: bool, updated_applications=None) -> bool:
+        self._application_task_count = max(0, getattr(self, "_application_task_count", 1) - 1)
+        self.applications_busy = bool(self._application_task_count)
         self._set_application_controls_sensitive(True)
         self._set_applications_status(message, "#1f7a1f" if success else "red")
         if refresh_after:
-            invalidate = getattr(self.application_registry, "invalidate_application_cache", None)
-            if callable(invalidate):
-                try:
-                    invalidate(clear_persisted=True)
-                except TypeError:
-                    invalidate()
-            store_invalidate = getattr(getattr(self, "store_registry", None), "invalidate_search_cache", None)
-            if callable(store_invalidate):
-                store_invalidate()
-            self.reload_applications_async()
-            if self.pages.get_current_page() == 2:
-                self.reload_packages_async()
-            if self.pages.get_current_page() == 4:
-                self._reload_updates_async()
+            self._refresh_inventory_quietly(updated_applications if success else None,
+                                            sources={app.source for app in (updated_applications or [])} or None)
         return False
 
     def _get_app_size_fallback(self, app: UnifiedApplication) -> int | None:
@@ -1667,7 +1855,7 @@ class InstalledViewMixin:
         return pb
 
     def _get_app_pixbuf(self, application: UnifiedApplication, size: int = 32) -> GdkPixbuf.Pixbuf | None:
-        cache_key = f"app:{application.id}:{size}"
+        cache_key = f"app:{application.id}:{application.icon}:{size}"
         if cache_key in self._icon_pixbuf_cache:
             return self._icon_pixbuf_cache[cache_key]
 
@@ -1795,7 +1983,7 @@ class InstalledViewMixin:
 
         results = []
         show_technical = getattr(self.preferences, "show_technical_packages", False)
-        if source == "updates" or (source == "all" and show_technical):
+        if source in ("updates", "system") or (source == "all" and show_technical):
             applications = self._application_items_with_update_status()
         else:
             applications = self.applications
@@ -1813,6 +2001,9 @@ class InstalledViewMixin:
                 if source in NATIVE_SOURCES:
                     if app.source not in NATIVE_SOURCES:
                         continue
+                elif source == "system":
+                    if not is_system_component(app):
+                        continue
                 elif source == "other":
                     if app.source in NATIVE_SOURCES or app.source in (SOURCE_FLATPAK, SOURCE_SNAP):
                         continue
@@ -1826,11 +2017,11 @@ class InstalledViewMixin:
         return results
 
     def _set_application_controls_sensitive(self, enabled: bool) -> None:
-        self.applications_search_entry.set_sensitive(enabled)
+        self.applications_search_entry.set_sensitive(True)
         self.applications_refresh_btn.set_sensitive(enabled)
         self.applications_check_updates_btn.set_sensitive(enabled)
         for btn in self.application_filter_buttons.values():
-            btn.set_sensitive(enabled)
+            btn.set_sensitive(True)
 
     def _set_applications_status(self, message: str, color: str) -> None:
         set_status(self.applications_status, message, color == "red")
@@ -1841,6 +2032,8 @@ class InstalledViewMixin:
             return t(lang, "applications_source_all")
         if source == "updates":
             return t(lang, "applications_source_updates")
+        if source == "system":
+            return t(lang, "category_system")
         if source == "other":
             return t(lang, "applications_source_other")
         labels = {
@@ -2011,10 +2204,13 @@ class InstalledViewMixin:
         # "downloading" toast underneath the installer preview.
         self.hide_toast()
         lang = self.preferences.language
-        finish_callback = on_finished or self.reload_applications_async
+        known_snapshot = (ApplicationSnapshot(list(self.applications))
+                          if self.applications and not self.applications_loading else None)
         loading = Gtk.Dialog(
             title=t(lang, "package_inspecting"), transient_for=self, modal=True, destroy_with_parent=True
         )
+        loading.set_default_size(440, 180)
+        loading.set_resizable(False)
         make_window_movable(loading)
         loading.add_button(t(lang, "password_cancel"), Gtk.ResponseType.CANCEL)
         loading._closed = False
@@ -2022,27 +2218,55 @@ class InstalledViewMixin:
         loading.connect("response", lambda widget, _response: widget.destroy())
         spinner = Gtk.Spinner()
         spinner.start()
-        loading.get_content_area().pack_start(spinner, False, False, 12)
+        content = loading.get_content_area()
+        content.set_spacing(8)
+        content.set_margin_top(16)
+        content.set_margin_bottom(16)
+        content.set_margin_start(18)
+        content.set_margin_end(18)
+        content.pack_start(spinner, False, False, 0)
         filename_label = Gtk.Label(label=Path(filename).name)
         filename_label.set_line_wrap(True)
         filename_label.set_max_width_chars(48)
-        loading.get_content_area().pack_start(filename_label, False, False, 12)
-        loading.show_all()
+        filename_label.set_xalign(0.5)
+        content.pack_start(filename_label, False, False, 0)
+        def show_loading():
+            if not loading._closed:
+                loading.show_all()
+            return False
 
-        def finish(registry, info, status, error):
+        # Fast inspection opens the preview directly, without flashing a modal.
+        loading._show_source = GLib.timeout_add(450, show_loading)
+
+        def finish(registry, info, status, replacement, error):
             if loading._closed:
                 return False
+            source = loading._show_source
+            loading._show_source = None
+            if source and GLib.MainContext.default().find_source_by_id(source):
+                GLib.source_remove(source)
             loading.destroy()
             if error:
                 self._show_error_dialog(f"{t(lang, 'package_inspect_failed')}: {error}")
             else:
+                def install_finished():
+                    if on_finished:
+                        on_finished()
+                    else:
+                        source = {"archive": SOURCE_PORTABLE, "appimage": SOURCE_APPIMAGE,
+                                  "flatpakref": SOURCE_FLATPAK, "flatpak": SOURCE_FLATPAK,
+                                  "deb": SOURCE_APT,
+                                  "rpm": self.application_registry.native_provider.source}.get(info.format)
+                        self._refresh_inventory_quietly(sources={source} if source else None)
+
                 dialog = PackageInstallerDialog(
                     parent=self,
                     info=info,
                     language=lang,
                     pkg_status=status,
                     registry=registry,
-                    on_finished=finish_callback,
+                    replacement_application=replacement,
+                    on_finished=install_finished,
                 )
                 dialog.show_all()
             return False
@@ -2054,9 +2278,10 @@ class InstalledViewMixin:
                 registry = ApplicationRegistry(distro_info=self.application_registry.distro)
                 info = registry.inspect_local_package(filename)
                 status = registry.get_local_package_status(info)
-                GLib.idle_add(finish, registry, info, status, None)
+                replacement = registry.find_native_replacement(info, snapshot=known_snapshot)
+                GLib.idle_add(finish, registry, info, status, replacement, None)
             except Exception as exc:
-                GLib.idle_add(finish, None, None, None, str(exc))
+                GLib.idle_add(finish, None, None, None, None, str(exc))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -2127,17 +2352,19 @@ class InstalledViewMixin:
             def worker():
                 failures = []
                 for app in selected_apps:
-                    if app.id in completed:
+                    identity = (app.source, app.package_name or app.id,
+                                app.install_path if app.source == SOURCE_FLATPAK else "")
+                    if identity in completed:
                         continue
                     try:
                         self.application_registry.remove(app)
-                        completed.add(app.id)
+                        completed.add(identity)
+                        GLib.idle_add(self._forget_removed_applications, [app])
                     except AuthRequiredError:
                         raise
                     except Exception as exc:
                         failures.append(f"{app.name}: {exc}")
                 if failures:
-                    GLib.idle_add(self.reload_applications_async)
                     raise BackendError("\n".join(failures))
 
             self._run_application_task(
@@ -2145,7 +2372,7 @@ class InstalledViewMixin:
                 worker,
                 "applications_remove_done",
                 "applications_progress_remove",
-                True,
+                False,
                 t(lang, "bulk_remove_title", count=len(selected_apps)),
             )
         else:

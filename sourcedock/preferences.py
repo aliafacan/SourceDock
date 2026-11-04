@@ -31,6 +31,7 @@ class AppPreferences:
     notifications_enabled: bool = True
     detailed_table_default: bool = True
     show_technical_packages: bool = False
+    show_operation_details_by_default: bool = False
 
 
 class PreferencesStore:
@@ -78,6 +79,7 @@ class PreferencesStore:
             notifications_enabled=raw.get("notifications_enabled", True) is not False,
             detailed_table_default=raw.get("detailed_table_default", True) is not False,
             show_technical_packages=raw.get("show_technical_packages") is True,
+            show_operation_details_by_default=raw.get("show_operation_details_by_default") is True,
         )
 
 

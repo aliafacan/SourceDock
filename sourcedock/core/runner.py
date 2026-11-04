@@ -19,11 +19,14 @@ import time
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.core.process import (
-    NATIVE_OPERATION_LOCK,
     critical_command,
     redact_text,
     stream_process,
     terminate_process,
+)
+
+from sourcedock.core.transactions import (
+    command_resource, current_resource, resources_conflict, transaction_scope,
 )
 
 
@@ -67,6 +70,7 @@ class OperationContext:
         self.timed_out = False
         self.lingering = False
         self.state: OperationState = OperationState.RUNNING
+        self.resource = command_resource(self.command)
         self.is_critical: bool = False
         self.returncode: int | None = None
         self.completed_event = threading.Event()
@@ -74,6 +78,30 @@ class OperationContext:
 
 class CommandRunner:
     """Sistem komutlarını yürüten, yetkilendirme (sudo) ve akış (streaming) yöneten sınıf."""
+
+    @property
+    def _sudo_password(self):
+        op = getattr(self, "_thread_bound_ops", {}).get(threading.get_ident())
+        if op:
+            return getattr(self, "_operation_passwords", {}).get(op)
+        return getattr(self, "_default_sudo_password", None)
+
+    @_sudo_password.setter
+    def _sudo_password(self, value):
+        op = getattr(self, "_thread_bound_ops", {}).get(threading.get_ident())
+        if op:
+            if not hasattr(self, "_operation_passwords"):
+                self._operation_passwords = {}
+            self._operation_passwords[op] = value
+        else:
+            self._default_sudo_password = value
+
+    def _transaction_scope(self, command):
+        def waiting():
+            callback = self._resolve_output_callback()
+            if callback:
+                callback("SOURCEDOCK_PHASE queued")
+        return transaction_scope(command, on_wait=waiting, cancelled=self._check_task_cancelled)
 
     _class_lock = threading.RLock()
     _class_cond = threading.Condition(_class_lock)
@@ -199,6 +227,11 @@ class CommandRunner:
         self.prepare_operation(op_id)
         with self._proc_lock:
             tid = threading.get_ident()
+            password = self._sudo_password
+            if not hasattr(self, "_operation_passwords"):
+                self._operation_passwords = {}
+            self._operation_passwords[op_id] = password
+            self._default_sudo_password = None
             self._thread_bound_ops[tid] = op_id
             self._thread_to_op[tid] = op_id
             stack = self._thread_op_stack.setdefault(tid, [])
@@ -213,6 +246,7 @@ class CommandRunner:
             target_op = op_id or self._thread_bound_ops.get(tid)
             if target_op:
                 self._op_callbacks.pop(target_op, None)
+                getattr(self, "_operation_passwords", {}).pop(target_op, None)
             if tid in self._thread_bound_ops:
                 if op_id is None or self._thread_bound_ops[tid] == op_id:
                     self._thread_bound_ops.pop(tid, None)
@@ -389,11 +423,13 @@ class CommandRunner:
         t.start()
 
     @classmethod
-    def has_global_active_critical_operation(cls, exclude_op_id: str | None = None) -> bool:
+    def has_global_active_critical_operation(cls, exclude_op_id: str | None = None, resource: str | None = None) -> bool:
         """Tüm CommandRunner örnekleri genelinde aktif/lingering kritik işlem olup olmadığını denetler (P0-03)."""
         with cls._class_lock:
             for op_id, ctx in list(cls._active_critical_registry.items()):
                 if op_id == exclude_op_id:
+                    continue
+                if resource and not resources_conflict(resource, getattr(ctx, "resource", "global")):
                     continue
                 if ctx.completed_event.is_set() or ctx.state in (OperationState.COMPLETED, OperationState.FAILED):
                     cls._active_critical_registry.pop(op_id, None)
@@ -434,11 +470,13 @@ class CommandRunner:
     def _has_active_critical_operation(self, exclude_op_id: str | None = None) -> bool:
         """Aktif veya arka planda devam eden kritik bir transaction olup olmadığını denetler."""
         self._ensure_state()
-        if CommandRunner.has_global_active_critical_operation(exclude_op_id=exclude_op_id):
+        if CommandRunner.has_global_active_critical_operation(exclude_op_id=exclude_op_id, resource=current_resource()):
             return True
         with self._proc_lock:
             for ctx in self._operations.values():
                 if ctx.op_id == exclude_op_id:
+                    continue
+                if current_resource() and not resources_conflict(current_resource(), getattr(ctx, "resource", "global")):
                     continue
                 if ctx.is_critical:
                     if ctx.process is not None:
@@ -456,7 +494,14 @@ class CommandRunner:
         """Devam eden kritik transaction'lar bitene kadar bekler (P0-03 - tüm CommandRunner nesneleri arasında koordinasyon)."""
         self._ensure_state()
         start = time.monotonic()
+        notified = False
         while self._has_active_critical_operation(exclude_op_id=exclude_op_id):
+            self._check_task_cancelled()
+            if not notified:
+                callback = self._resolve_output_callback()
+                if callback:
+                    callback("SOURCEDOCK_PHASE queued")
+                notified = True
             remaining = None
             if timeout is not None:
                 remaining = timeout - (time.monotonic() - start)
@@ -464,7 +509,7 @@ class CommandRunner:
                     return False
             wait_time = min(0.2, remaining) if remaining is not None else 0.2
             with CommandRunner._class_lock:
-                if CommandRunner.has_global_active_critical_operation(exclude_op_id=exclude_op_id):
+                if CommandRunner.has_global_active_critical_operation(exclude_op_id=exclude_op_id, resource=current_resource()):
                     CommandRunner._class_cond.wait(timeout=wait_time)
             with self._proc_lock:
                 if self._has_active_critical_operation(exclude_op_id=exclude_op_id):
@@ -937,16 +982,17 @@ class CommandRunner:
         check: bool = False,
         input_text: str | None = None,
         allow_cancel: bool | None = None,
+        emit_output: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         """Standart bir komut çalıştırır."""
         wrapped = self._wrap_host(command)
         if allow_cancel is None:
             allow_cancel = not critical_command(wrapped)
         is_critical = not allow_cancel or critical_command(wrapped)
-        with NATIVE_OPERATION_LOCK if is_critical else nullcontext():
+        with self._transaction_scope(wrapped) if is_critical else nullcontext():
             if is_critical:
                 self._wait_for_critical_transactions()
-            if timeout >= 120 or self._resolve_output_callback() is not None:
+            if emit_output and (timeout >= 120 or self._resolve_output_callback() is not None):
                 return self._run_streaming(wrapped, timeout, check, stdin_text=input_text, allow_cancel=allow_cancel)
             return self._run_subprocess(wrapped, command, timeout, check, input_text, allow_cancel=allow_cancel)
 
@@ -1043,7 +1089,7 @@ class CommandRunner:
         if allow_cancel is None:
             allow_cancel = not critical_command(wrapped_command)
         is_critical = not allow_cancel or critical_command(wrapped_command)
-        with NATIVE_OPERATION_LOCK if is_critical else nullcontext():
+        with self._transaction_scope(wrapped_command) if is_critical else nullcontext():
             if is_critical:
                 self._wait_for_critical_transactions()
             return self._run_streaming_locked(wrapped_command, timeout, check, stdin_text, allow_cancel=allow_cancel)
@@ -1056,10 +1102,16 @@ class CommandRunner:
             def started(process):
                 self._attach_process(context, process)
 
+            callback = self._resolve_output_callback(threading.get_ident())
+            if callback and critical_command(wrapped_command):
+                programs = {"apt", "apt-get", "dpkg", "dnf", "rpm", "pacman", "zypper", "flatpak", "snap", "fwupdmgr", "AppImageUpdate"}
+                program = next((Path(arg).name for arg in wrapped_command if Path(arg).name in programs), "")
+                callback(f"SOURCEDOCK_PHASE running {program}")
+
             result = stream_process(
                 wrapped_command,
                 timeout,
-                self._resolve_output_callback(threading.get_ident()),
+                callback,
                 stdin_text,
                 started,
                 secrets,
@@ -1098,7 +1150,7 @@ class CommandRunner:
         """
         if allow_cancel is None:
             allow_cancel = False
-        with NATIVE_OPERATION_LOCK:
+        with self._transaction_scope(command):
             self._wait_for_critical_transactions()
             self._check_task_cancelled()
             try:
@@ -1129,7 +1181,10 @@ class CommandRunner:
                 "Sistemde 'sudo' komutu bulunamadı. Lütfen 'sudo' paketini kurun (Debian'da root ile: 'apt install sudo')."
             )
         self._wait_for_apt_locks(command)
-        sudo_probe = self.run(["sudo", "-n", "true"], timeout=5, allow_cancel=False)
+        callback = self._resolve_output_callback()
+        if callback:
+            callback("SOURCEDOCK_PHASE authorizing")
+        sudo_probe = self.run(["sudo", "-n", "true"], timeout=5, allow_cancel=False, emit_output=False)
         if sudo_probe.returncode == 0:
             result = self._execute_privileged_command(command, timeout, input_text, allow_cancel)
             self._raise_for_privileged_result(result, command)
@@ -1149,6 +1204,7 @@ class CommandRunner:
         validation = self.run(
             ["sudo", "-S", "-p", "", "-v"], timeout=30,
             input_text=f"{self._sudo_password}\n", allow_cancel=False,
+            emit_output=False,
         )
         self._raise_for_privileged_result(validation, ["sudo", "-v"], auth_only=True)
         result = self._execute_privileged_command(command, timeout, input_text, allow_cancel)
@@ -1299,14 +1355,30 @@ fi
             holders.append((pid, args[:140]))
         return holders
 
-    def spawn(self, command: list[str]) -> None:
+    def spawn(self, command: list[str], *, desktop_file: str = "") -> None:
         """Yeni bir işlem başlatır (arka planda çalışması için)."""
+        child_env = dict(os.environ)
+        for name in (
+            "GTK_PATH", "GTK3_MODULES", "GTK_EXE_PREFIX", "GTK_IM_MODULE_FILE",
+            "GDK_PIXBUF_MODULEDIR", "GDK_PIXBUF_MODULE_FILE", "GIO_MODULE_DIR",
+            "GSETTINGS_SCHEMA_DIR", "LOCPATH",
+        ):
+            child_env.pop(name, None)
+        if "/snap/" in child_env.get("LD_LIBRARY_PATH", ""):
+            child_env.pop("LD_LIBRARY_PATH", None)
+        if desktop_file:
+            child_env["BAMF_DESKTOP_FILE_HINT"] = desktop_file
+            child_env["GIO_LAUNCHED_DESKTOP_FILE"] = desktop_file
+            child_env.pop("GIO_LAUNCHED_DESKTOP_FILE_PID", None)
+            child_env.pop("DESKTOP_STARTUP_ID", None)
+            child_env.pop("XDG_ACTIVATION_TOKEN", None)
         try:
             subprocess.Popen(
                 self._wrap_host(command),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
+                env=child_env,
             )
         except OSError as exc:
             raise BackendError(f"Komut calistirilamadi: {' '.join(command)}\n{exc}") from exc

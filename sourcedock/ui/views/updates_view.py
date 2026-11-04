@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, GObject, Gtk, Pango
 
 from sourcedock.backend.updates import build_update_catalog
-from sourcedock.core.models import SOURCE_APT
+from sourcedock.core.models import SOURCE_APT, SOURCE_FLATPAK
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.i18n import source_name, t, translate_provider_error, translate_provider_notice
 from sourcedock.ui.components.dialogs import show_firmware_confirmation
@@ -642,28 +642,24 @@ class UpdatesViewMixin:
 
     def _on_apply_updates(self, _button):
         items = self._selected_updates()
-        if not items or self.applications_busy:
+        if not items:
             return
         lang = self.preferences.language
         if any(item.group == "firmware" for item in items) and not self._confirm_firmware_update():
             return
-        completed = set()
+        applications = []
+        seen = set()
+        for item in items:
+            application = item.application
+            identity = (application.source, application.package_name or application.id)
+            if application.source == SOURCE_FLATPAK:
+                identity += (application.install_path,)
+            if identity not in seen:
+                seen.add(identity)
+                applications.append(application)
 
         def worker():
-            failures = []
-            for item in items:
-                if item.application.id in completed:
-                    continue
-                try:
-                    self.application_registry.update(item.application)
-                    completed.add(item.application.id)
-                except AuthRequiredError:
-                    raise
-                except BackendError as exc:
-                    failures.append(f"{item.application.name}: {exc}")
-            GLib.idle_add(self._reload_updates_async)
-            if failures:
-                raise BackendError("\n".join(failures))
+            self.application_registry.update_all(applications)
 
         self._run_application_task(
             "updates",
@@ -672,6 +668,7 @@ class UpdatesViewMixin:
             "nav_updates",
             True,
             t(lang, "updates_count", count=len(items)),
+            updated_applications=applications,
         )
 
     def _confirm_firmware_update(self):

@@ -13,6 +13,39 @@ nonblocking selector, so silence does not disable the timeout. Safe cancellation
 terminates the process group, with a bounded fallback for a child ignoring SIGTERM.
 The operation result is reported only after the worker exits.
 
+## Selected updates in 1.4.10
+
+Selected native updates are grouped by provider. APT uses one
+`apt-get -o DPkg::Lock::Timeout=0 install --only-upgrade -y -- ...` command,
+with exact Debian package names validated before privileged execution. Shell
+syntax, options, paths and version expressions are rejected as package names;
+architecture-qualified names are retained. Password lifetime and critical-process
+cancellation rules remain unchanged.
+
+Flatpak selections retain their installation paths so the user and system copies
+of an application are separate targets. Update completion, including failure,
+clears the busy state before refreshing the visible update list. Provider errors
+remain visible rather than being converted to a successful result.
+
+Installation and update completion reconcile installed metadata in the background
+with update discovery disabled for native packages, Flatpak, Snap and firmware.
+The current page, filters and unrelated checked updates remain visible. Known
+successful update targets are removed from the update catalog; failed providers
+retain their last visible data. Explicit refresh/check actions still discover
+updates. Confirmed removals are applied directly to the current lists.
+
+Internal sudo probes and password validation capture diagnostics without streaming
+them to operation windows. Their actual failure status is still checked. Real
+package-manager output remains visible and redacted. A silent command displays a
+running phase and elapsed time; percentages are shown only when supplied by the
+provider, never estimated from elapsed time.
+
+Before a release, verify five and fifteen selected APT updates in isolated Debian
+Trixie and Forky VMs, including an expired sudo session, an external dpkg lock,
+partial package failure and a transaction continuing past its UI deadline. Compare
+the final dpkg state and remaining updates with the UI. Unit tests use fake runners;
+they do not establish behavior on those distributions.
+
 ### Credential Lifecycle and Authorization Isolation
 
 - **Centralized Session Auth**: Sudo passwords are held in a single session

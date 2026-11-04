@@ -34,6 +34,7 @@ from sourcedock.core.models import (
     is_native_source,
 )
 from sourcedock.i18n import source_name, t
+from sourcedock.preferences import PreferencesStore
 from sourcedock.ui.components.common import ScreenshotGallery, icon_text_button, make_window_movable, prepare_dialog
 from sourcedock.ui.components.removal import add_sensitive_removal_confirmation
 from sourcedock.ui.components.dialogs import ask_sudo_password
@@ -112,6 +113,7 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             self.metadata = {}
         self.registry = registry
         self.language = language
+        self.preferences = PreferencesStore().load()
         self.on_action_callback = on_action_callback
         self.standalone = standalone
         self._removal_operation = removal_operation
@@ -536,6 +538,9 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             parent=self,
             language=self.language,
             cancel_fn=cancel_action,
+            show_details_by_default=getattr(
+                getattr(self, "preferences", None), "show_operation_details_by_default", False
+            ),
         )
 
         def get_auth_pwd():

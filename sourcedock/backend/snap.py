@@ -84,7 +84,7 @@ class SnapProvider:
                 )
             )
 
-        for update_name in update_names:
+        for update_name in snaps:
             if update_name in snaps and not any(app.package_name == update_name for app in applications):
                 version = snaps[update_name]
                 size_kib, installed_date, last_updated = self._get_snap_size_and_dates(update_name)
@@ -102,7 +102,7 @@ class SnapProvider:
                         install_path=f"/snap/{update_name}/current",
                         category="System",
                         package_name=update_name,
-                        update_available=True,
+                        update_available=update_name in update_names,
                         installed_size_kib=size_kib,
                         installed_date=installed_date,
                         last_updated=last_updated,
@@ -168,7 +168,7 @@ class SnapProvider:
         # scan open for the default command timeout.
         result = self.runner.run(["snap", "list"], timeout=self.LIST_TIMEOUT_SECONDS)
         if result.returncode != 0:
-            return {}
+            raise BackendError(result.stderr or "Could not read installed Snap packages.")
         snaps: dict[str, str] = {}
         for index, line in enumerate(result.stdout.splitlines()):
             if index == 0 or not line.strip():

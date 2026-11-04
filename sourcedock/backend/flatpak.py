@@ -13,6 +13,7 @@ from sourcedock.core.models import (
     UnifiedApplication,
 )
 from sourcedock.core.runner import CommandRunner
+from sourcedock.core.errors import BackendError
 from sourcedock.backend.scanner import (
     DesktopEntryScanner,
     _first_category,
@@ -103,7 +104,7 @@ class FlatpakProvider:
                 timeout=30,
             )
             if result.returncode != 0:
-                return []
+                raise BackendError(result.stderr or "Could not read installed Flatpak applications.")
 
         update_ids = self._update_ids() if include_updates else set()
         desktop_entries = {
@@ -146,50 +147,51 @@ class FlatpakProvider:
                 )
             )
 
-        if update_ids:
-            runtime_res = self.runner.run(
-                [
-                    "flatpak",
-                    "list",
-                    "--runtime",
-                    "--columns=application,name,version,origin,installation,size,description",
-                ],
-                timeout=30,
-                check=False,
-            )
-            if runtime_res.returncode == 0:
-                for line in runtime_res.stdout.splitlines():
-                    parts = line.split("\t")
-                    if len(parts) < 2:
-                        continue
-                    r_id = parts[0].strip()
-                    if r_id in update_ids and not any(a.package_name == r_id for a in applications):
-                        r_name = parts[1].strip() or r_id
-                        r_ver = parts[2].strip() if len(parts) > 2 else ""
-                        r_install = parts[4].strip() if len(parts) > 4 else "system"
-                        r_size = _parse_human_size_kib(parts[5].strip()) if len(parts) > 5 else None
-                        r_desc = parts[6].strip() if len(parts) > 6 else ""
-                        display_name = f"{r_name} ({r_desc})" if r_desc and r_desc != r_name else r_name
-                        install_path = _flatpak_install_path(r_id, r_install, is_runtime=True)
-                        installed_date, last_updated = _flatpak_dates(install_path)
-                        applications.append(
-                            UnifiedApplication(
-                                id=f"{SOURCE_FLATPAK}:{r_id}",
-                                name=display_name,
-                                source=SOURCE_FLATPAK,
-                                version=r_ver,
-                                icon="application-x-addon",
-                                executable="",
-                                desktop_file="",
-                                install_path=install_path,
-                                category="System",
-                                package_name=r_id,
-                                update_available=True,
-                                installed_size_kib=r_size,
-                                installed_date=installed_date,
-                                last_updated=last_updated,
-                            )
+        runtime_res = self.runner.run(
+            [
+                "flatpak",
+                "list",
+                "--runtime",
+                "--columns=application,name,version,origin,installation,size,description",
+            ],
+            timeout=30,
+            check=False,
+        )
+        if runtime_res.returncode != 0:
+            raise BackendError(runtime_res.stderr or "Could not read installed Flatpak runtimes.")
+        if runtime_res.returncode == 0:
+            for line in runtime_res.stdout.splitlines():
+                parts = line.split("\t")
+                if len(parts) < 2:
+                    continue
+                r_id = parts[0].strip()
+                if not any(a.package_name == r_id and a.install_path == _flatpak_install_path(r_id, parts[4].strip() if len(parts) > 4 else "system", is_runtime=True) for a in applications):
+                    r_name = parts[1].strip() or r_id
+                    r_ver = parts[2].strip() if len(parts) > 2 else ""
+                    r_install = parts[4].strip() if len(parts) > 4 else "system"
+                    r_size = _parse_human_size_kib(parts[5].strip()) if len(parts) > 5 else None
+                    r_desc = parts[6].strip() if len(parts) > 6 else ""
+                    display_name = f"{r_name} ({r_desc})" if r_desc and r_desc != r_name else r_name
+                    install_path = _flatpak_install_path(r_id, r_install, is_runtime=True)
+                    installed_date, last_updated = _flatpak_dates(install_path)
+                    applications.append(
+                        UnifiedApplication(
+                            id=f"{SOURCE_FLATPAK}:{r_id}",
+                            name=display_name,
+                            source=SOURCE_FLATPAK,
+                            version=r_ver,
+                            icon="application-x-addon",
+                            executable="",
+                            desktop_file="",
+                            install_path=install_path,
+                            category="System",
+                            package_name=r_id,
+                            update_available=r_id in update_ids,
+                            installed_size_kib=r_size,
+                            installed_date=installed_date,
+                            last_updated=last_updated,
                         )
+                    )
 
         return applications
 

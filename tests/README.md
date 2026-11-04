@@ -26,6 +26,17 @@ references, scopes, cancellation and stale-plan rejection.
 
 ## GTK Workflows
 
+The 1.4.10 regressions cover validated APT batch operands, mixed provider commands,
+both Flatpak installation scopes, preference persistence, immediate refiltering of
+cached store results, and operation-detail windows. Run them with a virtual display:
+
+```bash
+xvfb-run -a /usr/bin/python3 tools/run_tests.py tests.test_v1410_regressions tests.test_ui_workflows
+```
+
+If running from a Snap-packaged editor, inherited GTK/GdkPixbuf module paths may
+load incompatible Snap libraries. Use the system GTK environment for this command.
+
 ```bash
 xvfb-run -a -s '-screen 0 1366x768x24' bash -c '
   openbox >/tmp/sourcedock-test-wm.log 2>&1 & wm=$!

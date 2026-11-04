@@ -20,27 +20,52 @@
 
 SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımdan bağımsız bir Linux masaüstü yazılım yönetim aracıdır. Sistem paketleri, Flatpak'ler, Snap'ler ve yerel paketler için masaüstü akıcılığından ve sistem güvenliğinden ödün vermeden tek noktadan arama, inceleme, güncelleme ve kaldırma arayüzü sunar.
 
+## 1.4.10 ile gelenler
+
+- **Sayfa yenilenmeden güncel liste:** kurulum, kaldırma ve güncelleme bitince yalnızca ilgili kaynak uzlaştırılır; sayfa baştan yüklenmez ve güncellemeler tekrar taranmaz.
+- **Ayrı Sistem filtresi:** kurulu Flatpak çalışma ortamları ve Snap taban paketleri güncelleme durumundan bağımsız görünür. Paylaşılan bileşenlerin kaldırılmasında açık uyarı ve paket adını yazarak onay gerekir.
+- **İşlem sürerken kullanım:** arama ve kaynak filtreleri açık kalır. Farklı paket yöneticileri paralel çalışabilir; aynı paket veritabanına yazan işler güvenli biçimde sıraya girer.
+- **Uygulama kaynağını değiştirme:** mağaza, eşleşen yerel paket, Flatpak ve Snap kurulumlarını tanır. **Ayrıca kur** mevcut kopyayı tutar; **Kaynağı değiştir**, yeni paketi kurup doğruladıktan sonra seçilen eski paketi purge kullanmadan kaldırır. Ayarlar ve oturumlar otomatik taşınmaz.
+- **Daha anlaşılır kurulum:** tek ölçülü ilerleme çubuğu, isteğe bağlı ayrıntılı günlükler, okunaklı dosya seçici ve taşınabilir Electron uygulamalarında iyileştirilmiş simge/kısayol eşleşmesi.
+- **Gecikmelere dayanıklı mağaza:** Snap aramasına 15 saniye tanınır; diğer kaynakların sonuçları bekletilmez. Zaman aşımında ham komut yerine yerelleştirilmiş yeniden deneme mesajı gösterilir.
+
+Güncel kaynakları [build.sh](build.sh) ile paketleyip kurabilirsiniz. Betik sağlama özetini doğrular ve APT ile kurulum veya yeniden kurulum yapar; yönetici yetkisi yalnızca kurulum aşamasında istenir.
+
+```bash
+./build.sh
+```
+
 ## Ekran Görüntüleri
 
 <div align="center">
 
 ### Yazılım Keşfi ve Mağaza (Açık Tema)
-![Mağaza ve Keşfet Görünümü](docs/screenshots/discover-light-tr-100-1366x768.png)
+![Mağaza ve Keşfet Görünümü](docs/screenshots/v1.4.10/discover-light-tr-100-1366x768.png)
 
 ### Yüklü Uygulamalar (Koyu Tema)
-![Yüklü Uygulamalar Görünümü](docs/screenshots/installed-dark-tr-100-1366x768.png)
+![Yüklü Uygulamalar Görünümü](docs/screenshots/v1.4.10/installed-dark-tr-100-1366x768.png)
 
 ### Birleşik Güncelleme Merkezi (Koyu Tema)
-![Güncellemeler Görünümü](docs/screenshots/updates-dark-tr-100-1366x768.png)
+![Güncellemeler Görünümü](docs/screenshots/v1.4.10/updates-dark-tr-100-1366x768.png)
+
+### Uygulama kaynağını değiştirme
+
+![Uygulama kaynağını değiştirme](docs/screenshots/v1.4.10/source-switch-dark-tr.png)
+
+### Paylaşılan sistem bileşenleri
+
+![Paylaşılan sistem bileşenleri](docs/screenshots/v1.4.10/system-dark-tr.png)
+
+Görüntüler SourceDock 1.4.10’dan, sistem meta verileri yalnızca okunarak alındı; çekim sırasında paket işlemi çalıştırılmadı.
 
 <br/>
 
 **Diğer Ekranlar:**
-[Uygulama Ayrıntıları](docs/screenshots/details-light-tr-100-1366x768.png) &bull;
-[Müstakil Paket Kurucu](docs/screenshots/installer-dark-tr-100-1366x768.png) &bull;
-[Ayarlar ve Tercihler](docs/screenshots/settings-dark-tr-100-1366x768.png) &bull;
-[İşlem Günlüğü](docs/screenshots/operations-dark-tr-100-1366x768.png) &bull;
-[Paketler Görünümü](docs/screenshots/packages-dark-tr-100-1366x768.png)
+[Uygulama Ayrıntıları](docs/screenshots/v1.4.10/details-light-tr-100-1366x768.png) &bull;
+[Müstakil Paket Kurucu](docs/screenshots/v1.4.10/installer-dark-tr-100-1366x768.png) &bull;
+[Ayarlar ve Tercihler](docs/screenshots/v1.4.10/settings-dark-tr-100-1366x768.png) &bull;
+[İşlem Günlüğü](docs/screenshots/v1.4.10/operations-dark-tr-100-1366x768.png) &bull;
+[Paketler Görünümü](docs/screenshots/v1.4.10/packages-dark-tr-100-1366x768.png)
 
 </div>
 
@@ -54,6 +79,7 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 - **Müstakil Paket Kurucu**: Yerel `.deb` paketlerini kurmadan önce açıklama, mimari, dosya boyutu, bağımlılıklar ve kaynak açısından önizleme imkânı.
 - **Güvenli İşlem Yürütme**: Dosya kilitleri (`flock`), zaman aşımı sınırları ve parola/kullanıcı yolu redaksiyonu ile donatılmış asenkron komut çalıştırıcısı.
 - **Şeffaf İşlem Geçmişi**: Kullanıcı denetiminde dışa aktarılabilen ve temizlenebilen kayıt defteri.
+- **Uygulama kaynağını değiştirme**: Mağaza, uygulamanın hangi kaynaktan kurulu olduğunu gösterir. “Ayrıca kur” mevcut kopyayı tutar; “Kaynağı değiştir” yeni paketi kurup doğruladıktan sonra seçilen eski paketi veri temizleme (purge) kullanmadan kaldırır. APT, Flatpak, Snap ve kullanılabilir diğer yerel kaynaklar arasında geçiş yapılabilir; ayarlar ve oturumlar otomatik taşınmaz.
 - **Masaüstü Kişiselleştirme**: Sistem, Açık ve Koyu tema seçenekleri; %90–%125 arayüz ölçekleme desteği ve altı dilde yerelleştirme (TR/EN/DE/ES/PT-BR/FR).
 
 ---
@@ -62,14 +88,14 @@ SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımda
 
 SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint vb.) için standart Debian paketi (`.deb`) olarak dağıtılmaktadır.
 
-1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.9 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.9) sayfasından indirin.
+1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.10 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
-   sha256sum -c sourcedock_1.4.9_all.deb.sha256
+   sha256sum -c sourcedock_1.4.10_all.deb.sha256
    ```
 3. Paketi APT ile kurun:
    ```bash
-   sudo apt install ./sourcedock_1.4.9_all.deb
+   sudo apt install ./sourcedock_1.4.10_all.deb
    ```
 4. Uygulamayı başlatın:
    ```bash
@@ -164,6 +190,16 @@ xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null
 ```bash
 bash packaging/build_deb.sh dist
 ```
+
+Güncel kaynakları paketleyip hemen kurmak veya aynı sürümü yeniden kurmak için:
+
+```bash
+./build.sh
+```
+
+Betik paketi ve SHA-256 dosyasını `dist/` dizinine kaydeder, doğrular ve APT ile
+kurar. Yönetici yetkisi yalnızca kurulum aşamasında istenir. Paket oluşturma veya
+doğrulama başarısız olursa kurulum başlamaz.
 
 ---
 

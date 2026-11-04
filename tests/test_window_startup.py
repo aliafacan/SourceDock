@@ -165,19 +165,27 @@ class TestMainWindowStartup(unittest.TestCase):
         details.assert_not_called()
         remove.assert_not_called()
 
-    def test_successful_package_action_refreshes_the_open_packages_page(self):
+    def test_successful_package_action_reconciles_without_reloading_the_page(self):
         self.window.packages = [PackageInfo("example", "1.0", 1, "Test", False)]
         self.window.pages.set_current_page(2)
-        with patch.object(self.window, "reload_packages_async") as reload_packages:
+        with patch.object(self.window, "reload_packages_async") as reload_packages, patch.object(self.window, "_refresh_inventory_quietly") as refresh:
             self.window._finish_application_task(True, "Done", True)
-        reload_packages.assert_called_once()
+        reload_packages.assert_not_called()
+        refresh.assert_called_once_with(None, sources=None)
+
+    def test_package_updates_pass_only_the_requested_targets_to_reconciliation(self):
+        with patch.object(self.window, "_run_application_task") as start:
+            self.window._run_packages_task(["editor", "library"], "packages_update")
+        targets = start.call_args.kwargs["updated_applications"]
+        self.assertEqual([(app.source, app.package_name) for app in targets], [(SOURCE_APT, "editor"), (SOURCE_APT, "library")])
 
     def test_failed_partial_package_action_also_refreshes_measured_state(self):
         self.window.pages.set_current_page(2)
-        with patch.object(self.window, "reload_packages_async") as packages, patch.object(self.window, "reload_applications_async") as applications:
+        with patch.object(self.window, "reload_packages_async") as packages, patch.object(self.window, "reload_applications_async") as applications, patch.object(self.window, "_refresh_inventory_quietly") as refresh:
             self.window._finish_application_task(False, "A package failed", True)
-        packages.assert_called_once()
-        applications.assert_called_once()
+        packages.assert_not_called()
+        applications.assert_not_called()
+        refresh.assert_called_once_with(None, sources=None)
 
 
 if __name__ == "__main__":
