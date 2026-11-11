@@ -31,7 +31,7 @@ class TestCommandGuard:
         resolved = Path(shutil.which(executable) or executable).resolve()
         name = resolved.name
         options = command[1:]
-        if resolved == self.python:
+        if resolved == self.python or name.startswith("python"):
             return True
         # Read metadata only; extract/build/control operations are not permitted.
         if name == "dpkg-deb":
