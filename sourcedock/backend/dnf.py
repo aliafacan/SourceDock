@@ -102,17 +102,19 @@ class DnfProvider(BaseNativeProvider):
     def _owning_packages(self, paths: list[str]) -> dict[str, str]:
         if not paths:
             return {}
-        # rpm -qf paths
-        result = self.runner.run(["rpm", "-qf", *paths, "--qf", "%{FILENAMES}\t%{NAME}\n"], timeout=30)
         owners: dict[str, str] = {}
-        for line in result.stdout.splitlines():
-            if "\t" not in line:
+        # RPM query format: %{NAME} per query argument.
+        # rpm -qf prints one line per queried file in order when using --qf "%{NAME}\n".
+        # To be resilient against unowned files (which print an error to stderr),
+        # we query in batches or match directly.
+        for path in paths:
+            if not os.path.exists(path):
                 continue
-            p, pkg = line.split("\t", 1)
-            p = p.strip()
-            pkg = pkg.strip()
-            if p and pkg and not pkg.startswith("file "):
-                owners[p] = pkg
+            res = self.runner.run(["rpm", "-qf", path, "--qf", "%{NAME}\n"], timeout=5)
+            if res.returncode == 0:
+                pkg = res.stdout.strip()
+                if pkg and not pkg.startswith("file "):
+                    owners[path] = pkg
         return owners
 
     def _package_metadata(self, packages: list[str]) -> dict[str, dict]:
