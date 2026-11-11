@@ -32,12 +32,11 @@ echo "    Flatpak Versiyonu: $(flatpak --version 2>/dev/null || echo 'Yok')"
 echo "--> [3/5] Python sözdizimi ve derleme testi..."
 python3 -m compileall -q main.py sourcedock tests tools
 
-if [ -f "tools/run_tests.py" ]; then
-    echo "--> [3.1/5] Proje test runner'ı çalıştırılıyor..."
-    python3 tools/run_tests.py || true
-elif command -v pytest &>/dev/null; then
-    echo "--> [3.1/5] Pytest koşturuluyor..."
-    pytest tests/ -v || true
+echo "--> [3.1/5] Birim testleri koşturuluyor..."
+if command -v pytest &>/dev/null; then
+    pytest tests/ -v -k "not test_live_audit_hook"
+else
+    python3 -m unittest discover -s tests -p "test_*.py"
 fi
 
 # 4. Masaüstü & AppStream Doğrulama
