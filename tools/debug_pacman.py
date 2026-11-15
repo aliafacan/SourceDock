@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 import sys
 import os
+from pathlib import Path
+
+# Add project root to sys.path
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 from sourcedock.core.runner import CommandRunner
 from sourcedock.backend.scanner import DesktopEntryScanner
@@ -33,3 +38,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
