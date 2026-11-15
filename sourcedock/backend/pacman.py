@@ -120,25 +120,33 @@ class PacmanProvider(BaseNativeProvider):
         if not paths:
             return {}
         owners: dict[str, str] = {}
-        # pacman -Qo exits with an error if ANY queried file is unowned.
-        # Run queries in small chunks or per-file to ensure unowned desktop files
-        # don't invalidate the entire application inventory.
+        # Ensure LC_ALL=C is used so pacman outputs English "is owned by",
+        # but also support localized formats (e.g. Turkish "paketine ait").
+        env = {**os.environ, "LC_ALL": "C"}
         for path in paths:
             if not os.path.exists(path):
                 continue
-            result = self.runner.run(["pacman", "-Qo", path], timeout=5)
-            if result.returncode == 0 and " is owned by " in result.stdout:
-                path_part, owner_part = result.stdout.split(" is owned by ", 1)
-                p = path_part.strip()
-                pkg = owner_part.strip().split()[0] if owner_part.strip() else ""
-                if p and pkg:
-                    owners[path] = pkg
+            result = self.runner.run(["env", "LC_ALL=C", "pacman", "-Qo", path], timeout=5)
+            stdout = result.stdout.strip()
+            if result.returncode == 0:
+                if " is owned by " in stdout:
+                    _, owner_part = stdout.split(" is owned by ", 1)
+                    pkg = owner_part.strip().split()[0] if owner_part.strip() else ""
+                    if pkg:
+                        owners[path] = pkg
+                elif " paketine ait" in stdout:
+                    # Türkçe yerel: /path/to/file, pkg version paketine ait.
+                    parts = stdout.split(",")
+                    if len(parts) >= 2:
+                        pkg = parts[1].strip().split()[0]
+                        if pkg:
+                            owners[path] = pkg
         return owners
 
     def _package_metadata(self, packages: list[str]) -> dict[str, dict]:
         if not packages:
             return {}
-        result = self.runner.run(["pacman", "-Qi", *packages], timeout=45)
+        result = self.runner.run(["env", "LC_ALL=C", "pacman", "-Qi", *packages], timeout=45)
         metadata: dict[str, dict] = {}
         current_pkg = ""
         current_data: dict = {}
