@@ -22,12 +22,16 @@ class ShellViewMixin:
         self._notification_unread = 0
         self.header = Gtk.HeaderBar()
         self.header.set_show_close_button(True)
-        # Cinnamon, MATE ve GNOME için pencere kontrol butonlarını (küçült, büyüt, kapat) garanti et
-        settings = Gtk.Settings.get_default()
-        if settings and settings.get_property("gtk-decoration-layout"):
-            self.header.set_decoration_layout(settings.get_property("gtk-decoration-layout"))
-        else:
-            self.header.set_decoration_layout(":minimize,maximize,close")
+        # Cinnamon ve MATE gibi ortamlarda maximize/minimize butonlarını garanti et;
+        # KDE ve GNOME'da masaüstünün kendi doğal layout'unu koru.
+        desktop = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
+        if "kde" not in desktop:
+            settings = Gtk.Settings.get_default()
+            layout = settings.get_property("gtk-decoration-layout") if settings else None
+            if layout:
+                self.header.set_decoration_layout(layout)
+            elif "cinnamon" in desktop or "mate" in desktop or "x-cinnamon" in desktop:
+                self.header.set_decoration_layout(":minimize,maximize,close")
         self.header.set_title("SourceDock")
         self.header_search = Gtk.SearchEntry()
         self.header_search.set_width_chars(24)

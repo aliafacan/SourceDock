@@ -119,18 +119,20 @@ class PacmanProvider(BaseNativeProvider):
     def _owning_packages(self, paths: list[str]) -> dict[str, str]:
         if not paths:
             return {}
-        # pacman -Qo <paths>
-        # Çıktı: /usr/share/applications/gimp.desktop is owned by gimp 2.10.38-1
-        result = self.runner.run(["pacman", "-Qo", *paths], timeout=30)
         owners: dict[str, str] = {}
-        for line in result.stdout.splitlines():
-            if " is owned by " not in line:
+        # pacman -Qo exits with an error if ANY queried file is unowned.
+        # Run queries in small chunks or per-file to ensure unowned desktop files
+        # don't invalidate the entire application inventory.
+        for path in paths:
+            if not os.path.exists(path):
                 continue
-            path_part, owner_part = line.split(" is owned by ", 1)
-            p = path_part.strip()
-            pkg = owner_part.strip().split()[0] if owner_part.strip() else ""
-            if p and pkg:
-                owners[p] = pkg
+            result = self.runner.run(["pacman", "-Qo", path], timeout=5)
+            if result.returncode == 0 and " is owned by " in result.stdout:
+                path_part, owner_part = result.stdout.split(" is owned by ", 1)
+                p = path_part.strip()
+                pkg = owner_part.strip().split()[0] if owner_part.strip() else ""
+                if p and pkg:
+                    owners[path] = pkg
         return owners
 
     def _package_metadata(self, packages: list[str]) -> dict[str, dict]:
