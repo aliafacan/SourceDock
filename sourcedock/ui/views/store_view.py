@@ -1044,12 +1044,15 @@ class StoreViewMixin:
             STORE_SNAP: "package-x-generic",
         }
         fallback_name = fallback_by_source.get(result.source, "package-x-generic")
-        # A human name is not an icon ID. Resolving it through IconTheme can
-        # silently borrow an unrelated application's icon, especially for
-        # remote Snap results. Only use an exact provider ID, then a neutral
-        # package fallback.
-        candidates = [result.app_id] if result.app_id and result.app_id not in generic_names else []
-        candidates.append(fallback_name)
+        # Paket adı ve id'si üzerinden sistemdeki olası ikonları tara
+        candidates = []
+        clean_id = (result.app_id or "").lower()
+        if clean_id and clean_id not in generic_names:
+            candidates.extend([clean_id, f"org.{clean_id}", f"io.{clean_id}"])
+        clean_name = (result.name or "").lower().replace(" ", "-")
+        if clean_name and clean_name not in candidates and clean_name not in generic_names:
+            candidates.append(clean_name)
+        candidates.extend(["application-x-executable", fallback_name])
         for icon_name in candidates:
             if theme.has_icon(icon_name):
                 try:

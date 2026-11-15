@@ -23,10 +23,10 @@ class ShellViewMixin:
         self._notification_unread = 0
         self.header = Gtk.HeaderBar()
         self.header.set_show_close_button(True)
-        # Cinnamon ve MATE gibi ortamlarda maximize/minimize butonlarını garanti et;
-        # KDE ve GNOME'da masaüstünün kendi doğal layout'unu koru.
+        # KDE Plasma altında GTK HeaderBar'a zorla pencere butonları bind etmek Breeze temasında
+        # çift veya bozuk butonlara yol açar; bu yüzden KDE'de KWin'in doğal davranışını koruyoruz.
         desktop = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
-        if "kde" not in desktop:
+        if "kde" not in desktop and "plasma" not in desktop:
             settings = Gtk.Settings.get_default()
             layout = settings.get_property("gtk-decoration-layout") if settings else None
             if layout:

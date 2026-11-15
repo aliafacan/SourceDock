@@ -182,9 +182,22 @@ class PacmanProvider(BaseNativeProvider):
     def _upgradable_packages(self) -> dict[str, str]:
         if not self.runner.command_exists("pacman"):
             return {}
-        # pacman -Qu çıktısı: linux 6.8.1-arch1-1 -> 6.8.2-arch1-1
-        result = self.runner.run(["pacman", "-Qu"], timeout=30)
-        upgradable: dict[str, str] = {}
+        # Arch/CachyOS'te root olmadan en güvenli güncelleme sorgusu 'checkupdates' aracıdır
+        if self.runner.command_exists("checkupdates"):
+            res = self.runner.run(["checkupdates"], timeout=30)
+            if res.returncode == 0 and res.stdout.strip():
+                upgradable: dict[str, str] = {}
+                for line in res.stdout.splitlines():
+                    # Format: pkgname old_ver -> new_ver
+                    parts = line.strip().split()
+                    if len(parts) >= 4 and parts[2] == "->":
+                        upgradable[parts[0]] = parts[3]
+                if upgradable:
+                    return upgradable
+
+        # checkupdates yoksa veya boşsa standart pacman -Qu
+        result = self.runner.run(["env", "LC_ALL=C", "pacman", "-Qu"], timeout=30)
+        upgradable = {}
         for line in result.stdout.splitlines():
             line = line.strip()
             if not line or " -> " not in line:
@@ -200,26 +213,22 @@ class PacmanProvider(BaseNativeProvider):
         if not self.runner.command_exists("pacman"):
             return []
         # pacman -Q
-        result = self.runner.run(["pacman", "-Q"], timeout=60)
-        if not include_updates and result.returncode != 0:
-            raise BackendError(result.stderr or result.stdout or f"{self.source}: {result.returncode}")
+        res = self.runner.run(["pacman", "-Q"], timeout=30)
         upgradable = self._upgradable_packages() if include_updates else {}
         packages: list[PackageInfo] = []
-        for line in result.stdout.splitlines():
+        for line in res.stdout.splitlines():
             parts = line.strip().split()
-            if len(parts) < 2:
-                continue
-            name, version = parts[0], parts[1]
-            packages.append(
-                PackageInfo(
-                    name=name,
-                    version=version,
-                    installed_size_kib=None,
-                    description="",
-                    update_available=name in upgradable,
-                    new_version=upgradable.get(name, ""),
+            if len(parts) >= 2:
+                packages.append(
+                    PackageInfo(
+                        name=parts[0],
+                        version=parts[1],
+                        installed_size_kib=None,
+                        description="",
+                        update_available=parts[0] in upgradable,
+                        new_version=upgradable.get(parts[0], ""),
+                    )
                 )
-            )
         return sorted(packages, key=lambda p: p.name)
 
     def search_store(self, query: str) -> list[StoreResult]:
