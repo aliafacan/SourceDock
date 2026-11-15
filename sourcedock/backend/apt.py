@@ -416,10 +416,11 @@ class AptProvider(BaseNativeProvider):
         return installed_dates, last_updated_dates
 
     def _upgradable_packages_with_versions(self) -> dict[str, str]:
-        if not self.runner.command_exists("apt"):
+        apt_cmd = "/usr/bin/apt" if os.path.isfile("/usr/bin/apt") and os.access("/usr/bin/apt", os.X_OK) else "apt"
+        if not self.runner.command_exists(apt_cmd):
             raise BackendError("APT güncelleme sorgusu kullanılamıyor: apt komutu bulunamadı.")
         result = self.runner.run(
-            ["apt", APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "list", "--upgradable", "-q"],
+            [apt_cmd, APT_LOCK_NOWAIT, APT_LOCK_NOWAIT_VALUE, "list", "--upgradable", "-q"],
             timeout=45,
         )
         if result.returncode != 0:
