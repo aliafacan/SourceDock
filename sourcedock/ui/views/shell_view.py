@@ -1,5 +1,6 @@
 """Responsive navigation and global search around the existing GTK pages."""
 
+import os
 import gi
 from datetime import datetime
 from pathlib import Path
