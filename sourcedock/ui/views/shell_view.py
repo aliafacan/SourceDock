@@ -22,21 +22,10 @@ class ShellViewMixin:
         self._notification_history = []
         self._notification_unread = 0
         self.header = Gtk.HeaderBar()
-        desktop = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
-        is_kde = "kde" in desktop or "plasma" in desktop
-
-        if is_kde:
-            # KDE Plasma (KWin) pencereye kendi doğal çerçevesini ve butonlarını ekler.
-            # HeaderBar içinde GTK'nın buton çizmesi çift ve bozuk butonlara yol açar.
-            self.header.set_show_close_button(False)
-        else:
-            self.header.set_show_close_button(True)
-            settings = Gtk.Settings.get_default()
-            layout = settings.get_property("gtk-decoration-layout") if settings else None
-            if layout:
-                self.header.set_decoration_layout(layout)
-            elif "cinnamon" in desktop or "mate" in desktop or "x-cinnamon" in desktop:
-                self.header.set_decoration_layout(":minimize,maximize,close")
+        self.header.set_show_close_button(True)
+        # Her masaüstü ortamında (GNOME, KDE Plasma, Cinnamon, MATE, XFCE)
+        # küçült, büyüt ve kapat butonlarının sağ üstte görünmesini garanti et.
+        self.header.set_decoration_layout(":minimize,maximize,close")
         self.header.set_title("SourceDock")
         self.header_search = Gtk.SearchEntry()
         self.header_search.set_width_chars(24)

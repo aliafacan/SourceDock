@@ -102,6 +102,9 @@ label, window box, dialog box {{ color: @text; }}
 headerbar, .titlebar {{ background: @surface; color: @text; border-bottom: 1px solid @border; box-shadow: none; }}
 headerbar label.title {{ font-weight: bold; }}
 headerbar label.subtitle {{ color: @muted; }}
+headerbar button.titlebutton {{ min-width: 16px; min-height: 16px; padding: 4px; margin: 2px; border-radius: 4px; }}
+headerbar button.titlebutton:hover {{ background: @surface_hover; }}
+headerbar button.titlebutton.close:hover {{ background: @danger; color: #ffffff; }}
 button {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 6px;
           padding: 6px 12px; box-shadow: none; min-height: 22px; }}
 button label, button image {{ color: inherit; }}
