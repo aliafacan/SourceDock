@@ -91,6 +91,7 @@ class OperationProgressWindow(Gtk.Window):
 
         self._details_expander = Gtk.Expander(label=t(self.language, "progress_details"))
         self._details_expander.set_expanded(show_details_by_default)
+        self._details_expander.connect("notify::expanded", self._on_details_expanded)
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_min_content_height(180)
@@ -555,11 +556,19 @@ class OperationProgressWindow(Gtk.Window):
         if hasattr(self, "_cancel_btn") and self._cancel_btn is not None:
             self._cancel_btn.set_visible(False)
         if not success:
-            # Hata durumunda detaylar alanını otomatik genişlet ve pencereyi büyüt
+            # Hata durumunda detaylar alanını otomatik genişlet
             self._details_expander.set_expanded(True)
-            self.resize(560, 420)
         if success:
             GLib.timeout_add(2000, self._auto_close)
+
+    def _on_details_expanded(self, expander: Gtk.Expander, _param) -> None:
+        """Kullanıcı Detaylar'a tıkladığında veya kod ile genişletildiğinde pencereyi büyütüp küçültür."""
+        if expander.get_expanded():
+            self.set_size_request(540, 440)
+            self.resize(540, 440)
+        else:
+            self.set_size_request(460, 190)
+            self.resize(460, 190)
 
     def _on_cancel_clicked(self, _button=None) -> None:
         if self._cancel_fn:
