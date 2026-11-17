@@ -545,12 +545,15 @@ class ApplicationRegistry:
             # Arch/CachyOS: Bağımsız paketleri güncellemeye çalış.
             # Eğer sistem kütüphanesi bağımlılık çakışması olursa (partial upgrade engeli),
             # otomatik olarak pacman -Syu ile sistem bağımlılıklarını tamamla.
+            saved_pwd = self.runner._sudo_password
             try:
                 self.runner.run_privileged(["pacman", "-Sy", "--noconfirm", *names], timeout=1800)
             except BackendError as exc:
                 err_msg = str(exc).lower()
                 if any(k in err_msg for k in ("bağımlılık", "dependency", "breaks", "bozuyor", "çakışma", "conflict")):
                     # Bağımlılık zincirini bozmadan tam sistem yükseltmesiyle güvenle tamamla
+                    if saved_pwd:
+                        self.runner.set_sudo_password(saved_pwd)
                     self.runner.run_privileged(["pacman", "-Syu", "--noconfirm"], timeout=3600)
                 else:
                     raise
