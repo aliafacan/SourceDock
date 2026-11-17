@@ -554,6 +554,10 @@ class OperationProgressWindow(Gtk.Window):
         self._close_btn.grab_focus()
         if hasattr(self, "_cancel_btn") and self._cancel_btn is not None:
             self._cancel_btn.set_visible(False)
+        if not success:
+            # Hata durumunda detaylar alanını otomatik genişlet ve pencereyi büyüt
+            self._details_expander.set_expanded(True)
+            self.resize(560, 420)
         if success:
             GLib.timeout_add(2000, self._auto_close)
 
