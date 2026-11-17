@@ -542,21 +542,20 @@ class ApplicationRegistry:
         elif prov.source == SOURCE_DNF:
             self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
         elif prov.source == SOURCE_PACMAN:
-            # Arch/CachyOS: Bağımsız paketleri güncellemeye çalış.
-            # Eğer sistem kütüphanesi bağımlılık çakışması olursa (partial upgrade engeli),
-            # otomatik olarak pacman -Syu ile sistem bağımlılıklarını tamamla.
+            # Arch/CachyOS: Seçilen paketleri bağımsız olarak sırayla güncelle.
+            # Böylece bir paket bağımlılık engeline takılsa bile diğerleri başarıyla güncellenir.
+            # Kullanıcının seçmediği sistem paketleri asla habersiz güncellenmez.
             saved_pwd = self.runner._sudo_password
-            try:
-                self.runner.run_privileged(["pacman", "-Sy", "--noconfirm", *names], timeout=1800)
-            except BackendError as exc:
-                err_msg = str(exc).lower()
-                if any(k in err_msg for k in ("bağımlılık", "dependency", "breaks", "bozuyor", "çakışma", "conflict")):
-                    # Bağımlılık zincirini bozmadan tam sistem yükseltmesiyle güvenle tamamla
-                    if saved_pwd:
-                        self.runner.set_sudo_password(saved_pwd)
-                    self.runner.run_privileged(["pacman", "-Syu", "--noconfirm"], timeout=3600)
-                else:
-                    raise
+            pacman_failures: list[str] = []
+            for name in names:
+                if saved_pwd:
+                    self.runner.set_sudo_password(saved_pwd)
+                try:
+                    self.runner.run_privileged(["pacman", "-Sy", "--noconfirm", name], timeout=900)
+                except Exception as exc:
+                    pacman_failures.append(f"{name}: {exc}")
+            if pacman_failures:
+                raise BackendError("Bazı Pacman paketleri bağımlılık nedeniyle güncellenemedi:\n" + "\n".join(pacman_failures))
         elif prov.source == SOURCE_ZYPPER:
             self.runner.run_privileged(["zypper", "--non-interactive", "update", "-y", *names], timeout=1800)
         else:
