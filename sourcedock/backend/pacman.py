@@ -174,19 +174,41 @@ class PacmanProvider(BaseNativeProvider):
             elif key == "installed size":
                 current_data["size_kib"] = _parse_size_str(val)
             elif key == "install date":
-                # Pacman formatı: Sun Nov 15 16:25:12 2026 -> 2026-11-15
+                # Pacman formatı (İngilizce/Türkçe): 'Tue 17 Nov 2026...' veya 'Sal 17 Kas 2026...' -> '2026-11-17'
                 date_str = ""
                 if val:
-                    try:
-                        # Pacman standart ctime: %a %b %d %H:%M:%S %Y
-                        parts = val.split()
-                        if len(parts) >= 5:
-                            dt = datetime.strptime(f"{parts[0]} {parts[1]} {parts[2]} {parts[3]} {parts[4]}", "%a %b %d %H:%M:%S %Y")
-                            date_str = dt.strftime("%Y-%m-%d")
-                        else:
-                            date_str = val
-                    except Exception:
-                        date_str = val.split()[0] if val else ""
+                    # 1. 4 haneli yılı ara
+                    year_match = re.search(r"\b(20\d\d)\b", val)
+                    year = year_match.group(1) if year_match else ""
+                    # Ay eşleştirmesi (İngilizce ve Türkçe kısaltmalar)
+                    month_map = {
+                        "jan": "01", "ocak": "01", "oca": "01",
+                        "feb": "02", "şubat": "02", "şub": "02", "sub": "02",
+                        "mar": "03", "mart": "03",
+                        "apr": "04", "nisan": "04", "nis": "04",
+                        "may": "05", "mayıs": "05",
+                        "jun": "06", "haziran": "06", "haz": "06",
+                        "jul": "07", "temmuz": "07", "tem": "07",
+                        "aug": "08", "ağustos": "08", "ağu": "08", "agu": "08",
+                        "sep": "09", "eylül": "09", "eyl": "09",
+                        "oct": "10", "ekim": "10", "eki": "10",
+                        "nov": "11", "kasım": "11", "kas": "11",
+                        "dec": "12", "aralık": "12", "ara": "12",
+                    }
+                    val_lower = val.lower()
+                    found_month = ""
+                    for m_name, m_num in month_map.items():
+                        if re.search(rf"\b{m_name}\b", val_lower):
+                            found_month = m_num
+                            break
+                    # Gün sayısını ara (1-31)
+                    day_match = re.search(r"\b([0-2]?[1-9]|[1-3]0|31)\b", val)
+                    day = day_match.group(1).zfill(2) if day_match else "01"
+
+                    if year and found_month:
+                        date_str = f"{year}-{found_month}-{day}"
+                    else:
+                        date_str = year or val.split()[0]
                 current_data["install_date"] = date_str
 
         if current_pkg and current_data:
