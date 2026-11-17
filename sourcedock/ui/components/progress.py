@@ -42,7 +42,6 @@ class OperationProgressWindow(Gtk.Window):
         self.set_decorated(True)
         self.set_type_hint(Gdk.WindowTypeHint.NORMAL)
         self.set_position(Gtk.WindowPosition.CENTER)
-        make_window_movable(self, independent=True)
         self.get_style_context().add_class("icon-settings-window")
         self._last_measurement = 0.0
         self._phase_started = time.monotonic()
