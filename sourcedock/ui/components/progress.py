@@ -34,7 +34,7 @@ class OperationProgressWindow(Gtk.Window):
     ) -> None:
         super().__init__(title=title)
         self.language = language
-        self.set_default_size(460, 190)
+        self.set_default_size(520, 360)
         self.set_resizable(True)
         self.set_deletable(True)
         self.set_skip_taskbar_hint(False)
@@ -574,14 +574,8 @@ class OperationProgressWindow(Gtk.Window):
         return False
 
     def _on_details_expanded(self, expander: Gtk.Expander, _param) -> None:
-        """Kullanıcı Detaylar'a tıkladığında veya kod ile genişletildiğinde pencereyi büyütüp küçültür."""
-        is_exp = expander.get_expanded()
-        if is_exp:
-            self.set_size_request(540, 440)
-            self.resize(540, 440)
-        else:
-            self.set_size_request(460, 190)
-            self.resize(460, 190)
+        """Kullanıcı Detaylar'a tıkladığında pencere sabit boyutunu korur."""
+        pass
 
     def _on_cancel_clicked(self, _button=None) -> None:
         if self._cancel_fn:

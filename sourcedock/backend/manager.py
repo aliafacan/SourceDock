@@ -542,7 +542,18 @@ class ApplicationRegistry:
         elif prov.source == SOURCE_DNF:
             self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
         elif prov.source == SOURCE_PACMAN:
-            self.runner.run_privileged(["pacman", "-Sy", "--noconfirm", *names], timeout=1800)
+            # Arch/CachyOS: Bağımsız paketleri güncellemeye çalış.
+            # Eğer sistem kütüphanesi bağımlılık çakışması olursa (partial upgrade engeli),
+            # otomatik olarak pacman -Syu ile sistem bağımlılıklarını tamamla.
+            try:
+                self.runner.run_privileged(["pacman", "-Sy", "--noconfirm", *names], timeout=1800)
+            except BackendError as exc:
+                err_msg = str(exc).lower()
+                if any(k in err_msg for k in ("bağımlılık", "dependency", "breaks", "bozuyor", "çakışma", "conflict")):
+                    # Bağımlılık zincirini bozmadan tam sistem yükseltmesiyle güvenle tamamla
+                    self.runner.run_privileged(["pacman", "-Syu", "--noconfirm"], timeout=3600)
+                else:
+                    raise
         elif prov.source == SOURCE_ZYPPER:
             self.runner.run_privileged(["zypper", "--non-interactive", "update", "-y", *names], timeout=1800)
         else:
