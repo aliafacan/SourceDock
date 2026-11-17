@@ -103,22 +103,25 @@ headerbar, .titlebar {{ background: @surface; color: @text; border-bottom: 1px s
 headerbar label.title {{ font-weight: bold; }}
 headerbar label.subtitle {{ color: @muted; }}
 headerbar button.titlebutton {{ 
-    background: transparent; 
-    border: none; 
+    background-color: transparent; 
+    background-image: none;
+    border-color: transparent;
+    border-width: 0;
     box-shadow: none; 
-    padding: 2px 6px; 
-    margin: 0; 
-    min-width: 18px; 
-    min-height: 18px; 
+    padding: 0 4px; 
+    margin: 0 1px; 
+    min-width: 16px; 
+    min-height: 16px; 
     border-radius: 4px;
 }}
-headerbar button.titlebutton:hover {{ background: alpha(@text, 0.12); }}
-headerbar button.titlebutton.close:hover {{ background: @danger; color: #ffffff; }}
-button {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 6px;
+headerbar button.titlebutton image {{ color: inherit; }}
+headerbar button.titlebutton:hover {{ background-color: alpha(@text, 0.15); }}
+headerbar button.titlebutton.close:hover {{ background-color: @danger; color: #ffffff; }}
+button:not(.titlebutton) {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 6px;
           padding: 6px 12px; box-shadow: none; min-height: 22px; }}
-button label, button image {{ color: inherit; }}
-button:hover {{ background: @surface_hover; }}
-button:disabled, button:disabled label, button:disabled image {{ color: @muted; opacity: 0.55; }}
+button:not(.titlebutton) label, button:not(.titlebutton) image {{ color: inherit; }}
+button:not(.titlebutton):hover {{ background: @surface_hover; }}
+button:not(.titlebutton):disabled, button:not(.titlebutton):disabled label, button:not(.titlebutton):disabled image {{ color: @muted; opacity: 0.55; }}
 button:focus, entry:focus, checkbutton:focus, row:focus {{ outline: 2px solid @focus; outline-offset: 2px; }}
 button.suggested-action {{ background: @accent; border-color: @accent; color: @accent_text; font-weight: bold; }}
 button.suggested-action:hover {{ background: shade(@accent, 1.07); }}
