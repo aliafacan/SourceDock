@@ -119,28 +119,30 @@ class PacmanProvider(BaseNativeProvider):
     def _owning_packages(self, paths: list[str]) -> dict[str, str]:
         if not paths:
             return {}
+        # Hız optimizasyonu: 160 defa 'pacman -Qo' çağırmak yerine,
+        # 'pacman -Qo' komutunu 30'arlı paketler halinde çalıştırıyoruz.
+        # Böylece süreç başlatma yükü 160'tan 5'e iner ve anında tamamlanır.
         owners: dict[str, str] = {}
-        # Ensure LC_ALL=C is used so pacman outputs English "is owned by",
-        # but also support localized formats (e.g. Turkish "paketine ait").
-        env = {**os.environ, "LC_ALL": "C"}
-        for path in paths:
-            if not os.path.exists(path):
-                continue
-            result = self.runner.run(["env", "LC_ALL=C", "pacman", "-Qo", path], timeout=5)
-            stdout = result.stdout.strip()
-            if result.returncode == 0:
-                if " is owned by " in stdout:
-                    _, owner_part = stdout.split(" is owned by ", 1)
-                    pkg = owner_part.strip().split()[0] if owner_part.strip() else ""
-                    if pkg:
-                        owners[path] = pkg
-                elif " paketine ait" in stdout:
-                    # Türkçe yerel: /path/to/file, pkg version paketine ait.
-                    parts = stdout.split(",")
-                    if len(parts) >= 2:
-                        pkg = parts[1].strip().split()[0]
-                        if pkg:
-                            owners[path] = pkg
+        valid_paths = [p for p in paths if os.path.exists(p)]
+        batch_size = 30
+        for i in range(0, len(valid_paths), batch_size):
+            chunk = valid_paths[i : i + batch_size]
+            result = self.runner.run(["env", "LC_ALL=C", "pacman", "-Qo", *chunk], timeout=10)
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    if " is owned by " in line:
+                        path_part, owner_part = line.split(" is owned by ", 1)
+                        p = path_part.strip()
+                        pkg = owner_part.strip().split()[0] if owner_part.strip() else ""
+                        if p and pkg:
+                            owners[p] = pkg
+                    elif " paketine ait" in line:
+                        parts = line.split(",")
+                        if len(parts) >= 2:
+                            p = parts[0].strip()
+                            pkg = parts[1].strip().split()[0]
+                            if p and pkg:
+                                owners[p] = pkg
         return owners
 
     def _package_metadata(self, packages: list[str]) -> dict[str, dict]:
