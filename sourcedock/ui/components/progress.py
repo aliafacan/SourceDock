@@ -106,26 +106,35 @@ class OperationProgressWindow(Gtk.Window):
         content.pack_start(self._details_expander, True, True, 0)
 
         button_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        button_row.set_halign(Gtk.Align.END)
         content.pack_start(button_row, False, False, 0)
+
+        # Detayları Göster / Gizle Açık Buton
+        self._toggle_details_btn = Gtk.Button(label=t(self.language, "progress_details"))
+        self._toggle_details_btn.get_style_context().add_class("flat")
+        self._toggle_details_btn.connect("clicked", lambda _b: self._details_expander.set_expanded(not self._details_expander.get_expanded()))
+        button_row.pack_start(self._toggle_details_btn, False, False, 0)
+
+        right_buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        right_buttons.set_halign(Gtk.Align.END)
+        button_row.pack_end(right_buttons, False, False, 0)
 
         self._cancel_fn = cancel_fn
         if cancel_fn is not None:
             self._cancel_btn = Gtk.Button(label=t(self.language, "btn_cancel"))
             self._cancel_btn.connect("clicked", self._on_cancel_clicked)
-            button_row.pack_start(self._cancel_btn, False, False, 0)
+            right_buttons.pack_start(self._cancel_btn, False, False, 0)
         else:
             self._cancel_btn = None
 
         self._minimize_btn = Gtk.Button(label=t(self.language, "progress_minimize"))
         self._minimize_btn.connect("clicked", lambda _button: self.iconify())
-        button_row.pack_start(self._minimize_btn, False, False, 0)
+        right_buttons.pack_start(self._minimize_btn, False, False, 0)
 
         self._close_btn = Gtk.Button(label=t(self.language, "progress_close"))
         self._close_btn.get_style_context().add_class("suggested-action")
         self._close_btn.set_sensitive(False)
         self._close_btn.connect("clicked", lambda _button: self.destroy())
-        button_row.pack_start(self._close_btn, False, False, 0)
+        right_buttons.pack_start(self._close_btn, False, False, 0)
 
         self._pulse_source: int | None = GLib.timeout_add(80, self._pulse)
         self.connect("destroy", self._on_destroy)
@@ -563,7 +572,10 @@ class OperationProgressWindow(Gtk.Window):
 
     def _on_details_expanded(self, expander: Gtk.Expander, _param) -> None:
         """Kullanıcı Detaylar'a tıkladığında veya kod ile genişletildiğinde pencereyi büyütüp küçültür."""
-        if expander.get_expanded():
+        is_exp = expander.get_expanded()
+        if hasattr(self, "_toggle_details_btn"):
+            self._toggle_details_btn.set_label("▼ " + t(self.language, "progress_details") if is_exp else "▶ " + t(self.language, "progress_details"))
+        if is_exp:
             self.set_size_request(540, 440)
             self.resize(540, 440)
         else:
