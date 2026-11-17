@@ -172,8 +172,24 @@ class PacmanProvider(BaseNativeProvider):
             elif key == "installed size":
                 current_data["size_kib"] = _parse_size_str(val)
             elif key == "install date":
-                # Tarih formatını sadeleştir
-                current_data["install_date"] = val.split()[0] if val else ""
+                # Tarih formatını standartlaştır (örn: 'Sun 15 Nov 2026 ...' -> '2026-11-15')
+                date_str = ""
+                if val:
+                    try:
+                        # Pacman formatı: Sun 15 Nov 2026 05:30:12 PM ...
+                        parts = val.split()
+                        # Eğer format "Day DD Mon YYYY ..." şeklindeyse
+                        if len(parts) >= 4 and len(parts[3]) == 4 and parts[3].isdigit():
+                            from email.utils import parsedate_to_datetime
+                            # RFC 2822 uyumlu parse denemesi
+                            dt_str = f"{parts[0]}, {parts[1]} {parts[2]} {parts[3]} {parts[4]}"
+                            dt = parsedate_to_datetime(dt_str)
+                            date_str = dt.strftime("%Y-%m-%d")
+                        else:
+                            date_str = " ".join(parts[:4])
+                    except Exception:
+                        date_str = " ".join(val.split()[:4])
+                current_data["install_date"] = date_str
 
         if current_pkg and current_data:
             metadata[current_pkg] = current_data
