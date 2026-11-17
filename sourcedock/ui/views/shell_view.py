@@ -22,11 +22,15 @@ class ShellViewMixin:
         self._notification_history = []
         self._notification_unread = 0
         self.header = Gtk.HeaderBar()
-        self.header.set_show_close_button(True)
-        # KDE Plasma altında GTK HeaderBar'a zorla pencere butonları bind etmek Breeze temasında
-        # çift veya bozuk butonlara yol açar; bu yüzden KDE'de KWin'in doğal davranışını koruyoruz.
         desktop = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
-        if "kde" not in desktop and "plasma" not in desktop:
+        is_kde = "kde" in desktop or "plasma" in desktop
+
+        if is_kde:
+            # KDE Plasma (KWin) pencereye kendi doğal çerçevesini ve butonlarını ekler.
+            # HeaderBar içinde GTK'nın buton çizmesi çift ve bozuk butonlara yol açar.
+            self.header.set_show_close_button(False)
+        else:
+            self.header.set_show_close_button(True)
             settings = Gtk.Settings.get_default()
             layout = settings.get_property("gtk-decoration-layout") if settings else None
             if layout:
