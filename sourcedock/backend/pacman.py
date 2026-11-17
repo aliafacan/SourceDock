@@ -303,7 +303,7 @@ class PacmanProvider(BaseNativeProvider):
         return ["pacman", "-S", "--noconfirm", package]
 
     def update_command(self, package: str) -> list[str]:
-        return ["pacman", "-S", "--noconfirm", package]
+        return ["pacman", "-Sy", "--noconfirm", package]
 
     def update_all_command(self) -> list[str]:
         return ["pacman", "-Syu", "--noconfirm"]

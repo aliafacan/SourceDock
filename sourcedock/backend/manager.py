@@ -542,7 +542,7 @@ class ApplicationRegistry:
         elif prov.source == SOURCE_DNF:
             self.runner.run_privileged(["dnf", "upgrade", "-y", *names], timeout=1800)
         elif prov.source == SOURCE_PACMAN:
-            self.runner.run_privileged(["pacman", "-S", "--noconfirm", *names], timeout=1800)
+            self.runner.run_privileged(["pacman", "-Sy", "--noconfirm", *names], timeout=1800)
         elif prov.source == SOURCE_ZYPPER:
             self.runner.run_privileged(["zypper", "--non-interactive", "update", "-y", *names], timeout=1800)
         else:
