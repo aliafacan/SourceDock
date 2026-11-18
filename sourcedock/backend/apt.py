@@ -469,14 +469,18 @@ class AptProvider(BaseNativeProvider):
             package = packages.get(name)
             if package is None and ":" not in name:
                 matches = [item for key, item in packages.items() if _base_package_name(key) == name]
-                package = matches[0] if len(matches) == 1 else None
+                if len(matches) == 1:
+                    package = matches[0]
+                elif len(matches) > 1:
+                    # Multiarch (örneğin hem libgd3:amd64 hem libgd3:i386 kurulu):
+                    # Tüm mimari kopyalarını güncellenebilir olarak işaretle
+                    for m in matches:
+                        m.update_available = True
+                        m.new_version = new_ver
+                    continue
             if package is not None:
                 package.update_available = True
                 package.new_version = new_ver
-            else:
-                raise BackendError(
-                    f"APT {name} paketini güncellenebilir bildirdi ancak kurulu dpkg envanterinde eşleşme bulunamadı."
-                )
         return sorted(packages.values(), key=lambda p: p.name)
 
     def search_store(self, query: str) -> list[StoreResult]:
