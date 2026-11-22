@@ -822,7 +822,8 @@ class InstalledViewMixin:
             )
             self.applications_action_remove_btn.set_sensitive(application.source != SOURCE_FIRMWARE)
             is_flatpak = application.source == SOURCE_FLATPAK
-            self.applications_permissions_btn.set_sensitive(is_flatpak)
+            has_perms = is_flatpak or application.source == SOURCE_SNAP or is_native_source(application.source)
+            self.applications_permissions_btn.set_sensitive(has_perms)
             self.applications_rollback_btn.set_sensitive(is_flatpak)
             self.applications_changelog_btn.set_sensitive(is_native_source(application.source))
         else:
@@ -878,11 +879,12 @@ class InstalledViewMixin:
         item_loc.connect("activate", lambda _: self.on_open_application_location(None, application))
         menu.append(item_loc)
 
-        if application.source == SOURCE_FLATPAK:
+        if application.source in (SOURCE_FLATPAK, SOURCE_SNAP) or is_native_source(application.source):
             item_perm = Gtk.MenuItem(label=t(self.preferences.language, "flatpak_permissions_btn"))
             item_perm.connect("activate", lambda _: self.on_flatpak_permissions(None, application))
             menu.append(item_perm)
 
+        if application.source == SOURCE_FLATPAK:
             item_rollback = Gtk.MenuItem(label=t(self.preferences.language, "flatpak_rollback_menu"))
             item_rollback.connect("activate", lambda _: self.on_flatpak_rollback(None, application))
             menu.append(item_rollback)
@@ -2380,35 +2382,29 @@ class InstalledViewMixin:
             dialog.destroy()
 
     def on_flatpak_permissions(self, _button, application: UnifiedApplication) -> None:
+        def _fetch_perms():
+            if application.source == SOURCE_FLATPAK:
+                return self.application_registry.flatpak_permissions(application.package_name)
+            elif application.source == SOURCE_SNAP:
+                return self.application_registry.snap_permissions(application.package_name)
+            else:
+                return self.application_registry.native_permissions(application.package_name)
+
         load_dialog_data(
             self, t(self.preferences.language, "permissions_title", name=application.name),
-            lambda: self.application_registry.flatpak_permissions(application.package_name),
+            _fetch_perms,
             lambda permissions: self._show_flatpak_permissions(application, permissions),
         )
 
     def _show_flatpak_permissions(self, application, perms):
-        lang = self.preferences.language
-        dialog = Gtk.Dialog(
-            title=t(lang, "permissions_title").format(name=application.name),
-            transient_for=self,
-            modal=True,
-            destroy_with_parent=True,
+        from sourcedock.ui.components.permissions_dialog import PermissionsDialog
+        dialog = PermissionsDialog(
+            parent=self,
+            application=application,
+            registry=self.application_registry,
+            permissions_data=perms,
+            language=self.preferences.language,
         )
-        prepare_dialog(dialog, width=500, height=350)
-        dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
-
-        box = dialog.get_content_area()
-        scroller = Gtk.ScrolledWindow()
-        tv = Gtk.TextView()
-        tv.set_editable(False)
-        lines = []
-        for sec, items in perms.items():
-            lines.append(f"[{sec}]")
-            lines.extend(f"  {it}" for it in items)
-        tv.get_buffer().set_text("\n".join(lines) or t(lang, "permissions_none"))
-        scroller.add(tv)
-        box.pack_start(scroller, True, True, 0)
-        dialog.show_all()
         dialog.run()
         dialog.destroy()
 

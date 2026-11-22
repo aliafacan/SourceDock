@@ -281,8 +281,8 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
         btn_loc.connect("clicked", self._on_location_clicked)
         actions_card.pack_start(btn_loc, False, False, 0)
 
-        # [İzinler / Permissions] (Flatpak)
-        if self.application.source == SOURCE_FLATPAK:
+        # [İzinler / Permissions] (Flatpak, Snap ve Yerel Paketler)
+        if self.application.source in (SOURCE_FLATPAK, SOURCE_SNAP) or is_native_source(self.application.source):
             btn_perm = Gtk.Button()
             icon_text_button(
                 btn_perm,
@@ -293,6 +293,7 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
             btn_perm.connect("clicked", self._on_permissions_clicked)
             actions_card.pack_start(btn_perm, False, False, 0)
 
+        if self.application.source == SOURCE_FLATPAK:
             btn_rb = Gtk.Button()
             icon_text_button(
                 btn_rb,

@@ -869,21 +869,125 @@ class ApplicationRegistry:
     def flatpak_rollback(self, app_id: str, commit: str) -> None:
         self.runner.run(["flatpak", "update", "--commit", commit, "-y", app_id], timeout=1800, check=True)
 
-    def flatpak_permissions(self, app_id: str) -> dict[str, list[str]]:
-        result = self.runner.run(["flatpak", "override", "--show", app_id], timeout=10)
-        perms: dict[str, list[str]] = {}
-        section = ""
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if line.startswith("[") and line.endswith("]"):
-                section = line[1:-1]
-                perms[section] = []
-            elif line and section:
-                perms[section].append(line)
-        return perms
+    def flatpak_permissions(self, app_id: str) -> dict[str, Any]:
+        """Flatpak uygulamasının hem temel izinlerini hem de geçersiz kılmalarını döndürür."""
+        import configparser
+
+        # 1. Varsayılan izinler (metadata)
+        base_meta = {"filesystems": set(), "sockets": set(), "shares": set(), "devices": set()}
+        res_info = self.runner.run(["flatpak", "info", "-m", app_id], timeout=10)
+        if res_info.returncode == 0:
+            c = configparser.ConfigParser()
+            try:
+                c.read_string(res_info.stdout)
+                if "Context" in c:
+                    ctx = c["Context"]
+                    base_meta["filesystems"] = {f.split(":")[0] for f in ctx.get("filesystems", "").split(";") if f}
+                    base_meta["sockets"] = {s for s in ctx.get("sockets", "").split(";") if s}
+                    base_meta["shares"] = {sh for sh in ctx.get("shared", "").split(";") if sh}
+                    base_meta["devices"] = {d for d in ctx.get("devices", "").split(";") if d}
+            except Exception:
+                pass
+
+        # 2. Kullanıcı geçersiz kılmaları (override)
+        res_ov = self.runner.run(["flatpak", "override", "--user", "--show", app_id], timeout=10)
+        overrides = {"filesystems": {}, "sockets": {}, "shares": {}, "devices": {}}
+        if res_ov.returncode == 0:
+            c_ov = configparser.ConfigParser()
+            try:
+                c_ov.read_string(res_ov.stdout)
+                if "Context" in c_ov:
+                    ctx_ov = c_ov["Context"]
+                    for f in ctx_ov.get("filesystems", "").split(";"):
+                        if f.startswith("!"):
+                            overrides["filesystems"][f[1:].split(":")[0]] = False
+                        elif f:
+                            overrides["filesystems"][f.split(":")[0]] = True
+                    for s in ctx_ov.get("sockets", "").split(";"):
+                        if s.startswith("!"):
+                            overrides["sockets"][s[1:]] = False
+                        elif s:
+                            overrides["sockets"][s] = True
+                    for sh in ctx_ov.get("shared", "").split(";"):
+                        if sh.startswith("!"):
+                            overrides["shares"][sh[1:]] = False
+                        elif sh:
+                            overrides["shares"][sh] = True
+                    for d in ctx_ov.get("devices", "").split(";"):
+                        if d.startswith("!"):
+                            overrides["devices"][d[1:]] = False
+                        elif d:
+                            overrides["devices"][d] = True
+            except Exception:
+                pass
+
+        # Birleştirilmiş etkin izinler
+        effective_fs = {
+            "home": overrides["filesystems"].get("home", "home" in base_meta["filesystems"]),
+            "host": overrides["filesystems"].get("host", "host" in base_meta["filesystems"]),
+            "xdg-download": overrides["filesystems"].get("xdg-download", "xdg-download" in base_meta["filesystems"]),
+        }
+        effective_shares = {
+            "network": overrides["shares"].get("network", "network" in base_meta["shares"]),
+        }
+        effective_sockets = {
+            "pulseaudio": overrides["sockets"].get("pulseaudio", "pulseaudio" in base_meta["sockets"]),
+            "x11": overrides["sockets"].get("x11", "x11" in base_meta["sockets"]),
+            "wayland": overrides["sockets"].get("wayland", "wayland" in base_meta["sockets"]),
+        }
+        effective_devices = {
+            "all": overrides["devices"].get("all", "all" in base_meta["devices"]),
+        }
+
+        return {
+            "filesystems": effective_fs,
+            "shares": effective_shares,
+            "sockets": effective_sockets,
+            "devices": effective_devices,
+        }
+
+    def set_flatpak_override(self, app_id: str, override_type: str, value: str) -> None:
+        """Kullanıcı düzeyinde flatpak override uygular."""
+        flag = f"--{override_type}={value}"
+        self.runner.run(["flatpak", "override", "--user", flag, app_id], timeout=15, check=True)
 
     def flatpak_reset_permissions(self, app_id: str) -> None:
-        self.runner.run(["flatpak", "override", "--reset", app_id], timeout=15, check=True)
+        self.runner.run(["flatpak", "override", "--user", "--reset", app_id], timeout=15, check=True)
+
+    def snap_permissions(self, snap_name: str) -> dict[str, Any]:
+        """Snap uygulamasının plug bağlantılarını sorgular."""
+        result = self.runner.run(["snap", "connections", snap_name], timeout=10)
+        connections: list[dict[str, Any]] = []
+        if result.returncode == 0:
+            for line in result.stdout.splitlines()[1:]:
+                parts = line.split()
+                if len(parts) >= 3:
+                    iface = parts[0]
+                    plug = parts[1]
+                    slot = parts[2]
+                    # Slot '-' değilse bağlıdır
+                    is_connected = slot != "-"
+                    connections.append({
+                        "interface": iface,
+                        "plug": plug,
+                        "slot": slot,
+                        "connected": is_connected,
+                    })
+        return {"connections": connections}
+
+    def toggle_snap_connection(self, snap_name: str, interface: str, connect: bool) -> None:
+        """Snap plug'ını bağlar veya çözer (ayrıcalıklı işlem)."""
+        action = "connect" if connect else "disconnect"
+        cmd = ["snap", action, f"{snap_name}:{interface}"]
+        self.runner.run_privileged(cmd, timeout=30)
+
+    def native_permissions(self, package_name: str) -> dict[str, Any]:
+        """Yerel APT/DNF/Pacman paketleri için AppArmor/SELinux kısıtlama durumunu döner."""
+        is_confined = False
+        res = self.runner.run(["aa-status"], timeout=5)
+        if res.returncode == 0 and package_name in res.stdout:
+            is_confined = True
+        return {"apparmor_confined": is_confined}
 
     def export_app_list(self) -> str:
         from sourcedock.core.app_lists import export_applications
