@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.12 - 2026-11-22
+
+### Application permissions
+
+- Add an application permissions button to Installed Applications and organize Flatpak, Snap and native package information into readable tabs with application icons and theme-aware sizing.
+- Let users add and remove individual Flatpak folder grants. Show the available Snap interfaces and explain the limits of Snap and native package isolation instead of offering unsupported folder controls.
+- Prompt for administrator authorization when changing Snap connections and reuse the existing 15-minute password cache after a successful action.
+- Update permission switches only after the backend succeeds; canceling authentication or a failed command preserves the previous visual state.
+- Improve permission dialog typography, titlebar controls, and translations in all six languages.
+
+## 1.4.11 - 2026-11-18
+
+### Distribution support and package operations
+
+- Improve Pacman package ownership lookups, localized installation dates, update discovery, sequential selected-package updates and dependency-conflict fallback.
+- Fix APT update discovery for multiarch packages and prefer the system APT executable on Linux Mint.
+- Improve desktop window controls on KDE Plasma, Cinnamon and MATE, and make operation details easier to open and read.
+- Add cross-distribution VM test tooling and strengthen command-guarded test execution.
+
 ## 1.4.10 - 2026-11-04
 
 ### Updates, search and operation details

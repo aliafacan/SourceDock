@@ -451,6 +451,7 @@ class InstalledViewMixin:
         self.applications_permissions_btn.connect(
             "clicked", lambda _b: self._on_selected_app_action(self.on_flatpak_permissions)
         )
+        action_bar.pack_start(self.applications_permissions_btn, False, False, 0)
 
         self.applications_rollback_btn = Gtk.Button()
         self.applications_rollback_btn.connect(

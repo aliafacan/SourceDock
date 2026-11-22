@@ -2167,7 +2167,8 @@ sys.exit(0)
         from sourcedock.backend.apt import AptProvider
 
         runner = MagicMock()
-        runner.command_exists.side_effect = lambda cmd: cmd == "apt"
+        apt_cmd = "/usr/bin/apt" if os.path.isfile("/usr/bin/apt") and os.access("/usr/bin/apt", os.X_OK) else "apt"
+        runner.command_exists.side_effect = lambda cmd: cmd == apt_cmd
         provider = AptProvider(runner=runner, scanner=MagicMock())
 
         runner.run.return_value = subprocess.CompletedProcess(
@@ -2180,7 +2181,7 @@ sys.exit(0)
         self.assertEqual(pkgs, {"curl", "git"})
         cmd_called = runner.run.call_args[0][0]
         timeout_called = runner.run.call_args[1].get("timeout")
-        self.assertEqual(cmd_called, ["apt", "-o", "DPkg::Lock::Timeout=0", "list", "--upgradable", "-q"])
+        self.assertEqual(cmd_called, [apt_cmd, "-o", "DPkg::Lock::Timeout=0", "list", "--upgradable", "-q"])
         self.assertEqual(timeout_called, 45)
 
         runner.run.return_value = subprocess.CompletedProcess(

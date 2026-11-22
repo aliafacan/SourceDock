@@ -250,6 +250,9 @@ class PacmanProvider(BaseNativeProvider):
             return []
         # pacman -Q
         res = self.runner.run(["pacman", "-Q"], timeout=30)
+        if res.returncode != 0:
+            detail = res.stderr.strip() or res.stdout.strip() or "bilinmeyen hata"
+            raise BackendError(f"Kurulu Pacman paketleri okunamadı (kod {res.returncode}): {detail}")
         upgradable = self._upgradable_packages() if include_updates else {}
         packages: list[PackageInfo] = []
         for line in res.stdout.splitlines():

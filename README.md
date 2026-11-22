@@ -20,15 +20,13 @@
 
 SourceDock is a modern, modular, and distro-agnostic Linux desktop software management tool built with Python and GTK 3. It provides a unified interface for browsing, discovering, updating, and removing system packages, Flatpaks, Snaps, and local software packages without compromising desktop responsiveness or system security.
 
-## What’s new in 1.4.10
+## What’s new in 1.4.12
 
-- **Faster restarts:** reuse the saved inventory when package databases and deployment pointers are unchanged. External changes or an expired cache trigger discovery; F5 always requests a fresh scan. Antigravity launchers match the final window class after Electron startup.
-- **Steady installed lists:** completed installs, removals and updates reconcile the affected source without restarting the page or repeating update checks.
-- **A separate System filter:** installed Flatpak runtimes and Snap bases remain visible regardless of update availability. Removing shared components requires a clear warning and typed package-name confirmation.
-- **Work while operations run:** search and source filters stay usable. Different package managers can run concurrently; mutations of the same package database wait safely in a queue.
-- **Change application sources:** the store recognizes matching installed applications across native packages, Flatpak and Snap. Choose **Install alongside** or explicitly switch sources; the destination is installed and verified before the selected old package is removed without purge. Profiles and sessions are not transferred automatically.
-- **Clearer installation feedback:** one measured progress bar, optional detailed logs, readable file-picker selections, and improved portable Electron icons and desktop matching.
-- **Resilient store search:** slower Snap searches have a 15-second budget, faster provider results appear independently, and timeouts show localized retry messages instead of raw commands.
+- **Application permissions:** the Installed page now opens a themed, tabbed permission view with each application's icon. Flatpak permissions can be changed, including adding or removing specific folders; Snap connections can be switched. Native packages show their available security information.
+- **Reliable permission switches:** a change appears only after it succeeds. Canceling the administrator password prompt or a failed command leaves the previous state visible. Successful Snap authorization is reused for up to 15 minutes.
+- **Consistent desktop UI:** permission text follows the application scale, and window controls better match the other header buttons.
+- **1.4.11 package improvements:** Pacman package discovery and selected updates, APT multiarch detection, Linux Mint's APT path, and window controls on KDE Plasma, Cinnamon and MATE were improved.
+- **Earlier 1.4.10 improvements:** installed-list reconciliation, source switching, the separate System filter, concurrent provider operations and clearer progress remain available. See the [changelog](CHANGELOG.md) for details.
 
 Build and install the current source with [build.sh](build.sh). It verifies the package checksum and uses APT to install or reinstall it; administrator access is requested only for installation.
 
@@ -78,6 +76,7 @@ Captured from SourceDock 1.4.10 with read-only host metadata; no package operati
 - **Clear workspace views**: Discover, Installed, Updates, Operations, System Packages, Install Package, Settings, and Help; Updates separates Applications, System, Runtimes, and Firmware.
 - **Provider-aware architecture**: APT is the primary native integration; DNF, Pacman, and Zypper backends are experimental. Flatpak, Snap, AppImage, portable archives, and fwupd are optional and depend on host tools.
 - **Standalone Package Installer**: Preview `.deb` packages before installation, checking description, architecture, file size, dependencies, and origin.
+- **Application Permissions**: Review Flatpak, Snap and native package security information; manage Flatpak folder access and available Snap connections.
 - **Safe Transaction Execution**: Non-blocking asynchronous command runner with provider-scoped transaction queues, bounded read-only queries, and sensitive credential masking.
 - **Transparent Operation History**: Bounded, inspectable transaction logs with user-controlled export and clearing.
 - **Desktop Personalization**: Full Dark, Light, and System theme modes, 90%–125% user interface scaling, and six-language localization (TR/EN/DE/ES/PT-BR/FR).
@@ -88,14 +87,14 @@ Captured from SourceDock 1.4.10 with read-only host metadata; no package operati
 
 SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based distributions (Zorin OS, Ubuntu, Debian, Linux Mint, etc.).
 
-1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 1.4.10 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10).
+1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 1.4.12 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12).
 2. Verify the package checksum:
    ```bash
-   sha256sum -c sourcedock_1.4.10_all.deb.sha256
+   sha256sum -c sourcedock_1.4.12_all.deb.sha256
    ```
 3. Install the package via APT:
    ```bash
-   sudo apt install ./sourcedock_1.4.10_all.deb
+   sudo apt install ./sourcedock_1.4.12_all.deb
    ```
 4. Launch SourceDock:
    ```bash

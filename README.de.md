@@ -16,7 +16,18 @@
 
 SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen Paketdateien in einer einzigen, responsiven Oberfläche. Die Anwendung arbeitet asynchron, zeigt Anbieterfehler transparent an und fordert erhöhte Rechte erst für die jeweilige bestätigte Aktion an.
 
-## Neu in 1.4.10
+## Neu in 1.4.12
+
+- **Anwendungsberechtigungen:** Ein neuer Dialog mit App-Symbol und Registerkarten zeigt Flatpak-, Snap- und native Sicherheitsinformationen. Für Flatpak lassen sich einzelne Ordner hinzufügen und entfernen; verfügbare Snap-Verbindungen lassen sich umschalten.
+- **Zuverlässige Schalter:** Erst ein erfolgreicher Vorgang ändert den angezeigten Zustand. Bei abgebrochener Passwortabfrage oder Fehler bleibt der vorherige Zustand erhalten. Eine erfolgreiche Snap-Autorisierung wird bis zu 15 Minuten wiederverwendet.
+- **Passende Oberfläche:** Schriftgrößen folgen der Anwendungsskalierung; Fensterknöpfe passen besser zu den übrigen Kopfzeilenknöpfen.
+
+## Verbesserungen aus 1.4.11
+
+- Schnellere Pacman-Paketzuordnung, robustere Update-Erkennung und Aktualisierung ausgewählter Pakete; APT-Korrekturen für Multiarch und Linux Mint.
+- Verbesserte Fenstersteuerung unter KDE Plasma, Cinnamon und MATE sowie besser lesbare Vorgangsdetails.
+
+## Verbesserungen aus 1.4.10
 
 - **Schnellerer Start:** unveränderte Paketdatenbanken und Installationszeiger erlauben die Wiederverwendung der gespeicherten Liste. Externe Änderungen, ein abgelaufener Cache oder F5 lösen eine neue Suche aus. Antigravity wird anhand seiner endgültigen Fensterklasse zugeordnet.
 - **Stabile Anwendungslisten:** nach Installation, Entfernung oder Update wird nur die betroffene Quelle abgeglichen, ohne die Seite neu zu laden oder Updates erneut zu prüfen.
@@ -62,11 +73,11 @@ Aufgenommen mit SourceDock 1.4.10 und ausschließlich gelesenen Systemmetadaten;
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.10](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 1.4.12](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.10_all.deb.sha256
-sudo apt install ./sourcedock_1.4.10_all.deb
+sha256sum -c sourcedock_1.4.12_all.deb.sha256
+sudo apt install ./sourcedock_1.4.12_all.deb
 sourcedock
 ```
 

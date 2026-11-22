@@ -74,6 +74,7 @@ def system_reduced_motion() -> bool:
 def get_theme_css(theme_name: str, scale: str = "100", reduced_motion: bool = False) -> str:
     colors = PALETTES[resolve_theme(theme_name)]
     font = {"90": "9.5pt", "100": "10.5pt", "110": "11.5pt", "125": "13pt"}.get(scale, "10.5pt")
+    permission_font = {"90": "8.5pt", "100": "9.5pt", "110": "10.5pt", "125": "12pt"}.get(scale, "9.5pt")
     tokens = "\n".join(f"@define-color {key} {value};" for key, value in colors.items())
     motion = (
         "\n* { transition-duration: 0s !important; animation-duration: 0s !important; }"
@@ -103,18 +104,18 @@ headerbar, .titlebar {{ background: @surface; color: @text; border-bottom: 1px s
 headerbar label.title {{ font-weight: bold; }}
 headerbar label.subtitle {{ color: @muted; }}
 headerbar button.titlebutton {{ 
-    background-color: transparent; 
+    background-color: @surface;
     background-image: none;
-    border-color: transparent;
-    border-width: 0;
+    border-color: @border;
+    border-width: 1px;
     box-shadow: none; 
-    padding: 0 4px; 
-    margin: 0 1px; 
-    min-width: 16px; 
-    min-height: 16px; 
-    border-radius: 4px;
+    padding: 3px;
+    margin: 0 2px;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 6px;
 }}
-headerbar button.titlebutton image {{ color: inherit; }}
+headerbar button.titlebutton image {{ color: inherit; -gtk-icon-transform: scale(1.2); }}
 headerbar button.titlebutton:hover {{ background-color: alpha(@text, 0.15); }}
 headerbar button.titlebutton.close:hover {{ background-color: @danger; color: #ffffff; }}
 button:not(.titlebutton) {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 6px;
@@ -169,6 +170,33 @@ listbox, flowbox {{ background: transparent; }}
 flowboxchild {{ padding: 0; }}
 listbox row {{ background: transparent; border-bottom: 1px solid @border; border-radius: 0; padding: 12px; }}
 listbox row:hover {{ background: @surface_hover; }}
+.permissions-dialog, .permissions-dialog * {{ font-size: {permission_font}; }}
+.permissions-dialog .permission-app-title {{ font-weight: bold; }}
+.permissions-dialog .permissions-heading {{ border-bottom: 1px solid @border; padding-bottom: 16px; }}
+.permissions-dialog .permissions-tabs {{ background: @background; border: 0; }}
+.permissions-dialog .permissions-tabs header {{ background: transparent; border: 0; border-bottom: 1px solid @border; border-radius: 0; }}
+.permissions-dialog .permissions-tabs tab {{ padding: 11px 16px; border-bottom: 3px solid transparent; background: transparent; }}
+.permissions-dialog .permissions-tabs tab:hover {{ background: @surface_hover; }}
+.permissions-dialog .permissions-tabs tab:checked {{ background: @selection; border-bottom-color: @focus; }}
+.permissions-dialog .permissions-tabs tab label {{ color: @muted; }}
+.permissions-dialog .permissions-tabs tab image {{ color: @muted; }}
+.permissions-dialog .permissions-tabs tab:checked label, .permissions-dialog .permissions-tabs tab:checked image {{ color: @text; font-weight: bold; }}
+.permissions-dialog .permissions-tabs stack {{ background: @background; }}
+.permissions-dialog .permissions-tabs scrolledwindow, .permissions-dialog .permissions-tabs viewport,
+.permissions-dialog .permissions-tabs list {{ background: @background; }}
+.permissions-dialog list.permission-list {{ background: @surface; border: 1px solid @border; border-radius: 9px; }}
+.permissions-dialog list.permission-list row.permission-row {{ background: @surface; border: 0; border-bottom: 1px solid @border; border-radius: 0; padding: 0; margin: 0; }}
+.permissions-dialog list.permission-list row.permission-row:last-child {{ border-bottom: 0; }}
+.permissions-dialog .permission-row:hover {{ background: @surface_hover; }}
+.permissions-dialog .permission-section-title {{ font-weight: bold; }}
+.permissions-dialog .permission-info {{ background: alpha(@focus, 0.07); border: 1px solid alpha(@focus, 0.25); border-radius: 9px; padding: 16px; }}
+.permissions-dialog .permission-status {{ padding-top: 12px; }}
+.permissions-dialog .permission-status image {{ color: @focus; }}
+.permissions-dialog switch {{ background: @border; border: 1px solid @border; border-radius: 16px; }}
+.permissions-dialog switch:checked {{ background: @accent; border-color: @accent; }}
+.permissions-dialog switch slider {{ background: @surface; border: 1px solid @border; border-radius: 50%; }}
+.permissions-dialog switch:checked slider {{ background: @accent_text; border-color: @accent_text; }}
+.permissions-dialog .action-area {{ background: @background; padding: 12px 4px; }}
 /* GTK's PlacesSidebar otherwise keeps the system theme's pale selection while
    our global label rule supplies light text in a dark file chooser. */
 filechooser placessidebar row:selected,

@@ -16,7 +16,18 @@
 
 O SourceDock reúne a busca, instalação, atualização e remoção de aplicativos APT, Flatpak, Snap e pacotes locais em uma interface responsiva. As consultas são assíncronas e os erros de cada provedor são mostrados separadamente.
 
-## Novidades da versão 1.4.10
+## Novidades da versão 1.4.12
+
+- **Permissões de aplicativos:** uma janela com abas e ícone apresenta as informações de segurança de Flatpak, Snap e pacotes nativos. É possível adicionar ou remover pastas autorizadas para Flatpak e alterar as conexões Snap disponíveis.
+- **Controles confiáveis:** o estado exibido muda apenas após o sucesso da operação. Cancelar a senha ou receber um erro mantém o estado anterior. Uma autorização Snap bem-sucedida é reutilizada por até 15 minutos.
+- **Interface consistente:** o texto acompanha a escala do aplicativo e os controles de janela combinam melhor com os demais botões do cabeçalho.
+
+## Melhorias da versão 1.4.11
+
+- Melhor descoberta e atualização de pacotes Pacman; correções APT para multiarch e Linux Mint.
+- Controles de janela aprimorados no KDE Plasma, Cinnamon e MATE, além de detalhes de operações mais legíveis.
+
+## Melhorias da versão 1.4.10
 
 - **Inicialização mais rápida:** a lista salva é reutilizada quando os bancos de pacotes e os indicadores de instalação não mudam. Alterações externas, cache expirado ou F5 iniciam uma nova varredura. O Antigravity é associado à classe definitiva da janela.
 - **Listas estáveis:** após instalar, remover ou atualizar, apenas a fonte afetada é reconciliada, sem recarregar a página ou repetir a busca de atualizações.
@@ -62,11 +73,11 @@ Capturas do SourceDock 1.4.10 com metadados reais consultados em modo somente le
 
 ## Instalação
 
-Baixe o [SourceDock 1.4.10](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10) e o checksum:
+Baixe o [SourceDock 1.4.12](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12) e o checksum:
 
 ```bash
-sha256sum -c sourcedock_1.4.10_all.deb.sha256
-sudo apt install ./sourcedock_1.4.10_all.deb
+sha256sum -c sourcedock_1.4.12_all.deb.sha256
+sudo apt install ./sourcedock_1.4.12_all.deb
 sourcedock
 ```
 

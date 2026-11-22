@@ -13,6 +13,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import time
+from typing import Any
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.constants import APP_VERSION
@@ -927,6 +928,11 @@ class ApplicationRegistry:
             "host": overrides["filesystems"].get("host", "host" in base_meta["filesystems"]),
             "xdg-download": overrides["filesystems"].get("xdg-download", "xdg-download" in base_meta["filesystems"]),
         }
+        folder_permissions = {
+            path: overrides["filesystems"].get(path, path in base_meta["filesystems"])
+            for path in base_meta["filesystems"] | overrides["filesystems"].keys()
+            if path.startswith("/")
+        }
         effective_shares = {
             "network": overrides["shares"].get("network", "network" in base_meta["shares"]),
         }
@@ -941,6 +947,7 @@ class ApplicationRegistry:
 
         return {
             "filesystems": effective_fs,
+            "folders": folder_permissions,
             "shares": effective_shares,
             "sockets": effective_sockets,
             "devices": effective_devices,
@@ -975,10 +982,14 @@ class ApplicationRegistry:
                     })
         return {"connections": connections}
 
-    def toggle_snap_connection(self, snap_name: str, interface: str, connect: bool) -> None:
+    def toggle_snap_connection(self, snap_name: str, plug: str, connect: bool, slot: str = "-") -> None:
         """Snap plug'ını bağlar veya çözer (ayrıcalıklı işlem)."""
+        if not plug.startswith(f"{snap_name}:"):
+            raise ValueError("Snap plug does not belong to the selected application")
         action = "connect" if connect else "disconnect"
-        cmd = ["snap", action, f"{snap_name}:{interface}"]
+        cmd = ["snap", action, plug]
+        if connect and slot != "-":
+            cmd.append(slot)
         self.runner.run_privileged(cmd, timeout=30)
 
     def native_permissions(self, package_name: str) -> dict[str, Any]:

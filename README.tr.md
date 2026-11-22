@@ -20,15 +20,13 @@
 
 SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımdan bağımsız bir Linux masaüstü yazılım yönetim aracıdır. Sistem paketleri, Flatpak'ler, Snap'ler ve yerel paketler için masaüstü akıcılığından ve sistem güvenliğinden ödün vermeden tek noktadan arama, inceleme, güncelleme ve kaldırma arayüzü sunar.
 
-## 1.4.10 ile gelenler
+## 1.4.12 ile gelenler
 
-- **Daha hızlı açılış:** paket kayıtları ve kurulum işaretçileri değişmediyse son liste doğrudan kullanılır. Dışarıdan yapılan değişikliklerde veya önbellek eskidiğinde tarama yapılır; F5 her zaman yeni tarama başlatır. Antigravity kısayolu, Electron açılışından sonraki gerçek pencere kimliğiyle eşleşir.
-- **Sayfa yenilenmeden güncel liste:** kurulum, kaldırma ve güncelleme bitince yalnızca ilgili kaynak uzlaştırılır; sayfa baştan yüklenmez ve güncellemeler tekrar taranmaz.
-- **Ayrı Sistem filtresi:** kurulu Flatpak çalışma ortamları ve Snap taban paketleri güncelleme durumundan bağımsız görünür. Paylaşılan bileşenlerin kaldırılmasında açık uyarı ve paket adını yazarak onay gerekir.
-- **İşlem sürerken kullanım:** arama ve kaynak filtreleri açık kalır. Farklı paket yöneticileri paralel çalışabilir; aynı paket veritabanına yazan işler güvenli biçimde sıraya girer.
-- **Uygulama kaynağını değiştirme:** mağaza, eşleşen yerel paket, Flatpak ve Snap kurulumlarını tanır. **Ayrıca kur** mevcut kopyayı tutar; **Kaynağı değiştir**, yeni paketi kurup doğruladıktan sonra seçilen eski paketi purge kullanmadan kaldırır. Ayarlar ve oturumlar otomatik taşınmaz.
-- **Daha anlaşılır kurulum:** tek ölçülü ilerleme çubuğu, isteğe bağlı ayrıntılı günlükler, okunaklı dosya seçici ve taşınabilir Electron uygulamalarında iyileştirilmiş simge/kısayol eşleşmesi.
-- **Gecikmelere dayanıklı mağaza:** Snap aramasına 15 saniye tanınır; diğer kaynakların sonuçları bekletilmez. Zaman aşımında ham komut yerine yerelleştirilmiş yeniden deneme mesajı gösterilir.
+- **Uygulama izinleri:** Yüklü sayfasındaki simgeli, sekmeli izin ekranından Flatpak izinleri ve özel klasör erişimi eklenip kaldırılabilir; Snap bağlantıları açılıp kapatılabilir. Yerel paketlerde mevcut güvenlik bilgileri gösterilir.
+- **Tutarlı anahtar durumu:** Değişiklik ancak işlem başarılı olunca görünür. Parola penceresi iptal edilirse veya komut başarısız olursa önceki durum korunur. Başarılı Snap yetkilendirmesi 15 dakikaya kadar yeniden kullanılır.
+- **Temayla uyumlu görünüm:** İzin ekranı yazıları uygulama ölçeğini izler; pencere kontrolleri diğer başlık düğmeleriyle daha uyumludur.
+- **1.4.11 paket iyileştirmeleri:** Pacman paket keşfi ve seçili güncellemeler, APT çoklu mimari denetimi, Linux Mint APT yolu ve KDE Plasma, Cinnamon ve MATE pencere kontrolleri iyileştirildi.
+- **1.4.10 özellikleri:** Sayfa yenilemeden liste uzlaştırma, uygulama kaynağını değiştirme, ayrı Sistem filtresi, eşzamanlı sağlayıcı işlemleri ve anlaşılır ilerleme görünümü korunur. Ayrıntılar [değişiklik kaydında](CHANGELOG.md).
 
 Güncel kaynakları [build.sh](build.sh) ile paketleyip kurabilirsiniz. Betik sağlama özetini doğrular ve APT ile kurulum veya yeniden kurulum yapar; yönetici yetkisi yalnızca kurulum aşamasında istenir.
 
@@ -78,6 +76,7 @@ Görüntüler SourceDock 1.4.10’dan, sistem meta verileri yalnızca okunarak a
 - **Açık çalışma alanları**: Keşfet, Yüklü, Güncellemeler, İşlemler, Sistem Paketleri, Paket Kur, Ayarlar ve Yardım bölümleri; Güncellemeler görünümünde Uygulamalar, Sistem, Runtime ve Firmware grupları.
 - **Sağlayıcı odaklı mimari**: Birincil yerel entegrasyon APT'tir; DNF, Pacman ve Zypper arka uçları deneyseldir. Flatpak, Snap, AppImage, taşınabilir arşivler ve fwupd sistem araçlarına bağlı isteğe bağlı sağlayıcılardır.
 - **Müstakil Paket Kurucu**: Yerel `.deb` paketlerini kurmadan önce açıklama, mimari, dosya boyutu, bağımlılıklar ve kaynak açısından önizleme imkânı.
+- **Uygulama İzinleri**: Flatpak, Snap ve yerel paketlerin güvenlik bilgilerini inceleme; Flatpak klasör erişimi ve mevcut Snap bağlantılarını yönetme.
 - **Güvenli İşlem Yürütme**: Dosya kilitleri (`flock`), zaman aşımı sınırları ve parola/kullanıcı yolu redaksiyonu ile donatılmış asenkron komut çalıştırıcısı.
 - **Şeffaf İşlem Geçmişi**: Kullanıcı denetiminde dışa aktarılabilen ve temizlenebilen kayıt defteri.
 - **Uygulama kaynağını değiştirme**: Mağaza, uygulamanın hangi kaynaktan kurulu olduğunu gösterir. “Ayrıca kur” mevcut kopyayı tutar; “Kaynağı değiştir” yeni paketi kurup doğruladıktan sonra seçilen eski paketi veri temizleme (purge) kullanmadan kaldırır. APT, Flatpak, Snap ve kullanılabilir diğer yerel kaynaklar arasında geçiş yapılabilir; ayarlar ve oturumlar otomatik taşınmaz.
@@ -89,14 +88,14 @@ Görüntüler SourceDock 1.4.10’dan, sistem meta verileri yalnızca okunarak a
 
 SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint vb.) için standart Debian paketi (`.deb`) olarak dağıtılmaktadır.
 
-1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.10 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.10) sayfasından indirin.
+1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.12 sürümü](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
-   sha256sum -c sourcedock_1.4.10_all.deb.sha256
+   sha256sum -c sourcedock_1.4.12_all.deb.sha256
    ```
 3. Paketi APT ile kurun:
    ```bash
-   sudo apt install ./sourcedock_1.4.10_all.deb
+   sudo apt install ./sourcedock_1.4.12_all.deb
    ```
 4. Uygulamayı başlatın:
    ```bash

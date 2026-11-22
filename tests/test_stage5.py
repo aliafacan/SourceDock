@@ -153,7 +153,7 @@ class TestNativeProviders(unittest.TestCase):
         provider = PacmanProvider(runner, MagicMock())
 
         self.assertEqual(provider.install_command("neovim"), ["pacman", "-S", "--noconfirm", "neovim"])
-        self.assertEqual(provider.update_command("neovim"), ["pacman", "-S", "--noconfirm", "neovim"])
+        self.assertEqual(provider.update_command("neovim"), ["pacman", "-Sy", "--noconfirm", "neovim"])
         self.assertEqual(provider.update_all_command(), ["pacman", "-Syu", "--noconfirm"])
         self.assertEqual(provider.remove_command("neovim"), ["pacman", "-R", "--noconfirm", "neovim"])
         self.assertEqual(
@@ -221,7 +221,7 @@ class TestRegistryMultiDistroDispatch(unittest.TestCase):
             package_name="code",
         )
         registry.update(app)
-        mock_runner.run_privileged.assert_called_with(["pacman", "-S", "--noconfirm", "code"], timeout=1800)
+        mock_runner.run_privileged.assert_called_with(["pacman", "-Sy", "--noconfirm", "code"], timeout=1800)
 
     def test_registry_remove_native_dispatch(self):
         mock_runner = MagicMock()
