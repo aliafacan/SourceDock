@@ -42,6 +42,7 @@ class PermissionsDialog(Gtk.Dialog):
             modal=True,
             destroy_with_parent=True,
         )
+        self._parent_window = parent
         self.application = application
         self.registry = registry
         self.language = language
@@ -579,7 +580,7 @@ class PermissionsDialog(Gtk.Dialog):
         return title, desc
 
     def _toggle_snap_connection(self, plug: str, slot: str, connect: bool) -> bool:
-        parent = self.get_transient_for()
+        parent = self.get_transient_for() or getattr(self, "_parent_window", None)
         get_cached = getattr(parent, "get_cached_sudo_password", None)
         set_cached = getattr(parent, "set_cached_sudo_password", None)
         clear_cached = getattr(parent, "clear_cached_sudo_password", None)

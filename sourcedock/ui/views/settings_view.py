@@ -6,7 +6,7 @@ from __future__ import annotations
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # pyright: ignore[reportMissingModuleSource]
+from gi.repository import GLib, Gtk  # pyright: ignore[reportMissingModuleSource]
 
 from sourcedock.i18n import SUPPORTED_LANGUAGES, t
 from sourcedock.preferences import AppPreferences
@@ -176,7 +176,7 @@ class SettingsViewMixin:
         updates_page = _make_tab(t(lang, "settings_tab_updates"))
 
         upd_title = Gtk.Label()
-        upd_title.set_markup(f"<b>{t(lang, 'settings_update_policy_title')}</b>")
+        upd_title.set_markup(f"<b>{GLib.markup_escape_text(t(lang, 'settings_update_policy_title'))}</b>")
         upd_title.set_xalign(0)
         updates_page.pack_start(upd_title, False, False, 0)
 
@@ -359,7 +359,7 @@ class SettingsViewMixin:
         tools_card.add(tools_box)
 
         tools_title = Gtk.Label(xalign=0)
-        tools_title.set_markup(f"<b>{t(lang, 'settings_backup_cleanup_title')}</b>")
+        tools_title.set_markup(f"<b>{GLib.markup_escape_text(t(lang, 'settings_backup_cleanup_title'))}</b>")
         tools_box.pack_start(tools_title, False, False, 0)
 
         tools_desc = Gtk.Label(label=t(lang, "settings_backup_cleanup_desc"), xalign=0)

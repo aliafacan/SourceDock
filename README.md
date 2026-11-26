@@ -78,7 +78,8 @@ Captured from SourceDock 1.4.10 with read-only host metadata; no package operati
 **Additional Screens:**
 [Application Details](docs/screenshots/v1.4.10/details-light-en-100-1366x768.png) &bull;
 [Standalone Package Installer](docs/screenshots/v1.4.10/installer-dark-en-100-1366x768.png) &bull;
-[Settings & Preferences](docs/screenshots/v1.4.10/settings-dark-en-100-1366x768.png) &bull;
+[Settings & Preferences](docs/screenshots/v2.0.0/settings-update-policy-dark.png) &bull;
+[Help & User Guide](docs/screenshots/v2.0.0/help-light.png) &bull;
 [Operations Log](docs/screenshots/v1.4.10/operations-dark-en-100-1366x768.png) &bull;
 [Packages View](docs/screenshots/v1.4.10/packages-dark-en-100-1366x768.png)
 

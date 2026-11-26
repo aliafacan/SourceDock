@@ -527,10 +527,11 @@ class PackageInstallerDialog(Gtk.Dialog):
         self._current_op_id = f"op_pkg_{id(self)}_{int(time.monotonic() * 1000)}"
 
         # UI durumunu güncelle
-        self.preview_stack.hide()
-        self.preview_switcher.hide()
-        self.options_box.hide()
-        if self.info.format in ("deb", "rpm"):
+        for attr in ("preview_stack", "preview_switcher", "options_box"):
+            widget = getattr(self, attr, None)
+            if widget is not None:
+                widget.hide()
+        if self.info.format in ("deb", "rpm") and getattr(self, "plan_button", None) is not None:
             self.plan_button.hide()
         self.action_btn.hide()
         self.retry_btn.hide()

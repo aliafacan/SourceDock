@@ -78,7 +78,8 @@ Görüntüler SourceDock 1.4.10’dan, sistem meta verileri yalnızca okunarak a
 **Diğer Ekranlar:**
 [Uygulama Ayrıntıları](docs/screenshots/v1.4.10/details-light-tr-100-1366x768.png) &bull;
 [Müstakil Paket Kurucu](docs/screenshots/v1.4.10/installer-dark-tr-100-1366x768.png) &bull;
-[Ayarlar ve Tercihler](docs/screenshots/v1.4.10/settings-dark-tr-100-1366x768.png) &bull;
+[Ayarlar ve Güncelleme Politikası](docs/screenshots/v2.0.0/settings-update-policy-dark.png) &bull;
+[Yardım Rehberi](docs/screenshots/v2.0.0/help-light.png) &bull;
 [İşlem Günlüğü](docs/screenshots/v1.4.10/operations-dark-tr-100-1366x768.png) &bull;
 [Paketler Görünümü](docs/screenshots/v1.4.10/packages-dark-tr-100-1366x768.png)
 
