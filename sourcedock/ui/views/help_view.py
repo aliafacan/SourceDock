@@ -84,6 +84,7 @@ class HelpDialog(Gtk.Dialog):
         self.stack.set_transition_duration(200)
 
         switcher = Gtk.StackSwitcher()
+        switcher.get_style_context().add_class("help-tabs")
         switcher.set_stack(self.stack)
         switcher.set_halign(Gtk.Align.CENTER)
         switcher.set_margin_top(6)
