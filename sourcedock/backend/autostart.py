@@ -198,6 +198,11 @@ def toggle_autostart_entry(entry: AutostartEntry, enabled: bool) -> None:
     auto_dir.mkdir(parents=True, exist_ok=True)
     target_path = auto_dir / entry.filename
     source_path = target_path if target_path.is_file() else entry.path
+    if source_path.is_symlink() and not source_path.exists():
+        if not enabled:
+            target_path.unlink(missing_ok=True)
+            return
+        raise FileNotFoundError(f"Broken symlink target does not exist: {source_path}")
     content = source_path.read_text(encoding="utf-8", errors="replace")
     lines = [
         ln for ln in content.splitlines()
@@ -212,9 +217,9 @@ def toggle_autostart_entry(entry: AutostartEntry, enabled: bool) -> None:
 
 
 def remove_user_autostart_entry(entry: AutostartEntry) -> None:
-    """Kullanıcı tarafından eklenmiş bir başlangıç öğesini kaldırır."""
+    """Kullanıcı tarafından eklenmiş bir başlangıç öğesini (bozuk sembolik bağ dahil) kaldırır."""
     user_path = _autostart_dir() / entry.filename
-    if user_path.is_file() and not entry.is_system:
+    if (user_path.is_file() or user_path.is_symlink()) and not entry.is_system:
         user_path.unlink(missing_ok=True)
 
 

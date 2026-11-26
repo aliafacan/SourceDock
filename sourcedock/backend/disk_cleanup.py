@@ -125,25 +125,63 @@ def apply_disk_cleanup(
     selected_apt_autoremove: list[str] | None = None,
     selected_snap_revisions: list[SnapOldRevision] | None = None,
     selected_flatpak_refs: tuple[CleanupRef, ...] | None = None,
+    on_progress=None,
 ) -> None:
-    """Seçilen disk temizleme adımlarını uygular."""
-    if clean_apt_autoremove and plan.apt_autoremove_packages:
-        targets = selected_apt_autoremove if selected_apt_autoremove is not None else plan.apt_autoremove_packages
-        if targets:
-            if len(targets) == len(plan.apt_autoremove_packages):
-                runner.run_privileged(["apt-get", "-o", "DPkg::Lock::Timeout=0", "autoremove", "-y"], timeout=600)
-            else:
-                runner.run_privileged(["apt-get", "-o", "DPkg::Lock::Timeout=0", "remove", "-y", "--", *targets], timeout=600)
+    """Seçilen disk temizleme adımlarını uygular ve ilerleme bildirir."""
+    auto_targets = (
+        (selected_apt_autoremove if selected_apt_autoremove is not None else plan.apt_autoremove_packages)
+        if (clean_apt_autoremove and plan.apt_autoremove_packages)
+        else []
+    )
+    do_apt_cache = bool(clean_apt_cache and plan.apt_cache_files > 0)
+    snap_targets = (
+        (selected_snap_revisions if selected_snap_revisions is not None else plan.snap_old_revisions)
+        if (clean_snap_old and plan.snap_old_revisions)
+        else []
+    )
+    fp_targets = (
+        (selected_flatpak_refs if selected_flatpak_refs is not None else plan.flatpak_refs)
+        if (clean_flatpak and plan.flatpak_refs)
+        else ()
+    )
 
-    if clean_apt_cache and plan.apt_cache_files > 0:
+    total_steps = (
+        (1 if auto_targets else 0)
+        + (1 if do_apt_cache else 0)
+        + len(snap_targets)
+        + (1 if fp_targets else 0)
+    )
+    if total_steps == 0:
+        return
+    done_steps = 0
+
+    def _report(msg: str) -> None:
+        if callable(on_progress):
+            on_progress(min(1.0, done_steps / total_steps), msg)
+
+    if auto_targets:
+        _report(f"APT autoremove ({len(auto_targets)})")
+        if len(auto_targets) == len(plan.apt_autoremove_packages):
+            runner.run_privileged(["apt-get", "-o", "DPkg::Lock::Timeout=0", "autoremove", "-y"], timeout=600)
+        else:
+            runner.run_privileged(["apt-get", "-o", "DPkg::Lock::Timeout=0", "remove", "-y", "--", *auto_targets], timeout=600)
+        done_steps += 1
+        _report(f"APT autoremove ({len(auto_targets)})")
+
+    if do_apt_cache:
+        _report("APT cache")
         runner.run_privileged(["apt-get", "-o", "DPkg::Lock::Timeout=0", "clean"], timeout=120)
+        done_steps += 1
+        _report("APT cache")
 
-    if clean_snap_old and plan.snap_old_revisions:
-        snap_targets = selected_snap_revisions if selected_snap_revisions is not None else plan.snap_old_revisions
-        for item in snap_targets:
-            runner.run_privileged(["snap", "remove", item.name, f"--revision={item.revision}"], timeout=120)
+    for item in snap_targets:
+        _report(f"Snap: {item.name} (rev {item.revision})")
+        runner.run_privileged(["snap", "remove", item.name, f"--revision={item.revision}"], timeout=120)
+        done_steps += 1
+        _report(f"Snap: {item.name} (rev {item.revision})")
 
-    if clean_flatpak and plan.flatpak_refs:
-        fp_targets = selected_flatpak_refs if selected_flatpak_refs is not None else plan.flatpak_refs
-        if fp_targets:
-            apply_flatpak_cleanup(runner, fp_targets)
+    if fp_targets:
+        _report(f"Flatpak ({len(fp_targets)})")
+        apply_flatpak_cleanup(runner, fp_targets)
+        done_steps += 1
+        _report(f"Flatpak ({len(fp_targets)})")

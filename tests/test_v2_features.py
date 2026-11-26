@@ -11,6 +11,7 @@ from sourcedock.backend.autostart import (
     create_user_autostart_entry,
     is_autostart_enabled,
     list_autostart_entries,
+    remove_user_autostart_entry,
     set_autostart_enabled,
 )
 from sourcedock.backend.disk_cleanup import (
@@ -97,6 +98,18 @@ class TestAutostartManagement(unittest.TestCase):
                 self.assertIn("Terminal=true", term.read_text(encoding="utf-8"))
                 user_entries = [e for e in list_autostart_entries() if not e.is_system]
                 self.assertEqual(len(user_entries), 2)
+
+    def test_remove_broken_symlink_autostart_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp}):
+                auto_dir = Path(tmp) / "autostart"
+                auto_dir.mkdir(parents=True, exist_ok=True)
+                broken = auto_dir / "windscribe.desktop"
+                broken.symlink_to("/nonexistent/windscribe.desktop")
+                entries = [e for e in list_autostart_entries() if e.filename == "windscribe.desktop"]
+                self.assertEqual(len(entries), 1)
+                remove_user_autostart_entry(entries[0])
+                self.assertFalse(broken.exists() or broken.is_symlink())
 
 
 if __name__ == "__main__":

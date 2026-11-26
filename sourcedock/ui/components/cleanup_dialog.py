@@ -77,6 +77,12 @@ class DiskCleanupDialog(Gtk.Dialog):
         scroller.add(self.items_box)
         self.stack.add_named(scroller, "content")
 
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.set_show_text(True)
+        self.progress_bar.set_no_show_all(True)
+        self.progress_bar.set_visible(False)
+        content.pack_start(self.progress_bar, False, False, 0)
+
         self.status_lbl = Gtk.Label(xalign=0)
         self.status_lbl.set_line_wrap(True)
         content.pack_start(self.status_lbl, False, False, 0)
@@ -307,13 +313,24 @@ class DiskCleanupDialog(Gtk.Dialog):
             return
 
         self.clean_btn.set_sensitive(False)
+        self.progress_bar.set_fraction(0.05)
+        self.progress_bar.set_text(t(self.language, "cleanup_running"))
+        self.progress_bar.show()
         set_status(self.status_lbl, t(self.language, "cleanup_running"))
+
+        def _update_progress(frac: float, msg: str) -> None:
+            def _apply():
+                if not self._closed:
+                    self.progress_bar.set_fraction(max(0.05, min(1.0, frac)))
+                    self.progress_bar.set_text(f"{int(frac * 100)}% — {msg}")
+                return False
+            GLib.idle_add(_apply)
 
         def worker(pwd: str | None = None):
             try:
                 if pwd:
                     self.registry.runner.set_sudo_password(pwd)
-                apply_disk_cleanup(self.registry.runner, self.plan, **sel)
+                apply_disk_cleanup(self.registry.runner, self.plan, on_progress=_update_progress, **sel)
                 GLib.idle_add(self._on_cleanup_done, True, None)
             except AuthRequiredError as auth_err:
                 GLib.idle_add(self._on_auth_required, auth_err, sel)
@@ -329,13 +346,22 @@ class DiskCleanupDialog(Gtk.Dialog):
         pwd = ask(retry=getattr(auth_err, "password_failed", False)) if ask else None
         if not pwd:
             self.clean_btn.set_sensitive(True)
+            self.progress_bar.hide()
             set_status(self.status_lbl, t(self.language, "status_cancelled"), error=True)
             return False
+
+        def _update_progress(frac: float, msg: str) -> None:
+            def _apply():
+                if not self._closed:
+                    self.progress_bar.set_fraction(max(0.05, min(1.0, frac)))
+                    self.progress_bar.set_text(f"{int(frac * 100)}% — {msg}")
+                return False
+            GLib.idle_add(_apply)
 
         def retry_worker():
             try:
                 self.registry.runner.set_sudo_password(pwd)
-                apply_disk_cleanup(self.registry.runner, self.plan, **sel)
+                apply_disk_cleanup(self.registry.runner, self.plan, on_progress=_update_progress, **sel)
                 GLib.idle_add(self._on_cleanup_done, True, None)
             except Exception as exc:
                 GLib.idle_add(self._on_cleanup_done, False, str(exc))
