@@ -20,7 +20,14 @@
 
 SourceDock is a modern, modular, and distro-agnostic Linux desktop software management tool built with Python and GTK 3. It provides a unified interface for browsing, discovering, updating, and removing system packages, Flatpaks, Snaps, and local software packages without compromising desktop responsiveness or system security.
 
-## What’s new in 1.4.12
+## What’s new in 2.0.0
+
+- **Multi-tabbed Settings & Per-Source Update Policy:** Configure independent update check schedules (*Never, On startup, Hourly, Daily, Weekly*) for Native (APT/DNF/Pacman/Zypper), Flatpak, and Snap, with instant auto-save and a toggle to pause/resume system-wide `snapd` background auto-updates.
+- **Unified Disk & Cache Cleanup:** Inspect and clean APT download caches, unused `autoremove` packages, old disabled Snap revisions, and unused Flatpak runtimes with per-item selection and reclaimable size estimates.
+- **Startup Applications (Autostart) Manager:** Dedicated User & System tabs to enable/disable, edit, test-launch, or add custom startup entries in UI, silent background, or Terminal mode.
+- **Repository Scan & Modern Desktop UI:** Explicit **Scan Repositories** action and last-checked timestamp in Updates, consistent `HeaderBar` controls across independent dialogs, and modernized segmented-pill tabs across Light and Dark themes.
+
+### Earlier in 2.0.0
 
 - **Application permissions:** the Installed page now opens a themed, tabbed permission view with each application's icon. Flatpak permissions can be changed, including adding or removing specific folders; Snap connections can be switched. Native packages show their available security information.
 - **Reliable permission switches:** a change appears only after it succeeds. Canceling the administrator password prompt or a failed command leaves the previous state visible. Successful Snap authorization is reused for up to 15 minutes.
@@ -43,6 +50,15 @@ Build and install the current source with [build.sh](build.sh). It verifies the 
 
 ### Installed Applications (Dark Mode)
 ![Installed Applications View](docs/screenshots/v1.4.10/installed-dark-en-100-1366x768.png)
+
+### Application Permissions (Dark Mode)
+![Application Permissions](docs/screenshots/v2.0.0/permissions-dark.png)
+
+### Disk & Cache Cleanup (Dark Mode)
+![Disk & Cache Cleanup](docs/screenshots/v2.0.0/cleanup-dark.png)
+
+### Startup Applications (Light Mode)
+![Startup Applications](docs/screenshots/v2.0.0/autostart-light.png)
 
 ### Unified Updates Center (Dark Mode)
 ![Updates Center View](docs/screenshots/v1.4.10/updates-dark-en-100-1366x768.png)
@@ -87,14 +103,14 @@ Captured from SourceDock 1.4.10 with read-only host metadata; no package operati
 
 SourceDock is distributed as a standard Debian package (`.deb`) for Debian-based distributions (Zorin OS, Ubuntu, Debian, Linux Mint, etc.).
 
-1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 1.4.12 release](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12).
+1. Download the matching `.deb` package and SHA-256 checksum from the [SourceDock 2.0.0 release](https://github.com/aliafacan/SourceDock/releases/tag/v2.0.0).
 2. Verify the package checksum:
    ```bash
-   sha256sum -c sourcedock_1.4.12_all.deb.sha256
+   sha256sum -c sourcedock_2.0.0_all.deb.sha256
    ```
 3. Install the package via APT:
    ```bash
-   sudo apt install ./sourcedock_1.4.12_all.deb
+   sudo apt install ./sourcedock_2.0.0_all.deb
    ```
 4. Launch SourceDock:
    ```bash

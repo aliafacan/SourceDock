@@ -20,7 +20,14 @@
 
 SourceDock; Python ve GTK 3 ile geliştirilmiş modern, modüler ve dağıtımdan bağımsız bir Linux masaüstü yazılım yönetim aracıdır. Sistem paketleri, Flatpak'ler, Snap'ler ve yerel paketler için masaüstü akıcılığından ve sistem güvenliğinden ödün vermeden tek noktadan arama, inceleme, güncelleme ve kaldırma arayüzü sunar.
 
-## 1.4.12 ile gelenler
+## 2.0.0 ile gelenler
+
+- **Çok Sekmeli Ayarlar & Kaynak Bazlı Güncelleme Politikası:** Yerel paket yöneticisi (APT/DNF/Pacman/Zypper), Flatpak ve Snap için ayrı denetim zamanlaması (*Hiçbir zaman, Açılışta, Saatte bir, Günde bir, Haftada bir*), anlık otomatik kayıt ve sistemdeki `snapd` arka plan otomatik güncellemelerini duraklatma anahtarı.
+- **Birleşik Disk ve Önbellek Temizliği:** APT indirme önbelleği, kullanılmayan `autoremove` paketleri, eski devre dışı Snap revizyonları ve artık Flatpak bileşenlerini tek tek seçip kazanılacak alanı görerek temizleme.
+- **Başlangıç Uygulamaları (Autostart) Yönetimi:** Kullanıcı ve Sistem sekmeleriyle oturum açılışında çalışan uygulamaları açıp kapatma, düzenleme, test etme ve arayüzlü/arka plan/terminal modunda yeni ekleme.
+- **Depo Taraması & Modern Arayüz:** Güncellemeler sekmesinde **Depoları Tara** ve son denetim saati, bağımsız pencerelerde tutarlı `HeaderBar` kontrolleri ve açık/koyu temayla uyumlu modern sekmeler.
+
+### Önceki 2.0.0 sürümünden
 
 - **Uygulama izinleri:** Yüklü sayfasındaki simgeli, sekmeli izin ekranından Flatpak izinleri ve özel klasör erişimi eklenip kaldırılabilir; Snap bağlantıları açılıp kapatılabilir. Yerel paketlerde mevcut güvenlik bilgileri gösterilir.
 - **Tutarlı anahtar durumu:** Değişiklik ancak işlem başarılı olunca görünür. Parola penceresi iptal edilirse veya komut başarısız olursa önceki durum korunur. Başarılı Snap yetkilendirmesi 15 dakikaya kadar yeniden kullanılır.
@@ -43,6 +50,15 @@ Güncel kaynakları [build.sh](build.sh) ile paketleyip kurabilirsiniz. Betik sa
 
 ### Yüklü Uygulamalar (Koyu Tema)
 ![Yüklü Uygulamalar Görünümü](docs/screenshots/v1.4.10/installed-dark-tr-100-1366x768.png)
+
+### Uygulama İzinleri (Koyu Tema)
+![Uygulama İzinleri](docs/screenshots/v2.0.0/permissions-dark.png)
+
+### Disk ve Önbellek Temizliği (Koyu Tema)
+![Disk ve Önbellek Temizliği](docs/screenshots/v2.0.0/cleanup-dark.png)
+
+### Başlangıç Uygulamaları (Açık Tema)
+![Başlangıç Uygulamaları](docs/screenshots/v2.0.0/autostart-light.png)
 
 ### Birleşik Güncelleme Merkezi (Koyu Tema)
 ![Güncellemeler Görünümü](docs/screenshots/v1.4.10/updates-dark-tr-100-1366x768.png)
@@ -88,14 +104,14 @@ Görüntüler SourceDock 1.4.10’dan, sistem meta verileri yalnızca okunarak a
 
 SourceDock, Debian tabanlı dağıtımlar (Zorin OS, Ubuntu, Debian, Linux Mint vb.) için standart Debian paketi (`.deb`) olarak dağıtılmaktadır.
 
-1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 1.4.12 sürümü](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12) sayfasından indirin.
+1. Eşleşen `.deb` paketini ve SHA-256 sağlama özetini [SourceDock 2.0.0 sürümü](https://github.com/aliafacan/SourceDock/releases/tag/v2.0.0) sayfasından indirin.
 2. Sağlama özetini doğrulayın:
    ```bash
-   sha256sum -c sourcedock_1.4.12_all.deb.sha256
+   sha256sum -c sourcedock_2.0.0_all.deb.sha256
    ```
 3. Paketi APT ile kurun:
    ```bash
-   sudo apt install ./sourcedock_1.4.12_all.deb
+   sudo apt install ./sourcedock_2.0.0_all.deb
    ```
 4. Uygulamayı başlatın:
    ```bash

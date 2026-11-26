@@ -17,6 +17,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
+from sourcedock.backend.autostart import is_autostart_enabled, set_autostart_enabled
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.core.history import OperationHistory
 from sourcedock.core.icons import find_flatpak_icon_path, find_snap_icon_path
@@ -463,6 +464,50 @@ class InstalledAppDetailsDialog(Gtk.Dialog):
 
         grid_frame.add(grid_box)
         details_vbox.pack_start(grid_frame, False, False, 0)
+
+        # Başlangıç Uygulamaları (Autostart) Kartı
+        if self.application.executable or self.application.desktop_file:
+            auto_frame = Gtk.Frame()
+            auto_frame.get_style_context().add_class("app-card")
+            auto_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            auto_row.set_margin_top(10)
+            auto_row.set_margin_bottom(10)
+            auto_row.set_margin_start(14)
+            auto_row.set_margin_end(14)
+            auto_frame.add(auto_row)
+
+            auto_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            auto_title = Gtk.Label(xalign=0)
+            auto_title.set_markup(f"<b>{t(self.language, 'details_autostart_title')}</b>")
+            auto_desc = Gtk.Label(label=t(self.language, "details_autostart_desc"), xalign=0)
+            auto_desc.set_line_wrap(True)
+            auto_desc.get_style_context().add_class("dim-label")
+            auto_text.pack_start(auto_title, False, False, 0)
+            auto_text.pack_start(auto_desc, False, False, 0)
+            auto_row.pack_start(auto_text, True, True, 0)
+
+            auto_switch = Gtk.Switch()
+            auto_switch.set_valign(Gtk.Align.CENTER)
+            _auto_guard = {"updating": True}
+            auto_switch.set_active(is_autostart_enabled(self.application))
+            _auto_guard["updating"] = False
+
+            def _on_autostart_toggled(_sw, state: bool) -> bool:
+                if _auto_guard["updating"]:
+                    return False
+                try:
+                    set_autostart_enabled(self.application, bool(state))
+                    return False
+                except Exception as exc:
+                    _auto_guard["updating"] = True
+                    auto_switch.set_active(not bool(state))
+                    _auto_guard["updating"] = False
+                    self._show_error(str(exc))
+                    return True
+
+            auto_switch.connect("state-set", _on_autostart_toggled)
+            auto_row.pack_end(auto_switch, False, False, 0)
+            details_vbox.pack_start(auto_frame, False, False, 0)
 
         # 4. Alt Kapat Butonu
         btn_close = Gtk.Button(label=t(self.language, "dialog_close"))

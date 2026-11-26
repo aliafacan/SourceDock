@@ -1,5 +1,6 @@
 """Unified updates with explicit selection and firmware confirmation."""
 
+from datetime import datetime
 from pathlib import Path
 import threading
 
@@ -75,13 +76,23 @@ class UpdatesViewMixin:
         container.pack_start(self.updates_summary_cards, False, False, 0)
 
         toolbar = Gtk.Box(spacing=8)
+        summary_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.updates_summary = Gtk.Label(xalign=0)
-        toolbar.pack_start(self.updates_summary, True, True, 0)
+        self.updates_last_checked_label = Gtk.Label(xalign=0)
+        self.updates_last_checked_label.get_style_context().add_class("dim-label")
+        self._updates_last_checked_at = ""
+        summary_box.pack_start(self.updates_summary, False, False, 0)
+        summary_box.pack_start(self.updates_last_checked_label, False, False, 0)
+        toolbar.pack_start(summary_box, True, True, 0)
         self.updates_show_all_btn = Gtk.Button()
         self.updates_show_all_btn.set_no_show_all(True)
         self.updates_show_all_btn.get_style_context().add_class("secondary-action")
         self.updates_show_all_btn.connect("clicked", self._on_clear_update_group_filter)
         toolbar.pack_end(self.updates_show_all_btn, False, False, 0)
+        self.updates_scan_repos_btn = Gtk.Button()
+        self.updates_scan_repos_btn.get_style_context().add_class("secondary-action")
+        self.updates_scan_repos_btn.connect("clicked", lambda _button: self._on_scan_repositories())
+        toolbar.pack_end(self.updates_scan_repos_btn, False, False, 0)
         self.updates_refresh_btn = Gtk.Button()
         self.updates_refresh_btn.connect("clicked", lambda _button: self._reload_updates_async())
         toolbar.pack_end(self.updates_refresh_btn, False, False, 0)
@@ -212,6 +223,20 @@ class UpdatesViewMixin:
         self.updates_page_title.set_text(t(lang, "updates_page_title"))
         self.updates_page_subtitle.set_text(t(lang, "updates_page_subtitle"))
         icon_button(self.updates_refresh_btn, "view-refresh-symbolic", t(lang, "updates_check"))
+        if hasattr(self, "updates_scan_repos_btn"):
+            icon_text_button(
+                self.updates_scan_repos_btn,
+                "system-search-symbolic",
+                t(lang, "updates_scan_repos"),
+                t(lang, "updates_scan_repos_tooltip"),
+            )
+        if hasattr(self, "updates_last_checked_label"):
+            if getattr(self, "_updates_last_checked_at", ""):
+                self.updates_last_checked_label.set_text(
+                    t(lang, "updates_last_checked", time=self._updates_last_checked_at)
+                )
+            else:
+                self.updates_last_checked_label.set_text("")
         icon_text_button(
             self.updates_show_all_btn,
             "view-list-symbolic",
@@ -457,6 +482,51 @@ class UpdatesViewMixin:
         self.updates_status_details.hide()
         self._set_updates_status_details_button()
 
+    def _on_scan_repositories(self, retry_auth: bool = False):
+        if self.updates_loading or self.applications_busy:
+            return
+        self.updates_loading = True
+        self.updates_refresh_btn.set_sensitive(False)
+        if hasattr(self, "updates_scan_repos_btn"):
+            self.updates_scan_repos_btn.set_sensitive(False)
+        self.updates_state.show_state(t(self.preferences.language, "updates_scanning_repos"), loading=True)
+
+        def worker():
+            try:
+                self.application_registry.refresh_update_cache()
+                GLib.idle_add(self._finish_scan_repositories, None)
+            except AuthRequiredError as auth_err:
+                GLib.idle_add(self._on_scan_repos_auth_required, auth_err)
+            except Exception as exc:
+                GLib.idle_add(self._finish_scan_repositories, str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_scan_repos_auth_required(self, auth_err):
+        self.updates_loading = False
+        self.updates_refresh_btn.set_sensitive(True)
+        if hasattr(self, "updates_scan_repos_btn"):
+            self.updates_scan_repos_btn.set_sensitive(True)
+        ask = getattr(self, "_ask_sudo_password", None)
+        pwd = ask(retry=getattr(auth_err, "password_failed", False)) if ask else None
+        if not pwd:
+            self._finish_updates_load(self.update_items, [], None)
+            return False
+        self.application_registry.runner.set_sudo_password(pwd)
+        self._on_scan_repositories(retry_auth=True)
+        return False
+
+    def _finish_scan_repositories(self, error):
+        self.updates_loading = False
+        self.updates_refresh_btn.set_sensitive(True)
+        if hasattr(self, "updates_scan_repos_btn"):
+            self.updates_scan_repos_btn.set_sensitive(True)
+        if error:
+            self._finish_updates_load(self.update_items, [], error)
+            return False
+        self._reload_updates_async()
+        return False
+
     def _reload_updates_async(self):
         if self.updates_loading or self.applications_busy:
             return
@@ -494,6 +564,10 @@ class UpdatesViewMixin:
     def _finish_updates_load(self, items, provider_errors, error):
         self.updates_loading = False
         self.updates_refresh_btn.set_sensitive(True)
+        if hasattr(self, "updates_scan_repos_btn"):
+            self.updates_scan_repos_btn.set_sensitive(True)
+        if error is None:
+            self._updates_last_checked_at = datetime.now().strftime("%H:%M")
         self.update_items = items
         lang = self.preferences.language
         self._render_updates_model()

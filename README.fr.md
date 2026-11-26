@@ -16,7 +16,17 @@
 
 SourceDock réunit la recherche, l’installation, la mise à jour et la suppression des applications APT, Flatpak, Snap et des paquets locaux dans une interface réactive. Les fournisseurs sont interrogés de manière asynchrone et leurs erreurs sont affichées séparément.
 
-## Nouveautés de la version 1.4.12
+## Nouveautés de la version 2.0.0
+
+- **Paramètres par onglets et politique de mises à jour :** Planification distincte pour APT/Natif, Flatpak et Snap avec enregistrement instantané et contrôle `snapd`.
+- **Nettoyage disque et cache :** Inspectez et nettoyez le cache APT, les paquets inutilisés, les anciennes révisions Snap et les runtimes Flatpak.
+- **Applications au démarrage :** Onglets Utilisateur et Système pour activer, modifier, tester et ajouter des entrées.
+
+![Permissions](docs/screenshots/v2.0.0/permissions-dark.png)
+![Nettoyage](docs/screenshots/v2.0.0/cleanup-dark.png)
+![Démarrage](docs/screenshots/v2.0.0/autostart-light.png)
+
+### Précédemment dans 2.0.0
 
 - **Permissions des applications :** une fenêtre à onglets avec l’icône de l’application présente les informations de sécurité Flatpak, Snap et des paquets natifs. Les dossiers autorisés pour Flatpak peuvent être ajoutés ou retirés ; les connexions Snap disponibles peuvent être modifiées.
 - **Interrupteurs fiables :** l’état affiché ne change qu’après la réussite de l’opération. Une demande de mot de passe annulée ou une erreur conserve l’ancien état. Une autorisation Snap réussie est réutilisée pendant 15 minutes au maximum.
@@ -73,11 +83,11 @@ Captures de SourceDock 1.4.10 avec des métadonnées système consultées en lec
 
 ## Installation
 
-Téléchargez [SourceDock 1.4.12](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12) et son checksum :
+Téléchargez [SourceDock 2.0.0](https://github.com/aliafacan/SourceDock/releases/tag/v2.0.0) et son checksum :
 
 ```bash
-sha256sum -c sourcedock_1.4.12_all.deb.sha256
-sudo apt install ./sourcedock_1.4.12_all.deb
+sha256sum -c sourcedock_2.0.0_all.deb.sha256
+sudo apt install ./sourcedock_2.0.0_all.deb
 sourcedock
 ```
 

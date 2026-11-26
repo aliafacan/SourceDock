@@ -90,6 +90,15 @@ class ShellViewMixin:
         self.local_install_btn, self.local_install_label = self._sidebar_button("list-add-symbolic")
         self.local_install_btn.connect("clicked", self.on_install_local_package)
         self.sidebar.pack_start(self.local_install_btn, False, False, 0)
+        self.cleanup_sidebar_btn, self.cleanup_sidebar_label = self._sidebar_button("edit-clear-all-symbolic")
+        self.cleanup_sidebar_btn.connect("clicked", self.on_open_disk_cleanup)
+        self.sidebar.pack_start(self.cleanup_sidebar_btn, False, False, 0)
+        self.autostart_sidebar_btn, self.autostart_sidebar_label = self._sidebar_button("system-run-symbolic")
+        self.autostart_sidebar_btn.connect("clicked", self.on_open_autostart)
+        self.sidebar.pack_start(self.autostart_sidebar_btn, False, False, 0)
+        self.sources_sidebar_btn, self.sources_sidebar_label = self._sidebar_button("folder-remote-symbolic")
+        self.sources_sidebar_btn.connect("clicked", self.on_open_sources)
+        self.sidebar.pack_start(self.sources_sidebar_btn, False, False, 0)
         self.settings_btn, self.settings_label = self._sidebar_button("preferences-system-symbolic")
         self.settings_btn.connect("clicked", self.on_open_settings)
         self.sidebar.pack_start(self.settings_btn, False, False, 0)
@@ -146,6 +155,9 @@ class ShellViewMixin:
         for label in (
             *self.nav_labels.values(),
             self.local_install_label,
+            self.cleanup_sidebar_label,
+            self.autostart_sidebar_label,
+            self.sources_sidebar_label,
             self.settings_label,
             self.help_label,
             self.brand_label,
@@ -203,6 +215,9 @@ class ShellViewMixin:
             self.nav_buttons[index].get_accessible().set_name(text)
         for label, button, key in (
             (self.local_install_label, self.local_install_btn, "install_package_btn"),
+            (self.cleanup_sidebar_label, self.cleanup_sidebar_btn, "cleanup_dialog_title"),
+            (self.autostart_sidebar_label, self.autostart_sidebar_btn, "autostart_dialog_title"),
+            (self.sources_sidebar_label, self.sources_sidebar_btn, "settings_sources"),
             (self.settings_label, self.settings_btn, "settings"),
             (self.help_label, self.help_btn, "help"),
         ):
@@ -311,7 +326,7 @@ class ShellViewMixin:
             modal=True,
             destroy_with_parent=True,
         )
-        prepare_dialog(dialog, width=620, height=420)
+        prepare_dialog(dialog, width=620, height=420, independent=True)
         dialog.add_button(t(lang, "notifications_close"), Gtk.ResponseType.CLOSE)
         clear_button = dialog.add_button(t(lang, "notifications_clear"), Gtk.ResponseType.APPLY)
         clear_button.get_style_context().add_class("destructive-action")

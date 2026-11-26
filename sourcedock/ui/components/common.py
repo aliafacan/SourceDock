@@ -33,11 +33,18 @@ def prepare_dialog(
     *,
     independent: bool = False,
 ) -> None:
-    """Apply shared sizing rules, optionally turning a dialog into a tool window."""
+    """Apply shared sizing rules, matching HeaderBar controls and optional independent movement."""
     dialog.set_default_size(width, height)
     dialog.set_resizable(True)
     make_window_movable(dialog, independent=independent)
     dialog.get_style_context().add_class("icon-settings-window")
+    if not dialog.get_realized() and dialog.get_titlebar() is None:
+        header = Gtk.HeaderBar()
+        header.set_show_close_button(True)
+        header.set_decoration_layout(":minimize,maximize,close" if independent else ":close")
+        header.set_title(dialog.get_title() or "SourceDock")
+        dialog.set_titlebar(header)
+        header.show()
 
 
 def make_window_movable(window: Gtk.Window, *, independent: bool = False) -> None:

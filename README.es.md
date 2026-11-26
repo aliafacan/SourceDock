@@ -16,7 +16,17 @@
 
 SourceDock reúne la búsqueda, instalación, actualización y eliminación de aplicaciones APT, Flatpak, Snap y paquetes locales en una interfaz rápida y unificada. Las consultas se ejecutan de forma asíncrona y los errores de cada proveedor se muestran sin ocultar los resultados disponibles.
 
-## Novedades de 1.4.12
+## Novedades de 2.0.0
+
+- **Ajustes por pestañas y política de actualizaciones:** Horarios independientes para APT/Nativo, Flatpak y Snap con guardado instantáneo y control para pausar `snapd`.
+- **Limpieza de disco y caché:** Revisa y limpia caché APT, paquetes huérfanos, revisiones antiguas de Snap y runtimes Flatpak.
+- **Aplicaciones al inicio:** Pestañas separadas de Usuario y Sistema para activar, editar, probar y añadir entradas.
+
+![Permisos](docs/screenshots/v2.0.0/permissions-dark.png)
+![Limpieza](docs/screenshots/v2.0.0/cleanup-dark.png)
+![Inicio](docs/screenshots/v2.0.0/autostart-light.png)
+
+### Anteriormente en 2.0.0
 
 - **Permisos de aplicaciones:** un diálogo con pestañas e icono muestra la información de seguridad de Flatpak, Snap y paquetes nativos. Se pueden añadir o quitar carpetas permitidas para Flatpak y cambiar las conexiones Snap disponibles.
 - **Interruptores fiables:** el estado visible cambia solo cuando la operación termina correctamente. Si se cancela la contraseña o falla el comando, se conserva el estado anterior. Una autorización Snap correcta se reutiliza hasta 15 minutos.
@@ -73,11 +83,11 @@ Capturas de SourceDock 1.4.10 con metadatos reales consultados en modo de solo l
 
 ## Instalación
 
-Descarga la versión [SourceDock 1.4.12](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12) y su checksum:
+Descarga la versión [SourceDock 2.0.0](https://github.com/aliafacan/SourceDock/releases/tag/v2.0.0) y su checksum:
 
 ```bash
-sha256sum -c sourcedock_1.4.12_all.deb.sha256
-sudo apt install ./sourcedock_1.4.12_all.deb
+sha256sum -c sourcedock_2.0.0_all.deb.sha256
+sudo apt install ./sourcedock_2.0.0_all.deb
 sourcedock
 ```
 

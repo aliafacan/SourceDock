@@ -533,6 +533,9 @@ class InstalledViewMixin:
         self.applications_flatpak_cleanup_btn = Gtk.Button()
         self.applications_flatpak_cleanup_btn.connect("clicked", self.on_flatpak_cleanup)
         maintenance_row.pack_start(self.applications_flatpak_cleanup_btn, False, False, 0)
+        self.applications_disk_cleanup_btn = Gtk.Button()
+        self.applications_disk_cleanup_btn.connect("clicked", self.on_open_disk_cleanup)
+        maintenance_row.pack_start(self.applications_disk_cleanup_btn, False, False, 0)
         diagnostics_box.pack_start(maintenance_row, False, False, 0)
 
         self.applications_diagnostics_expander.add(diagnostics_box)
@@ -585,6 +588,26 @@ class InstalledViewMixin:
 
     def on_reload_applications(self, *_args) -> None:
         self.reload_applications_async()
+
+    def on_open_disk_cleanup(self, _button=None, on_close=None) -> None:
+        from sourcedock.ui.components.cleanup_dialog import DiskCleanupDialog
+
+        DiskCleanupDialog(
+            self,
+            self.application_registry,
+            language=self.preferences.language,
+            on_cleaned=self.reload_applications_async,
+            on_close=on_close,
+        )
+
+    def on_open_autostart(self, _button=None, on_close=None) -> None:
+        from sourcedock.ui.components.autostart_dialog import AutostartDialog
+
+        AutostartDialog(
+            self,
+            language=self.preferences.language,
+            on_close=on_close,
+        )
 
     def on_flatpak_cleanup(self, *_args) -> None:
         if getattr(self, "_cleanup_plan_loading", False):
@@ -931,6 +954,7 @@ class InstalledViewMixin:
             parent=parent_win,
             on_action_callback=_handle_detail_action,
         )
+        self._active_details_dialog = dialog
         dialog.connect("response", lambda widget, _response: widget.destroy())
         dialog.show_all()
         dialog.present()
@@ -1208,6 +1232,7 @@ class InstalledViewMixin:
         self._set_applications_status(t(self.preferences.language, "applications_loading"), "#666666")
         self._application_load_generation = getattr(self, "_application_load_generation", 0) + 1
         generation = self._application_load_generation
+        self._application_startup_reset_generation = generation if startup else None
         threading.Thread(target=self._load_applications_worker, args=(generation, startup), daemon=True).start()
 
     def _load_applications_worker(self, generation=None, startup=False) -> None:
@@ -1374,6 +1399,9 @@ class InstalledViewMixin:
         self.applications_loading = not complete
         self._set_application_controls_sensitive(True)
         self._update_category_combo()
+        if complete and generation == getattr(self, "_application_startup_reset_generation", None):
+            self._reset_application_scroll_on_next_render = True
+            self._application_startup_reset_generation = None
         self._render_applications_list()
         self._render_application_diagnostics()
         if self.application_filter_source == "updates" and self.applications_loading:
@@ -1665,7 +1693,11 @@ class InstalledViewMixin:
         state = ApplicationViewState(scroll_value=adjustment.get_value())
         model, paths = self.applications_tree.get_selection().get_selected_rows()
         state.selected_ids = {model[path][9].id for path in paths}
-        if is_grid:
+        reset_to_top = getattr(self, "_reset_application_scroll_on_next_render", False)
+        if reset_to_top:
+            self._reset_application_scroll_on_next_render = False
+            state = ApplicationViewState(scroll_value=0.0)
+        if is_grid and not reset_to_top:
             children = self.applications_cards.get_children()
             state.ordered_ids = [child.application_id for child in children]
             for child in children:
@@ -1674,7 +1706,7 @@ class InstalledViewMixin:
                     state.anchor_id = child.application_id
                     state.anchor_offset = area.y - state.scroll_value
                     break
-        else:
+        elif not reset_to_top:
             state.ordered_ids = [row[9].id for row in model]
             visible = self.applications_tree.get_visible_range()
             if visible:
@@ -2109,7 +2141,7 @@ class InstalledViewMixin:
         self.application_filter_category = active_id
         self._render_applications_list()
 
-    def on_export_application_list(self, _button) -> None:
+    def on_export_application_list(self, _button=None, on_close=None) -> None:
         json_data = self.application_registry.export_app_list()
         dialog = Gtk.FileChooserDialog(
             title=t(self.preferences.language, "export_dialog_title"),
@@ -2132,6 +2164,8 @@ class InstalledViewMixin:
                     f"{t(self.preferences.language, 'status_exported')}: {filename}", "#1f7a1f"
                 )
         dialog.destroy()
+        if callable(on_close):
+            on_close()
 
     def on_install_local_package(self, _button=None) -> None:
         lang = self.preferences.language
@@ -2399,6 +2433,7 @@ class InstalledViewMixin:
 
     def _show_flatpak_permissions(self, application, perms):
         from sourcedock.ui.components.permissions_dialog import PermissionsDialog
+
         dialog = PermissionsDialog(
             parent=self,
             application=application,
@@ -2406,8 +2441,15 @@ class InstalledViewMixin:
             permissions_data=perms,
             language=self.preferences.language,
         )
-        dialog.run()
-        dialog.destroy()
+
+        def _on_perm_destroy(_w):
+            details = getattr(self, "_active_details_dialog", None)
+            if details is not None and not getattr(details, "_destroyed", True):
+                details.present()
+
+        dialog.connect("destroy", _on_perm_destroy)
+        dialog.connect("response", lambda d, _r: d.destroy())
+        dialog.show_all()
 
     def on_flatpak_rollback(self, _button, application: UnifiedApplication) -> None:
         load_dialog_data(
@@ -2420,6 +2462,9 @@ class InstalledViewMixin:
         lang = self.preferences.language
         if not history:
             self._show_error_dialog(t(lang, "rollback_no_history"))
+            details = getattr(self, "_active_details_dialog", None)
+            if details is not None and not getattr(details, "_destroyed", True):
+                details.present()
             return
         dialog = Gtk.Dialog(
             title=t(lang, "rollback_title").format(name=application.name),
@@ -2453,6 +2498,11 @@ class InstalledViewMixin:
                     progress_title_key="applications_progress_update",
                     refresh_after=True,
                 )
+        else:
+            dialog.destroy()
+        details = getattr(self, "_active_details_dialog", None)
+        if details is not None and not getattr(details, "_destroyed", True):
+            details.present()
         else:
             dialog.destroy()
 

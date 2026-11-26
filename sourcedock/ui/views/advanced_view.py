@@ -17,12 +17,12 @@ from sourcedock.ui.components.common import ContentState, make_window_movable, p
 
 
 class AdvancedViewMixin:
-    def on_open_sources(self, _button):
+    def on_open_sources(self, _button=None, on_close=None):
         lang = self.preferences.language
         dialog = Gtk.Dialog(
-            title=t(lang, "settings_sources"), transient_for=self, modal=True, destroy_with_parent=True
+            title=t(lang, "settings_sources"), transient_for=None, modal=False, destroy_with_parent=False
         )
-        prepare_dialog(dialog, width=860, height=460)
+        prepare_dialog(dialog, width=860, height=460, independent=True)
         dialog.add_button(t(lang, "sources_add_remote"), Gtk.ResponseType.APPLY)
         dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
@@ -34,7 +34,13 @@ class AdvancedViewMixin:
 
         dialog.connect("response", on_dialog_response)
         dialog._closed = False
-        dialog.connect("destroy", lambda widget: setattr(widget, "_closed", True))
+
+        def _on_destroy(widget):
+            widget._closed = True
+            if callable(on_close):
+                on_close()
+
+        dialog.connect("destroy", _on_destroy)
         model = Gtk.ListStore(str, str, str, str)
         tree = Gtk.TreeView(model=model)
         style_tree_view(tree)
@@ -242,7 +248,7 @@ class AdvancedViewMixin:
             break
 
 
-    def on_import_application_list(self, _button):
+    def on_import_application_list(self, _button=None, on_close=None):
         lang = self.preferences.language
         chooser = Gtk.FileChooserDialog(
             title=t(lang, "restore_title"), transient_for=self, action=Gtk.FileChooserAction.OPEN
@@ -258,6 +264,8 @@ class AdvancedViewMixin:
         filename = chooser.get_filename()
         chooser.destroy()
         if response != Gtk.ResponseType.OK or not filename:
+            if callable(on_close):
+                on_close()
             return
         try:
             path = Path(filename)
@@ -268,6 +276,8 @@ class AdvancedViewMixin:
             self._show_restore_preview(items)
         except (OSError, ValueError, BackendError) as exc:
             self._show_error_dialog(str(exc))
+        if callable(on_close):
+            on_close()
 
     def _show_restore_preview(self, items):
         lang = self.preferences.language

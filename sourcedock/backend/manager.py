@@ -259,26 +259,65 @@ class ApplicationRegistry:
         if self.runner.command_exists("fwupdmgr"):
             self.runner.run(["fwupdmgr", "refresh", "--no-authenticate"], timeout=30, check=False)
 
-    def refresh_update_cache_silent(self) -> None:
+    def refresh_update_cache_silent(self, sources: set[str] | None = None) -> None:
+        check_native = sources is None or "native" in sources
+        check_flatpak = sources is None or SOURCE_FLATPAK in sources
+        check_snap = sources is None or SOURCE_SNAP in sources
+        check_firmware = sources is None or SOURCE_FIRMWARE in sources
+
+        if check_native:
+            try:
+                sudo_res = self.runner.run(["sudo", "-n", "true"], timeout=5)
+                sudo_free = self._is_completed_success(sudo_res)
+                if sudo_free and self.native_provider.is_available():
+                    cmd = self.native_provider.refresh_cache_command()
+                    if cmd:
+                        self.runner.run(["sudo", "-n", *cmd], timeout=90, check=False)
+            except Exception:
+                pass
+        if check_flatpak:
+            try:
+                if self.runner.command_exists("flatpak"):
+                    self.runner.run(["flatpak", "update", "--appstream", "-y"], timeout=60, check=False)
+            except Exception:
+                pass
+        if check_snap:
+            try:
+                if self.runner.command_exists("snap"):
+                    self.runner.run(["snap", "refresh", "--list"], timeout=15, check=False)
+            except Exception:
+                pass
+        if check_firmware:
+            try:
+                if self.runner.command_exists("fwupdmgr"):
+                    self.runner.run(["fwupdmgr", "refresh", "--no-authenticate"], timeout=30, check=False)
+            except Exception:
+                pass
+
+    def get_snap_auto_refresh_paused(self) -> bool | None:
+        """Sistemdeki snapd otomatik güncelleme erteleme (hold) durumunu döner."""
+        if not self.runner.command_exists("snap"):
+            return None
         try:
-            sudo_res = self.runner.run(["sudo", "-n", "true"], timeout=5)
-            sudo_free = self._is_completed_success(sudo_res)
-            if sudo_free and self.native_provider.is_available():
-                cmd = self.native_provider.refresh_cache_command()
-                if cmd:
-                    self.runner.run(["sudo", "-n", *cmd], timeout=90, check=False)
+            res = self.runner.run(["snap", "refresh", "--time"], timeout=5, check=False)
         except Exception:
-            pass
-        try:
-            if self.runner.command_exists("flatpak"):
-                self.runner.run(["flatpak", "update", "--appstream", "-y"], timeout=60, check=False)
-        except Exception:
-            pass
-        try:
-            if self.runner.command_exists("fwupdmgr"):
-                self.runner.run(["fwupdmgr", "refresh", "--no-authenticate"], timeout=30, check=False)
-        except Exception:
-            pass
+            return None
+        if not self._is_completed_success(res):
+            return None
+        for line in (getattr(res, "stdout", "") or "").splitlines():
+            stripped = line.strip().lower()
+            if stripped.startswith("hold:"):
+                val = stripped.split(":", 1)[1].strip()
+                if val and val != "-":
+                    return True
+        return False
+
+    def set_snap_auto_refresh_paused(self, paused: bool) -> None:
+        """Sistemdeki snapd otomatik güncellemelerini duraklatır veya devam ettirir."""
+        if not self.runner.command_exists("snap"):
+            raise BackendError("Snap is not available on this system.")
+        cmd = ["snap", "refresh", "--hold=forever"] if paused else ["snap", "refresh", "--unhold"]
+        self.runner.run_privileged(cmd, timeout=30)
 
     def _load_provider(self, provider, include_updates: bool = True):
         started_at = time.perf_counter()
@@ -876,7 +915,7 @@ class ApplicationRegistry:
 
         # 1. Varsayılan izinler (metadata)
         base_meta = {"filesystems": set(), "sockets": set(), "shares": set(), "devices": set()}
-        res_info = self.runner.run(["flatpak", "info", "-m", app_id], timeout=10)
+        res_info = self.runner.run_read_only(["flatpak", "info", "-m", app_id], timeout=10)
         if res_info.returncode == 0:
             c = configparser.ConfigParser()
             try:
@@ -891,7 +930,7 @@ class ApplicationRegistry:
                 pass
 
         # 2. Kullanıcı geçersiz kılmaları (override)
-        res_ov = self.runner.run(["flatpak", "override", "--user", "--show", app_id], timeout=10)
+        res_ov = self.runner.run_read_only(["flatpak", "override", "--user", "--show", app_id], timeout=10)
         overrides = {"filesystems": {}, "sockets": {}, "shares": {}, "devices": {}}
         if res_ov.returncode == 0:
             c_ov = configparser.ConfigParser()
@@ -963,7 +1002,7 @@ class ApplicationRegistry:
 
     def snap_permissions(self, snap_name: str) -> dict[str, Any]:
         """Snap uygulamasının plug bağlantılarını sorgular."""
-        result = self.runner.run(["snap", "connections", snap_name], timeout=10)
+        result = self.runner.run_read_only(["snap", "connections", snap_name], timeout=10)
         connections: list[dict[str, Any]] = []
         if result.returncode == 0:
             for line in result.stdout.splitlines()[1:]:

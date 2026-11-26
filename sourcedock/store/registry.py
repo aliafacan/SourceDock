@@ -103,8 +103,6 @@ class StoreRegistry:
     """Mağazalardan (Flatpak, Snap, APT, DNF, Pacman, Zypper) arama ve kurulum işlemlerini yürüten sınıf."""
 
     def __init__(self, distro_info: DistroInfo | None = None):
-        self._sudo_password: str | None = None
-        self._output_callback: Callable[[str], None] | None = None
         self.host_bridge_available = self._detect_host_bridge()
         self._current_process: subprocess.Popen | None = None
         self._stream_runner = CommandRunner()
@@ -273,10 +271,9 @@ class StoreRegistry:
         self._stream_runner.unbind_thread_op(op_id)
 
     def set_sudo_password(self, password: str) -> None:
-        self._sudo_password = password
+        self._stream_runner.set_sudo_password(password)
 
     def clear_sudo_password(self) -> None:
-        self._sudo_password = None
         self._stream_runner.clear_sudo_password()
 
     def _record_provider_error(self, message: str) -> None:
@@ -288,7 +285,6 @@ class StoreRegistry:
         callback: Callable[[str], None] | None,
         op_id: str | None = None,
     ) -> None:
-        self._output_callback = callback
         self._stream_runner.set_output_callback(callback, op_id=op_id)
 
     def search(
@@ -886,8 +882,9 @@ class StoreRegistry:
             if not self._snap_has_active_change():
                 return False
             message = f"Snap başka bir işlem yürütüyor; {package} için bekleniyor..."
-            if message != last_message and self._output_callback is not None:
-                self._output_callback(message)
+            callback = self._stream_runner._resolve_output_callback()
+            if message != last_message and callback is not None:
+                callback(message)
                 last_message = message
             time.sleep(2)
         return self._snap_package_is_installed(package)
@@ -919,7 +916,6 @@ class StoreRegistry:
     def _run_streaming(
         self, command: list[str], timeout: int = 1800, check: bool = False, snap_pkg: str = ""
     ) -> None:
-        self._stream_runner.set_output_callback(self._output_callback)
         result = self._stream_runner._run_streaming(self._wrap_host(command), timeout, False)
         self._check_stream_result(result, command, check, snap_pkg)
 
@@ -934,9 +930,6 @@ class StoreRegistry:
             raise BackendError(f"Command failed: {' '.join(command)}\n{result.stdout[-2000:]}")
 
     def _run_privileged_streaming(self, command: list[str], timeout: int = 1800, snap_pkg: str = "") -> None:
-        self._stream_runner.set_output_callback(self._output_callback)
-        if self._sudo_password:
-            self._stream_runner.set_sudo_password(self._sudo_password)
         try:
             self._wait_for_native_locks(command)
             self._stream_runner.run_privileged(command, timeout=timeout)

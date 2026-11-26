@@ -8,7 +8,7 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import GdkPixbuf, Gtk
+from gi.repository import GdkPixbuf, GLib, Gtk
 
 from sourcedock.backend.updates import build_update_catalog
 from sourcedock.core.models import (
@@ -27,6 +27,7 @@ from sourcedock.preferences import AppPreferences, PreferencesStore
 from sourcedock.ui.components.dialogs import AppDetailDialog
 from sourcedock.ui.components.common import ScreenshotGallery
 from sourcedock.ui.components.package_installer_dialog import PackageInstallerDialog
+from sourcedock.ui.views.installed_view import InstalledViewMixin
 from sourcedock.ui.window import MainWindow
 
 
@@ -64,6 +65,29 @@ class TestUiWorkflows(unittest.TestCase):
             self.window.nav_buttons[page].clicked()
             self.assertEqual(self.window.pages.get_current_page(), page)
         self.registry.runner.run_privileged.assert_not_called()
+
+    def test_startup_final_inventory_resets_scroll_only_once(self):
+        snap = UnifiedApplication("snap:alpha", "Alpha", SOURCE_SNAP, package_name="alpha", desktop_file="alpha.desktop")
+        apt = UnifiedApplication("apt:beta", "Beta", SOURCE_APT, package_name="beta", desktop_file="beta.desktop")
+        rendered_reset_values = []
+
+        def record_render():
+            rendered_reset_values.append(getattr(self.window, "_reset_application_scroll_on_next_render", False))
+            self.window._reset_application_scroll_on_next_render = False
+
+        with patch("sourcedock.ui.views.installed_view.threading.Thread"), patch.object(
+            self.window, "_render_applications_list", side_effect=record_render
+        ):
+            InstalledViewMixin.reload_applications_async(self.window, startup=True)
+            generation = self.window._application_load_generation
+            self.window._finish_applications_load(ApplicationSnapshot([snap]), False, generation)
+            self.window._finish_applications_load(ApplicationSnapshot([snap, apt]), True, generation)
+            self.assertEqual(rendered_reset_values[-2:], [False, True])
+
+            InstalledViewMixin.reload_applications_async(self.window, startup=False)
+            generation = self.window._application_load_generation
+            self.window._finish_applications_load(ApplicationSnapshot([snap, apt]), True, generation)
+            self.assertFalse(rendered_reset_values[-1])
 
     def test_logo_toggles_sidebar_on_wide_window(self):
         self.window.resize(1366, 707)
@@ -528,10 +552,12 @@ class TestUiWorkflows(unittest.TestCase):
             return Gtk.ResponseType.OK
 
         with (
-            patch("sourcedock.ui.views.settings_view.Gtk.Dialog.run", save_settings),
             patch("sourcedock.ui.views.settings_view.is_default_package_handler", return_value=False),
         ):
             self.window.on_open_settings(None)
+            dialog = self.window._settings_dialog
+            save_settings(dialog)
+            dialog.response(Gtk.ResponseType.CLOSE)
         self.assertTrue(self.window.preferences.show_technical_packages)
         self.assertEqual(len(self.window.store_results_store), 2)
 
@@ -687,6 +713,116 @@ class TestUiWorkflows(unittest.TestCase):
         dialog._on_cancel_clicked(None)
         self.assertTrue(dialog._is_installing)
         self.assertEqual(dialog.progress_status_label.get_text(), t("tr", "cancel_critical"))
+
+    def test_installer_details_fit_with_decisions_visible(self):
+        for package_format in ("flatpakref", "deb"):
+            with self.subTest(package_format=package_format):
+                info = LocalPackageInfo(
+                    f"/home/ali/Downloads/com.github.hluk.copyq.{package_format}",
+                    package_format, "CopyQ", version="9.0", summary="Clipboard manager",
+                    description="Keeps and organizes clipboard history", size_bytes=4096,
+                    architecture="amd64", maintainer="Example Maintainer",
+                    dependencies=["glib", "gtk3"],
+                )
+                dialog = PackageInstallerDialog(parent=self.window, info=info, registry=self.registry)
+                self.addCleanup(dialog.destroy)
+                dialog.show_all()
+                while Gtk.events_pending():
+                    Gtk.main_iteration_do(False)
+
+                area = dialog.get_content_area()
+                header, switcher, stack, options = area.get_children()[:4]
+                self.assertIs(switcher, dialog.preview_switcher)
+                self.assertIs(stack, dialog.preview_stack)
+                self.assertIs(options, dialog.options_box)
+                self.assertTrue(header.get_visible())
+                self.assertTrue(switcher.get_visible())
+                self.assertEqual(switcher.get_halign(), Gtk.Align.START)
+                self.assertEqual(stack.get_visible_child_name(), "overview")
+                self.assertTrue(options.get_visible())
+                self.assertTrue(dialog.trust_check.get_visible())
+                self.assertTrue(dialog.action_btn.get_visible())
+                monitor = dialog.get_display().get_monitor_at_window(dialog.get_window())
+                self.assertLessEqual(dialog.get_size().height, monitor.get_workarea().height - 32)
+                if monitor.get_workarea().height >= 600:
+                    adjustment = dialog.overview_scroller.get_vadjustment()
+                    self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 1)
+                stack.set_visible_child_name("details")
+                while Gtk.events_pending():
+                    Gtk.main_iteration_do(False)
+                self.assertTrue(dialog.metadata_card.get_visible())
+                if monitor.get_workarea().height >= 600:
+                    adjustment = dialog.details_scroller.get_vadjustment()
+                    self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 1)
+                dialog.destroy()
+
+    def test_long_installer_details_are_complete_and_scrollable(self):
+        dependencies = [f"libexample-{index} (>= 1.0)" for index in range(32)]
+        info = LocalPackageInfo(
+            "/home/ali/Downloads/google-chrome-stable_current_amd64.deb", "deb", "google-chrome-stable",
+            version="158.0.8127.36-1", summary="The web browser from Google",
+            size_bytes=145600000, architecture="amd64", installed_size="480 MB",
+            maintainer="Chrome Linux Team", dependencies=dependencies,
+            description="Google Chrome is a browser that combines a minimal design with sophisticated technology.",
+        )
+        dialog = PackageInstallerDialog(parent=self.window, info=info, is_installed=True, registry=self.registry)
+        self.addCleanup(dialog.destroy)
+        dialog.show_all()
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+
+        monitor = dialog.get_display().get_monitor_at_window(dialog.get_window())
+        self.assertLessEqual(dialog.get_size().width, monitor.get_workarea().width - 32)
+        if monitor.get_workarea().height >= 600:
+            adjustment = dialog.overview_scroller.get_vadjustment()
+            self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 1)
+        overview_labels = dialog.overview_scroller.get_child().get_child().get_children()
+        hint_box = next(widget for widget in overview_labels
+                        if widget.get_style_context().has_class("installer-status-note"))
+        self.assertIsInstance(hint_box.get_children()[0], Gtk.Image)
+        self.assertFalse(hint_box.get_children()[1].get_text().startswith("ℹ"))
+        self.assertTrue(any(
+            isinstance(widget, Gtk.Label)
+            and widget.get_style_context().has_class("installer-overview-description")
+            and info.description.startswith(widget.get_text()[:30])
+            for widget in overview_labels
+        ))
+        dialog.preview_stack.set_visible_child_name("details")
+        loop = GLib.MainLoop()
+        GLib.timeout_add(120, loop.quit)
+        loop.run()
+        self.assertNotEqual(dialog.metadata_card.get_children()[0].get_children()[0].get_text(), "Ayrıntılar")
+        self.assertFalse(dialog.dependencies_revealer.get_reveal_child())
+        dialog.dependencies_button.clicked()
+        self.assertTrue(dialog.dependencies_revealer.get_reveal_child())
+        loop = GLib.MainLoop()
+        GLib.timeout_add(120, loop.quit)
+        loop.run()
+        self.assertEqual(dialog.dependencies_revealer.get_child().get_text().splitlines(), dependencies)
+        self.assertEqual(dialog.metadata_card.get_children()[-1].get_children()[-1].get_text(), info.description)
+        for row in dialog.metadata_card.get_children():
+            value = (dialog.dependencies_revealer.get_child()
+                     if row is dialog.dependencies_button.get_parent() else row.get_children()[-1])
+            self.assertTrue(value.get_line_wrap())
+        self.assertGreater(
+            dialog.details_scroller.get_vadjustment().get_upper(),
+            dialog.details_scroller.get_vadjustment().get_page_size(),
+        )
+        dialog.dependencies_button.clicked()
+        self.assertFalse(dialog.dependencies_revealer.get_reveal_child())
+
+    def test_installer_switches_from_tabs_to_progress(self):
+        info = LocalPackageInfo("/tmp/test.deb", "deb", "Test", version="1")
+        dialog = PackageInstallerDialog(parent=self.window, info=info, registry=self.registry)
+        self.addCleanup(dialog.destroy)
+        dialog.show_all()
+        dialog.trust_check.set_active(True)
+        with patch("sourcedock.ui.components.package_installer_dialog.threading.Thread"):
+            dialog._start_installation()
+        self.assertFalse(dialog.preview_stack.get_visible())
+        self.assertFalse(dialog.preview_switcher.get_visible())
+        self.assertFalse(dialog.options_box.get_visible())
+        self.assertTrue(dialog.progress_container.get_visible())
 
     def test_confirmed_removal_updates_rows_without_a_reload_or_update_scan(self):
         from sourcedock.backend.updates import UpdateItem
@@ -1119,6 +1255,15 @@ class TestUiWorkflows(unittest.TestCase):
         self.assertEqual(install.call_args.args, (target,))
         self.assertEqual(install.call_args.kwargs["source_switch"].previous, old)
         self.registry.remove.assert_not_called()
+
+    def test_store_install_keeps_other_provider_available(self):
+        target = StoreResult("Editor", "org.example.Editor", "", SOURCE_FLATPAK, "1", "flathub")
+        with patch("sourcedock.ui.views.store_view.threading.Thread"), patch.object(
+            self.window, "on_store_result_selected", side_effect=lambda _selection: self.window.store_install_btn.set_sensitive(True)
+        ) as update_selection:
+            self.window._run_store_install(target)
+        update_selection.assert_called_once()
+        self.assertTrue(self.window.store_install_btn.get_sensitive())
 
     def test_store_source_switch_only_continues_after_verified_success(self):
         from tests.test_source_switch import chrome

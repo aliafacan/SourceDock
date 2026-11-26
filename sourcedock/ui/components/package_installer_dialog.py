@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import threading
 import time
+import textwrap
 from typing import Callable
 
 import gi
@@ -14,7 +15,7 @@ import gi
 gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # pyright: ignore[reportMissingModuleSource]
 
 from sourcedock.core.errors import AuthRequiredError, BackendError
 from sourcedock.core.models import InstalledPackageStatus, LocalPackageInfo, UnifiedApplication
@@ -63,10 +64,20 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.is_installed = self.pkg_status.is_installed
         self.is_reinstall = self.pkg_status.status == "same_version"
 
-        prepare_dialog(self, width=520, height=460, independent=True)
+        display = Gdk.Display.get_default()
+        monitor = display.get_primary_monitor() if display else None
+        if display and parent and parent.get_window():
+            monitor = display.get_monitor_at_window(parent.get_window()) or monitor
+        if display and monitor is None:
+            monitor = display.get_monitor(0)
+        workarea = monitor.get_workarea() if monitor else None
+        width = min(680, max(320, workarea.width - 48)) if workarea else 680
+        height = min(620, max(260, workarea.height - 40)) if workarea else 570
+        prepare_dialog(self, width=width, height=height, independent=True)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_resizable(True)
         self.get_style_context().add_class("icon-settings-window")
+        self.get_style_context().add_class("local-installer-dialog")
 
         # Pencere ikonu
         icon_file = get_icon_path()
@@ -92,25 +103,48 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.connect("delete-event", lambda _window, _event: self._is_installing)
 
     def _build_ui(self) -> None:
+        content_area = self.get_content_area()
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         viewport = Gtk.ScrolledWindow()
         viewport.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        viewport.set_max_content_height(540)
-        viewport.set_propagate_natural_height(True)
+        viewport.set_min_content_height(120)
         viewport.add(content)
-        self.get_content_area().pack_start(viewport, True, True, 0)
-        content.set_spacing(12)
-        content.set_margin_top(16)
-        content.set_margin_bottom(16)
-        content.set_margin_start(16)
-        content.set_margin_end(16)
+        self.overview_scroller = viewport
+        details_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        details_content.set_margin_top(8)
+        details_content.set_margin_bottom(8)
+        details_content.set_margin_start(14)
+        details_content.set_margin_end(14)
+        details_viewport = Gtk.ScrolledWindow()
+        details_viewport.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        details_viewport.add(details_content)
+        self.details_scroller = details_viewport
+        self.preview_stack = Gtk.Stack()
+        self.preview_stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        self.preview_stack.add_titled(viewport, "overview", t(self.language, "package_installer_overview"))
+        self.preview_stack.add_titled(details_viewport, "details", t(self.language, "package_installer_details"))
+        self.preview_switcher = Gtk.StackSwitcher()
+        self.preview_switcher.set_stack(self.preview_stack)
+        self.preview_switcher.set_halign(Gtk.Align.START)
+        self.preview_switcher.get_style_context().add_class("installer-tabs")
+        content.set_spacing(5)
+        content.set_margin_top(6)
+        content.set_margin_bottom(6)
+        content.set_margin_start(14)
+        content.set_margin_end(14)
 
         # 1. Başlık ve İkon Alanı
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
-        content.pack_start(header_box, False, False, 0)
+        header_box.get_style_context().add_class("installer-heading")
+        content_area.pack_start(header_box, False, False, 0)
+        content_area.pack_start(self.preview_switcher, False, False, 0)
+        content_area.pack_start(self.preview_stack, True, True, 0)
 
         icon_widget = self._create_icon_widget()
-        header_box.pack_start(icon_widget, False, False, 0)
+        icon_frame = Gtk.Box()
+        icon_frame.get_style_context().add_class("installer-icon-frame")
+        icon_frame.add(icon_widget)
+        header_box.pack_start(icon_frame, False, False, 0)
 
         title_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         header_box.pack_start(title_vbox, True, True, 0)
@@ -121,11 +155,11 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         title_lbl = Gtk.Label()
         title_lbl.set_markup(
-            f'<span size="x-large" weight="bold">{GLib.markup_escape_text(self.info.name)}</span>'
+            f'<span size="large" weight="bold">{GLib.markup_escape_text(self.info.name)}</span>'
         )
         title_lbl.set_xalign(0)
         title_lbl.set_ellipsize(Pango.EllipsizeMode.END)
-        name_badge_box.pack_start(title_lbl, False, False, 0)
+        name_badge_box.pack_start(title_lbl, True, True, 0)
 
         badge_lbl = Gtk.Label()
         badge_text = self._format_badge()
@@ -180,137 +214,150 @@ class PackageInstallerDialog(Gtk.Dialog):
             summary_lbl.set_line_wrap(True)
             summary_lbl.set_xalign(0)
             summary_lbl.get_style_context().add_class("dim-label")
-            title_vbox.pack_start(summary_lbl, False, False, 0)
+            content.pack_start(summary_lbl, False, False, 0)
+        if self.info.description:
+            short_description = textwrap.shorten(
+                self.info.description, width=125, placeholder="…"
+            )
+            if short_description and short_description != self.info.summary:
+                description_lbl = Gtk.Label(label=short_description, xalign=0)
+                description_lbl.set_line_wrap(True)
+                description_lbl.get_style_context().add_class("installer-overview-description")
+                content.pack_start(description_lbl, False, False, 0)
 
         # Bilgilendirme / İpucu Kutusu
+        hint_msg = None
+        hint_icon = "emblem-default-symbolic"
+        hint_style = "success-text"
         if status == "upgradable":
-            hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            hint_lbl = Gtk.Label()
             hint_msg = t(
                 self.language,
                 "package_installer_update_hint",
                 installed_version=self.pkg_status.installed_version,
                 new_version=self.info.version,
             )
-            hint_lbl.set_text(f"ℹ {hint_msg}")
-            hint_lbl.get_style_context().add_class("package-version-change")
-            hint_lbl.set_line_wrap(True)
-            hint_lbl.set_xalign(0)
-            hint_box.pack_start(hint_lbl, True, True, 0)
-            content.pack_start(hint_box, False, False, 0)
         elif status == "downgrade":
-            hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            hint_lbl = Gtk.Label()
             hint_msg = t(
                 self.language,
                 "package_installer_downgrade_hint",
                 installed_version=self.pkg_status.installed_version,
             )
-            hint_lbl.set_text(f"⚠ {hint_msg}")
-            hint_lbl.get_style_context().add_class("warning-text")
-            hint_lbl.set_line_wrap(True)
-            hint_lbl.set_xalign(0)
-            hint_box.pack_start(hint_lbl, True, True, 0)
-            content.pack_start(hint_box, False, False, 0)
+            hint_icon = "dialog-warning-symbolic"
+            hint_style = "warning-text"
         elif status == "same_version":
+            hint_msg = t(self.language, "package_installer_already_installed_hint")
+        if hint_msg:
             hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            hint_lbl = Gtk.Label()
-            hint_lbl.set_text(f"ℹ {t(self.language, 'package_installer_already_installed_hint')}")
-            hint_lbl.get_style_context().add_class("success-text")
+            hint_box.get_style_context().add_class("installer-status-note")
+            if status == "downgrade":
+                hint_box.get_style_context().add_class("caution")
+            hint_image = Gtk.Image.new_from_icon_name(hint_icon, Gtk.IconSize.BUTTON)
+            hint_image.set_valign(Gtk.Align.START)
+            hint_image.get_style_context().add_class(hint_style)
+            hint_box.pack_start(hint_image, False, False, 0)
+            hint_lbl = Gtk.Label(label=hint_msg)
+            hint_lbl.get_style_context().add_class(hint_style)
             hint_lbl.set_line_wrap(True)
             hint_lbl.set_xalign(0)
             hint_box.pack_start(hint_lbl, True, True, 0)
             content.pack_start(hint_box, False, False, 0)
-
-        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        content.pack_start(sep, False, False, 0)
 
         # 2. Önizleme ve Seçenekler Alanı (Kurulum başlayınca gizlenecek)
-        self.preview_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.preview_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.preview_container.get_style_context().add_class("installer-preview-card")
         content.pack_start(self.preview_container, True, True, 0)
 
-        # Detay Bilgileri Tablosu
-        self.grid = Gtk.Grid()
-        self.grid.set_column_spacing(16)
-        self.grid.set_row_spacing(6)
-        self.preview_container.pack_start(self.grid, False, False, 0)
+        facts = Gtk.Grid(column_spacing=8, row_spacing=8)
+        facts.get_style_context().add_class("installer-facts")
+        self.preview_container.pack_start(facts, False, False, 0)
+        for index, (label, value) in enumerate((
+            (t(self.language, "package_installer_file"), Path(self.info.file_path).name or self.info.name),
+            (t(self.language, "packages_col_size"), self._format_file_size(self.info.size_bytes)),
+            (t(self.language, "security_privileges"),
+             t(self.language, "security_privilege_admin") if self.info.format in ("deb", "rpm")
+             else t(self.language, "security_privilege_user")),
+        )):
+            fact = self._make_info_cell(label, value, wrap=True)
+            fact.get_style_context().add_class("installer-fact")
+            facts.attach(fact, 0 if index != 2 else 1, 0 if index == 0 else 1, 2 if index == 0 else 1, 1)
 
-        row = 0
-        file_size_str = self._format_file_size(self.info.size_bytes)
-        row = self._add_grid_row(self.grid, row, t(self.language, "packages_col_size") + ":", file_size_str)
-
-        if self.info.installed_size:
-            row = self._add_grid_row(
-                self.grid,
-                row,
-                t(self.language, "package_installer_installed_size") + ":",
-                self.info.installed_size,
+        self.metadata_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        self.metadata_card.get_style_context().add_class("installer-details-card")
+        details_content.pack_start(self.metadata_card, False, False, 0)
+        metadata = [
+            ("package_installer_installed_size", self.info.installed_size),
+            ("package_installer_arch", self.info.architecture),
+            ("package_installer_maintainer", self.info.maintainer),
+            ("package_installer_file_path", self.info.file_path),
+        ]
+        metadata = [(label, value) for label, value in metadata if value]
+        for label, value in metadata[:2]:
+            self.metadata_card.pack_start(
+                self._make_detail_row(t(self.language, label), value), False, False, 0
             )
 
-        if self.info.architecture:
-            row = self._add_grid_row(
-                self.grid, row, t(self.language, "package_installer_arch") + ":", self.info.architecture
+        if self.info.dependencies:
+            dependencies_text = "\n".join(self.info.dependencies)
+            dependencies_title = f"{t(self.language, 'package_installer_deps')} · {len(self.info.dependencies)}"
+            if len(self.info.dependencies) > 5:
+                dependency_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+                dependency_section.get_style_context().add_class("installer-dependency-section")
+                self.dependencies_button = Gtk.Button()
+                self.dependencies_button.set_relief(Gtk.ReliefStyle.NONE)
+                self.dependencies_button.get_style_context().add_class("installer-dependency-toggle")
+                button_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                self.dependencies_icon = Gtk.Image.new_from_icon_name("go-next-symbolic", Gtk.IconSize.MENU)
+                button_content.pack_start(self.dependencies_icon, False, False, 0)
+                button_content.pack_start(Gtk.Label(label=dependencies_title, xalign=0), True, True, 0)
+                self.dependencies_button.add(button_content)
+                self.dependencies_button.connect("clicked", self._toggle_dependencies)
+                dependency_section.pack_start(self.dependencies_button, False, False, 0)
+                self.dependencies_revealer = Gtk.Revealer()
+                self.dependencies_revealer.set_transition_type(Gtk.RevealerTransitionType.NONE)
+                dependency_label = Gtk.Label(label=dependencies_text, xalign=0)
+                dependency_label.set_selectable(True)
+                dependency_label.set_line_wrap(True)
+                dependency_label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+                dependency_label.set_margin_top(8)
+                dependency_label.set_margin_start(22)
+                self.dependencies_revealer.add(dependency_label)
+                dependency_section.pack_start(self.dependencies_revealer, False, False, 0)
+                self.metadata_card.pack_start(dependency_section, False, False, 0)
+            else:
+                self.metadata_card.pack_start(
+                    self._make_detail_row(dependencies_title, dependencies_text), False, False, 0,
+                )
+
+        for label, value in metadata[2:]:
+            self.metadata_card.pack_start(
+                self._make_detail_row(t(self.language, label), value), False, False, 0
             )
 
-        if self.info.maintainer:
-            row = self._add_grid_row(
-                self.grid, row, t(self.language, "package_installer_maintainer") + ":", self.info.maintainer
+        if self.info.description:
+            self.metadata_card.pack_start(
+                self._make_detail_row(t(self.language, "details_description"), self.info.description),
+                False, False, 0,
             )
-
-        if self.info.file_path:
-            row = self._add_grid_row(
-                self.grid,
-                row,
-                t(self.language, "package_installer_file") + ":",
-                Path(self.info.file_path).name,
-            )
-            row = self._add_grid_row(
-                self.grid, row, t(self.language, "package_installer_file_path") + ":", self.info.file_path
-            )
-        row = self._add_grid_row(
-            self.grid,
-            row,
-            t(self.language, "security_privileges") + ":",
-            t(self.language, "security_privilege_admin")
-            if self.info.format in ("deb", "rpm")
-            else t(self.language, "security_privilege_user"),
-        )
-        security = Gtk.Label(
-            label=t(
-                self.language,
-                "security_appimage_body" if self.info.format == "appimage" else "security_local_body",
-            )
-        )
+        security = Gtk.Label(label=t(self.language, "security_local_short"))
+        security.set_tooltip_text(t(
+            self.language, "security_appimage_body" if self.info.format == "appimage" else "security_local_body"
+        ))
         security.set_line_wrap(True)
         security.set_max_width_chars(58)
         security.set_xalign(0)
         security.get_style_context().add_class("warning-text")
+        security.get_style_context().add_class("installer-security-note")
         self.preview_container.pack_start(security, False, False, 0)
-        if self.info.dependencies:
-            dependency_text = Gtk.Label(label=", ".join(self.info.dependencies), xalign=0)
-            dependency_text.set_line_wrap(True)
-            dependency_text.set_max_width_chars(58)
-            self.preview_container.pack_start(dependency_text, False, False, 0)
         if self.info.format in ("deb", "rpm"):
-            self.plan_button = Gtk.Button(label=t(self.language, "package_plan"))
+            self.plan_button = Gtk.Button(label=t(self.language, "package_plan_short"))
+            self.plan_button.set_tooltip_text(t(self.language, "package_plan"))
             self.plan_button.connect("clicked", self._on_preview_plan)
-            self.preview_container.pack_start(self.plan_button, False, False, 0)
-
-        if self.info.description:
-            desc_scroll = Gtk.ScrolledWindow()
-            desc_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-            desc_scroll.set_min_content_height(70)
-            desc_scroll.set_max_content_height(100)
-            desc_lbl = Gtk.Label(label=self.info.description)
-            desc_lbl.set_line_wrap(True)
-            desc_lbl.set_xalign(0)
-            desc_lbl.get_style_context().add_class("dim-label")
-            desc_scroll.add(desc_lbl)
-            self.preview_container.pack_start(desc_scroll, False, False, 0)
+            self.plan_button.get_style_context().add_class("installer-secondary-action")
 
         # Kurulum Seçenekleri
         self.options_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        self.preview_container.pack_start(self.options_box, False, False, 0)
+        self.options_box.get_style_context().add_class("installer-options-card")
+        content_area.pack_start(self.options_box, False, False, 0)
 
         if self.info.format in ("appimage", "archive"):
             self.create_desktop_check = Gtk.CheckButton(
@@ -335,19 +382,20 @@ class PackageInstallerDialog(Gtk.Dialog):
             self.options_box.pack_start(self.delete_after_check, False, False, 0)
 
         if self.info.format in ("flatpak", "flatpakref"):
-            scope_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            scope_box.set_margin_top(4)
+            scope_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
             scope_lbl = Gtk.Label(label=t(self.language, "package_installer_scope_title") + ":")
             scope_lbl.set_xalign(0)
             scope_lbl.get_style_context().add_class("dim-label")
             scope_box.pack_start(scope_lbl, False, False, 0)
 
             self.flatpak_scope_user_radio = Gtk.RadioButton.new_with_label(
-                None, t(self.language, "package_installer_scope_user")
+                None, t(self.language, "cleanup_scope_user")
             )
             self.flatpak_scope_system_radio = Gtk.RadioButton.new_with_label_from_widget(
-                self.flatpak_scope_user_radio, t(self.language, "package_installer_scope_system")
+                self.flatpak_scope_user_radio, t(self.language, "cleanup_scope_system")
             )
+            self.flatpak_scope_user_radio.set_tooltip_text(t(self.language, "package_installer_scope_user"))
+            self.flatpak_scope_system_radio.set_tooltip_text(t(self.language, "package_installer_scope_system"))
             self.flatpak_scope_user_radio.set_active(True)
             scope_box.pack_start(self.flatpak_scope_user_radio, False, False, 0)
             scope_box.pack_start(self.flatpak_scope_system_radio, False, False, 0)
@@ -369,8 +417,9 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         # 3. İlerleme Alanı (Kurulum sırasında görünür)
         self.progress_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.progress_container.get_style_context().add_class("installer-progress-card")
         self.progress_container.set_no_show_all(True)
-        content.pack_start(self.progress_container, True, True, 0)
+        content_area.pack_start(self.progress_container, True, True, 0)
 
         self.progress_status_label = Gtk.Label(label=t(self.language, "progress_preparing"))
         self.progress_status_label.set_xalign(0)
@@ -401,8 +450,9 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         # 4. Sonuç Alanı (Başarı veya Hata)
         self.result_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.result_container.get_style_context().add_class("installer-result-card")
         self.result_container.set_no_show_all(True)
-        content.pack_start(self.result_container, False, False, 0)
+        content_area.pack_start(self.result_container, False, False, 0)
 
         self.result_badge_label = Gtk.Label()
         self.result_badge_label.set_xalign(0)
@@ -416,8 +466,11 @@ class PackageInstallerDialog(Gtk.Dialog):
 
         # 5. Alt Butonlar Alanı
         action_area = self.get_action_area()
+        action_area.get_style_context().add_class("installer-actions")
         for child in action_area.get_children():
             action_area.remove(child)
+        if self.info.format in ("deb", "rpm"):
+            action_area.pack_start(self.plan_button, False, False, 0)
 
         self.cancel_btn = Gtk.Button(label=t(self.language, "password_cancel"))
         self.cancel_btn.set_tooltip_text(t(self.language, "tooltip_installer_cancel"))
@@ -460,6 +513,7 @@ class PackageInstallerDialog(Gtk.Dialog):
         self.close_btn.set_no_show_all(True)
         action_area.pack_start(self.close_btn, False, False, 0)
         self.trust_check = Gtk.CheckButton(label=t(self.language, "security_trust_confirmation"))
+        self.trust_check.get_style_context().add_class("installer-trust")
         self.trust_check.connect("toggled", lambda button: self.action_btn.set_sensitive(button.get_active()))
         self.options_box.pack_start(self.trust_check, False, False, 0)
         self.action_btn.set_sensitive(False)
@@ -473,7 +527,11 @@ class PackageInstallerDialog(Gtk.Dialog):
         self._current_op_id = f"op_pkg_{id(self)}_{int(time.monotonic() * 1000)}"
 
         # UI durumunu güncelle
-        self.preview_container.hide()
+        self.preview_stack.hide()
+        self.preview_switcher.hide()
+        self.options_box.hide()
+        if self.info.format in ("deb", "rpm"):
+            self.plan_button.hide()
         self.action_btn.hide()
         self.retry_btn.hide()
         self.result_container.hide()
@@ -853,20 +911,50 @@ class PackageInstallerDialog(Gtk.Dialog):
             return f"{size_bytes / 1024:.0f} KB"
         return f"{size_bytes} B"
 
-    def _add_grid_row(self, grid: Gtk.Grid, row: int, label_text: str, value_text: str) -> int:
-        lbl = Gtk.Label(label=label_text)
-        lbl.set_xalign(0)
-        lbl.get_style_context().add_class("dim-label")
-        grid.attach(lbl, 0, row, 1, 1)
+    def _make_info_cell(self, label_text: str, value_text: str, *, wrap: bool = False) -> Gtk.Box:
+        cell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        cell.set_hexpand(True)
+        label = Gtk.Label(label=label_text, xalign=0)
+        label.set_width_chars(1)
+        label.set_max_width_chars(16)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        label.set_tooltip_text(label_text)
+        label.get_style_context().add_class("installer-fact-label")
+        cell.pack_start(label, False, False, 0)
+        value = Gtk.Label(label=value_text, xalign=0)
+        value.set_hexpand(True)
+        value.set_width_chars(1)
+        if wrap:
+            value.set_line_wrap(True)
+            value.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        else:
+            value.set_max_width_chars(28)
+            value.set_ellipsize(Pango.EllipsizeMode.END)
+        value.set_tooltip_text(value_text)
+        value.get_style_context().add_class("installer-fact-value")
+        cell.pack_start(value, False, False, 0)
+        return cell
 
-        val = Gtk.Label(label=value_text)
-        val.set_xalign(0)
-        val.set_hexpand(True)
-        val.set_max_width_chars(36)
-        val.set_tooltip_text(value_text)
-        val.set_ellipsize(Pango.EllipsizeMode.END)
-        grid.attach(val, 1, row, 1, 1)
-        return row + 1
+    def _make_detail_row(self, label_text: str, value_text: str) -> Gtk.Box:
+        row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        row.get_style_context().add_class("installer-detail-row")
+        label = Gtk.Label(label=label_text, xalign=0)
+        label.get_style_context().add_class("installer-fact-label")
+        row.pack_start(label, False, False, 0)
+        value = Gtk.Label(label=value_text, xalign=0)
+        value.set_selectable(True)
+        value.set_line_wrap(True)
+        value.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        value.get_style_context().add_class("installer-fact-value")
+        row.pack_start(value, False, False, 0)
+        return row
+
+    def _toggle_dependencies(self, _button: Gtk.Button) -> None:
+        expanded = not self.dependencies_revealer.get_reveal_child()
+        self.dependencies_revealer.set_reveal_child(expanded)
+        self.dependencies_icon.set_from_icon_name(
+            "go-down-symbolic" if expanded else "go-next-symbolic", Gtk.IconSize.MENU
+        )
 
     @property
     def should_create_desktop(self) -> bool:

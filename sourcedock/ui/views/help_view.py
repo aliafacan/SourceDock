@@ -29,7 +29,7 @@ class HelpDialog(Gtk.Dialog):
         self.language = language
         self.context = context
 
-        prepare_dialog(self, width=720, height=560, independent=True)
+        prepare_dialog(self, width=780, height=600, independent=True)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_resizable(True)
         self.get_style_context().add_class("icon-settings-window")
@@ -207,6 +207,9 @@ class HelpDialog(Gtk.Dialog):
             ("help_features_packages_title", "help_features_packages_desc"),
             ("help_features_operations_title", "help_features_operations_desc"),
             ("help_features_updates_title", "help_features_updates_desc"),
+            ("help_features_permissions_title", "help_features_permissions_desc"),
+            ("help_features_maintenance_title", "help_features_maintenance_desc"),
+            ("help_features_autostart_title", "help_features_autostart_desc"),
         ]
         features.sort(key=lambda pair: pair[0] != f"help_features_{self.context}_title")
         for title_key, desc_key in features:
@@ -299,6 +302,13 @@ class HelpDialog(Gtk.Dialog):
             tips_box.pack_start(tip_lbl, False, False, 0)
 
         box.pack_start(tips_box, False, False, 0)
+
+        box.pack_start(
+            self._create_card(t(self.language, "help_faq_title"), t(self.language, "help_faq_desc")),
+            False,
+            False,
+            0,
+        )
 
         self.stack.add_titled(scroller, "shortcuts", t(self.language, "help_tab_shortcuts"))
 

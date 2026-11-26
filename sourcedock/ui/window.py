@@ -146,10 +146,72 @@ class MainWindow(
         preferred = self.store_filter_buttons.get(self.preferences.preferred_source)
         if preferred:
             preferred.set_active(True)
-        if self.preferences.check_updates_on_start:
-            self._reload_updates_async()
+        self._update_schedule_timer_id = 0
+        self._run_scheduled_update_checks(startup=True)
+        self._update_schedule_timer_id = GLib.timeout_add_seconds(300, self._on_update_schedule_tick)
         if os.environ.get("SOURCEDOCK_DISABLE_RELEASE_CHECK") != "1":
             self._start_release_check()
+
+    def _on_update_schedule_tick(self) -> bool:
+        if getattr(self, "_release_check_destroyed", False):
+            self._update_schedule_timer_id = 0
+            return False
+        self._run_scheduled_update_checks(startup=False)
+        return True
+
+    def _run_scheduled_update_checks(self, *, startup: bool = False) -> None:
+        if getattr(self, "updates_loading", False) or getattr(self, "applications_busy", False):
+            return
+        intervals = {"hourly": 3600.0, "daily": 86400.0, "weekly": 604800.0}
+        now = time.time()
+        prefs = self.preferences
+        schedules = {
+            "native": (getattr(prefs, "update_schedule_native", "never"), getattr(prefs, "last_update_check_native", 0.0)),
+            "flatpak": (getattr(prefs, "update_schedule_flatpak", "never"), getattr(prefs, "last_update_check_flatpak", 0.0)),
+            "snap": (getattr(prefs, "update_schedule_snap", "never"), getattr(prefs, "last_update_check_snap", 0.0)),
+        }
+        due_sources: set[str] = set()
+        needs_cache_refresh = False
+        for src, (sched, last_ts) in schedules.items():
+            if startup and sched == "on_start":
+                due_sources.add(src)
+            elif sched in intervals and (now - float(last_ts or 0.0)) >= intervals[sched]:
+                due_sources.add(src)
+                needs_cache_refresh = True
+
+        if startup and getattr(prefs, "check_updates_on_start", False) and not due_sources:
+            all_never = all(sched == "never" for sched, _ in schedules.values())
+            if all_never:
+                self._reload_updates_async()
+                return
+
+        if not due_sources:
+            return
+
+        if "native" in due_sources:
+            prefs.last_update_check_native = now
+        if "flatpak" in due_sources:
+            prefs.last_update_check_flatpak = now
+        if "snap" in due_sources:
+            prefs.last_update_check_snap = now
+        try:
+            self.preferences_store.save(prefs)
+        except Exception:
+            pass
+
+        if not needs_cache_refresh:
+            self._reload_updates_async()
+            return
+
+        def worker():
+            try:
+                self.application_registry.refresh_update_cache_silent(sources=due_sources)
+            except Exception:
+                pass
+            if not getattr(self, "_release_check_destroyed", False):
+                GLib.idle_add(self._reload_updates_async)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _start_release_check(self) -> None:
         """Check GitHub after startup, then repeat without blocking the UI."""
@@ -505,6 +567,9 @@ class MainWindow(
         self._render_application_diagnostics()
         self.applications_flatpak_cleanup_btn.set_label(t(lang, "applications_flatpak_cleanup"))
         self.applications_flatpak_cleanup_btn.set_tooltip_text(t(lang, "tooltip_installed_flatpak_cleanup"))
+        if hasattr(self, "applications_disk_cleanup_btn"):
+            self.applications_disk_cleanup_btn.set_label(t(lang, "cleanup_dialog_title"))
+            self.applications_disk_cleanup_btn.set_tooltip_text(t(lang, "cleanup_dialog_desc"))
 
         filter_tooltip_map = {
             "all": "tooltip_installed_filter_all",
@@ -771,7 +836,11 @@ class MainWindow(
 
     def _on_window_destroy(self, *_args) -> None:
         self._release_check_destroyed = True
-        for attr in ("_release_check_initial_timer_id", "_release_check_periodic_timer_id"):
+        for attr in (
+            "_release_check_initial_timer_id",
+            "_release_check_periodic_timer_id",
+            "_update_schedule_timer_id",
+        ):
             source_id = getattr(self, attr, 0)
             if source_id:
                 try:

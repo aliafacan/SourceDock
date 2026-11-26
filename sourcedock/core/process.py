@@ -44,7 +44,7 @@ def critical_command(command: list[str]) -> bool:
         "pacman": {"-Q", "-Qi", "-Ql", "-Qq", "-Qu", "-Qs", "-Si", "-Ss"},
         "zypper": {"search", "info", "list-updates", "repos"},
         "flatpak": {"list", "search", "info", "history", "remotes", "remote-info", "remote-ls"},
-        "snap": {"list", "find", "info", "changes", "tasks", "version"},
+        "snap": {"list", "find", "info", "changes", "tasks", "version", "connections"},
         "fwupdmgr": {"get-devices", "get-updates", "get-history", "get-releases"},
     }
 
@@ -56,10 +56,14 @@ def critical_command(command: list[str]) -> bool:
             if lower_arg.endswith((".sh", ".bash", ".py", ".run")) or "uninstall" in base_name:
                 return True
 
-    for index, arg in enumerate(command[:6]):
+    for index, arg in enumerate(command[:10]):
         program = Path(arg).name
         if program not in CRITICAL_COMMANDS:
             continue
+        if program == "flatpak" and "override" in command[index + 1:] and "--show" in command[index + 1:]:
+            options = (arg for arg in command[index + 1:] if arg.startswith("--"))
+            if all(option in {"--show", "--user", "--system"} for option in options):
+                return False
         arguments = iter(command[index + 1:])
         for action in arguments:
             if action in ("-o", "--option", "-c", "--config-file"):

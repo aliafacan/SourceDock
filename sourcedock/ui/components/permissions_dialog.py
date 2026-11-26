@@ -47,7 +47,7 @@ class PermissionsDialog(Gtk.Dialog):
         self.language = language
         self.data = permissions_data
 
-        prepare_dialog(self, width=850, height=500)
+        prepare_dialog(self, width=850, height=500, independent=True)
         self.set_size_request(760, 440)
         self.get_style_context().add_class("permissions-dialog")
         self.add_button(t(language, "dialog_close"), Gtk.ResponseType.CLOSE)

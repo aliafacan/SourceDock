@@ -19,7 +19,7 @@ def command_resource(command):
         "AppImageUpdate": "appimage",
         "sourcedock-portable": "portable", "sourcedock-appimage": "appimage",
     }
-    for arg in command[:6]:
+    for arg in command[:10]:
         resource = groups.get(Path(arg).name)
         if resource:
             return resource

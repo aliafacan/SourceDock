@@ -8,9 +8,11 @@ from unittest.mock import MagicMock, patch
 from sourcedock.backend.flatpak import FlatpakProvider
 from sourcedock.backend.snap import SnapProvider
 from sourcedock.backend.manager import ApplicationRegistry
+from sourcedock.store.registry import StoreRegistry
 from sourcedock.core.errors import BackendError
 from sourcedock.core.runner import CommandRunner, OperationContext
-from sourcedock.core.transactions import transaction_scope
+from sourcedock.core.process import critical_command
+from sourcedock.core.transactions import command_resource, transaction_scope
 
 
 class TestSystemInventory(unittest.TestCase):
@@ -64,6 +66,68 @@ class TestSystemInventory(unittest.TestCase):
 
 
 class TestConcurrentTransactions(unittest.TestCase):
+    def test_store_registry_keeps_parallel_operation_credentials_and_logs_separate(self):
+        store = StoreRegistry.__new__(StoreRegistry)
+        store._stream_runner = CommandRunner()
+        store.host_bridge_available = False
+        snap_started, flatpak_started, release = (threading.Event() for _ in range(3))
+        logs = {"snap": [], "flatpak": []}
+        secrets = {}
+
+        def fake_snap(_command, **_kwargs):
+            snap_started.set()
+            self.assertTrue(flatpak_started.wait(2))
+            secrets["snap"] = store.runner._sudo_password
+            store.runner._resolve_output_callback()("snap log")
+            release.wait(2)
+
+        def fake_flatpak(_command, *_args):
+            flatpak_started.set()
+            self.assertTrue(snap_started.wait(2))
+            secrets["flatpak"] = store.runner._sudo_password
+            store.runner._resolve_output_callback()("flatpak log")
+            release.wait(2)
+            return subprocess.CompletedProcess([], 0, "", "")
+
+        def work(source):
+            store.set_output_callback(logs[source].append, op_id=source)
+            store.bind_thread_op(source)
+            store.set_sudo_password(source + " secret")
+            try:
+                if source == "snap":
+                    store._run_privileged_streaming(["snap", "install", "editor"])
+                else:
+                    store._run_streaming(["flatpak", "install", "--user", "editor"])
+            finally:
+                store.unbind_thread_op(source)
+
+        with patch.object(store.runner, "run_privileged", side_effect=fake_snap), patch.object(
+            store.runner, "_run_streaming", side_effect=fake_flatpak
+        ):
+            snap = threading.Thread(target=work, args=("snap",))
+            flatpak = threading.Thread(target=work, args=("flatpak",))
+            snap.start()
+            flatpak.start()
+            try:
+                self.assertTrue(snap_started.wait(1))
+                self.assertTrue(flatpak_started.wait(1))
+            finally:
+                release.set()
+                snap.join(3)
+                flatpak.join(3)
+        self.assertEqual(secrets, {"snap": "snap secret", "flatpak": "flatpak secret"})
+        self.assertEqual(logs, {"snap": ["snap log"], "flatpak": ["flatpak log"]})
+
+    def test_permission_inspection_commands_are_read_only(self):
+        self.assertFalse(critical_command(["snap", "connections", "sample"]))
+        self.assertFalse(critical_command(["flatpak", "override", "--user", "--show", "org.example.App"]))
+        self.assertTrue(critical_command(["flatpak", "override", "--user", "--filesystem=/tmp", "org.example.App"]))
+        self.assertTrue(critical_command(["snap", "connect", "sample:home"]))
+        wrapped = ["sudo", "-k", "-S", "-p", "", "flatpak-spawn", "--host", "snap", "install", "sample"]
+        self.assertTrue(critical_command(wrapped))
+        self.assertEqual(command_resource(wrapped), "snap")
+        self.assertTrue(critical_command(["flatpak", "override", "--show", "--filesystem=/tmp", "org.example.App"]))
+
     def test_different_package_managers_run_concurrently(self):
         runner = CommandRunner()
         runner.host_bridge_available = False

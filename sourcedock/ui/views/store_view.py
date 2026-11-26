@@ -627,7 +627,9 @@ class StoreViewMixin:
 
     def _run_store_install(self, result: StoreResult, retry: bool = False, classic: bool = False, source_switch: SourceSwitchPlan | None = None) -> None:
         self._store_install_count = getattr(self, "_store_install_count", 0) + 1
-        self.store_install_btn.set_sensitive(False)
+        # A running installation does not block the user from starting one
+        # from another provider. Database-level serialization lives in the runner.
+        self.on_store_result_selected(self.store_tree.get_selection())
         self._set_store_status(t(self.preferences.language, "store_action_running"), "#666666")
 
         cached_pwd = self.get_cached_sudo_password() if hasattr(self, "get_cached_sudo_password") else getattr(self, "_cached_sudo_password", None)

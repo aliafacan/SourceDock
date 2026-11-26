@@ -450,7 +450,7 @@ class PackagesViewMixin:
             modal=True,
             destroy_with_parent=True,
         )
-        prepare_dialog(dialog, width=600, height=400)
+        prepare_dialog(dialog, width=600, height=400, independent=True)
         dialog.add_button(t(lang, "dialog_close"), Gtk.ResponseType.CLOSE)
 
         scroller = Gtk.ScrolledWindow()

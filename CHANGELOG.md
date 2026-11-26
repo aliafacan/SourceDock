@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0 - 2026-11-26
+
+### Update policy, system maintenance, autostart & windowing
+
+- Reorganize Settings into three clean tabs (*General & Appearance*, *Update Policy*, *System & Sources*) and disable accidental mouse-wheel changes on dropdowns.
+- Add per-source update check schedules (Never, On startup, Hourly, Daily, Weekly) for Native (APT/DNF/Pacman/Zypper), Flatpak, and Snap, plus a system-level toggle to pause or resume `snapd` background auto-updates (`snap refresh --hold=forever` / `--unhold`).
+- Add a unified **Disk & Cache Cleanup** dialog (`APT` download cache and `autoremove`, old disabled `Snap` revisions, and unused `Flatpak` runtimes) showing reclaimable disk space before cleaning.
+- Add XDG **Autostart** management (`~/.config/autostart`) directly in Application Details.
+- Add a **Scan Repositories** action and last-checked timestamp to the Updates view, plus Export / Restore / Cleanup shortcuts in Settings.
+- Apply consistent `Gtk.HeaderBar` titlebar controls and independent window movement across all secondary dialogs.
+
 ## 1.4.12 - 2026-11-22
 
 ### Application permissions

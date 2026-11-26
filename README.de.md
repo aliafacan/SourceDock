@@ -16,7 +16,17 @@
 
 SourceDock verwaltet Anwendungen und Pakete aus APT, Flatpak, Snap und lokalen Paketdateien in einer einzigen, responsiven Oberfläche. Die Anwendung arbeitet asynchron, zeigt Anbieterfehler transparent an und fordert erhöhte Rechte erst für die jeweilige bestätigte Aktion an.
 
-## Neu in 1.4.12
+## Neu in 2.0.0
+
+- **Mehrseitige Einstellungen & Aktualisierungsrichtlinie:** Unabhängige Prüfintervalle für APT/Nativ, Flatpak und Snap mit sofortiger Speicherung sowie Pause/Fortsetzen für `snapd`-Hintergrundupdates.
+- **Festplatten- & Cache-Bereinigung:** APT-Cache, nicht benötigte Pakete, alte Snap-Revisionen und ungenutzte Flatpak-Laufzeiten detailliert prüfen und bereinigen.
+- **Startprogramme (Autostart):** Getrennte Benutzer- & System-Tabs zum Verwalten, Bearbeiten, Testen und Hinzufügen von Autostart-Einträgen.
+
+![Berechtigungen](docs/screenshots/v2.0.0/permissions-dark.png)
+![Bereinigung](docs/screenshots/v2.0.0/cleanup-dark.png)
+![Startprogramme](docs/screenshots/v2.0.0/autostart-light.png)
+
+### Früher in 2.0.0
 
 - **Anwendungsberechtigungen:** Ein neuer Dialog mit App-Symbol und Registerkarten zeigt Flatpak-, Snap- und native Sicherheitsinformationen. Für Flatpak lassen sich einzelne Ordner hinzufügen und entfernen; verfügbare Snap-Verbindungen lassen sich umschalten.
 - **Zuverlässige Schalter:** Erst ein erfolgreicher Vorgang ändert den angezeigten Zustand. Bei abgebrochener Passwortabfrage oder Fehler bleibt der vorherige Zustand erhalten. Eine erfolgreiche Snap-Autorisierung wird bis zu 15 Minuten wiederverwendet.
@@ -73,11 +83,11 @@ Aufgenommen mit SourceDock 1.4.10 und ausschließlich gelesenen Systemmetadaten;
 
 ## Installation
 
-Die aktuelle Version ist [SourceDock 1.4.12](https://github.com/aliafacan/SourceDock/releases/tag/v1.4.12). Lade die DEB-Datei und die SHA-256-Datei herunter:
+Die aktuelle Version ist [SourceDock 2.0.0](https://github.com/aliafacan/SourceDock/releases/tag/v2.0.0). Lade die DEB-Datei und die SHA-256-Datei herunter:
 
 ```bash
-sha256sum -c sourcedock_1.4.12_all.deb.sha256
-sudo apt install ./sourcedock_1.4.12_all.deb
+sha256sum -c sourcedock_2.0.0_all.deb.sha256
+sudo apt install ./sourcedock_2.0.0_all.deb
 sourcedock
 ```
 

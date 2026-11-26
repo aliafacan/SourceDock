@@ -106,8 +106,8 @@ headerbar label.subtitle {{ color: @muted; }}
 headerbar button.titlebutton {{ 
     background-color: @surface;
     background-image: none;
-    border-color: @border;
-    border-width: 1px;
+    color: @text;
+    border: 1px solid @border;
     box-shadow: none; 
     padding: 3px;
     margin: 0 2px;
@@ -115,9 +115,10 @@ headerbar button.titlebutton {{
     min-height: 28px;
     border-radius: 6px;
 }}
-headerbar button.titlebutton image {{ color: inherit; -gtk-icon-transform: scale(1.2); }}
-headerbar button.titlebutton:hover {{ background-color: alpha(@text, 0.15); }}
-headerbar button.titlebutton.close:hover {{ background-color: @danger; color: #ffffff; }}
+headerbar button.titlebutton image {{ color: @text; -gtk-icon-transform: scale(1.2); }}
+headerbar button.titlebutton:hover {{ background-color: @surface_hover; border-color: @focus; }}
+headerbar button.titlebutton.close:hover {{ background-color: @danger; border-color: @danger; color: #ffffff; }}
+headerbar button.titlebutton.close:hover image {{ color: #ffffff; }}
 button:not(.titlebutton) {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 6px;
           padding: 6px 12px; box-shadow: none; min-height: 22px; }}
 button:not(.titlebutton) label, button:not(.titlebutton) image {{ color: inherit; }}
@@ -174,10 +175,11 @@ listbox row:hover {{ background: @surface_hover; }}
 .permissions-dialog .permission-app-title {{ font-weight: bold; }}
 .permissions-dialog .permissions-heading {{ border-bottom: 1px solid @border; padding-bottom: 16px; }}
 .permissions-dialog .permissions-tabs {{ background: @background; border: 0; }}
-.permissions-dialog .permissions-tabs header {{ background: transparent; border: 0; border-bottom: 1px solid @border; border-radius: 0; }}
-.permissions-dialog .permissions-tabs tab {{ padding: 11px 16px; border-bottom: 3px solid transparent; background: transparent; }}
-.permissions-dialog .permissions-tabs tab:hover {{ background: @surface_hover; }}
-.permissions-dialog .permissions-tabs tab:checked {{ background: @selection; border-bottom-color: @focus; }}
+.permissions-dialog .permissions-tabs header {{ background: transparent; border: 0; padding: 0 0 8px 0; box-shadow: none; }}
+.permissions-dialog .permissions-tabs header tabs {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 3px; }}
+.permissions-dialog .permissions-tabs tab {{ padding: 8px 14px; margin: 0 2px; border: 1px solid transparent; border-radius: 7px; background: transparent; box-shadow: none; }}
+.permissions-dialog .permissions-tabs tab:hover {{ background: @surface_hover; box-shadow: none; }}
+.permissions-dialog .permissions-tabs tab:checked {{ background: @selection; border-color: alpha(@focus, 0.35); box-shadow: none; }}
 .permissions-dialog .permissions-tabs tab label {{ color: @muted; }}
 .permissions-dialog .permissions-tabs tab image {{ color: @muted; }}
 .permissions-dialog .permissions-tabs tab:checked label, .permissions-dialog .permissions-tabs tab:checked image {{ color: @text; font-weight: bold; }}
@@ -193,10 +195,26 @@ listbox row:hover {{ background: @surface_hover; }}
 .permissions-dialog .permission-status {{ padding-top: 12px; }}
 .permissions-dialog .permission-status image {{ color: @focus; }}
 .permissions-dialog switch {{ background: @border; border: 1px solid @border; border-radius: 16px; }}
-.permissions-dialog switch:checked {{ background: @accent; border-color: @accent; }}
-.permissions-dialog switch slider {{ background: @surface; border: 1px solid @border; border-radius: 50%; }}
-.permissions-dialog switch:checked slider {{ background: @accent_text; border-color: @accent_text; }}
+.permissions-dialog switch:checked {{ background: @accent; border-color: shade(@accent, 0.9); }}
+.permissions-dialog switch slider {{ background: #ffffff; border: 1px solid @border; border-radius: 50%; }}
+.permissions-dialog switch:checked slider {{ background: #ffffff; border-color: shade(@accent, 0.85); }}
 .permissions-dialog .action-area {{ background: @background; padding: 12px 4px; }}
+notebook {{ background: @background; border: none; }}
+notebook header {{ background: transparent; border: none; padding: 0 0 8px 0; box-shadow: none; }}
+notebook header tabs {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 3px; }}
+notebook tab {{ background: transparent; color: @muted; border: 1px solid transparent; border-radius: 7px; padding: 7px 14px; margin: 0 2px; box-shadow: none; }}
+notebook tab:hover {{ background: @surface_hover; color: @text; box-shadow: none; }}
+notebook tab:checked {{ background: @selection; color: @text; border-color: alpha(@focus, 0.35); font-weight: bold; box-shadow: none; }}
+notebook tab:focus, notebook tab:checked:focus {{ outline: none; box-shadow: none; }}
+notebook tab label {{ color: inherit; }}
+notebook stack, notebook > stack {{ background: @background; }}
+switch {{ background: @border; border: 1px solid @border; border-radius: 16px; min-width: 44px; min-height: 24px; }}
+switch:checked {{ background: @accent; border-color: shade(@accent, 0.9); }}
+switch slider {{ background: #ffffff; border: 1px solid @border; border-radius: 50%; }}
+switch:checked slider {{ background: #ffffff; border: 1px solid shade(@accent, 0.85); }}
+expander title {{ color: @text; padding: 4px 2px; border-radius: 6px; }}
+expander title:hover {{ background: @surface_hover; }}
+frame > border {{ border-color: @border; }}
 /* GTK's PlacesSidebar otherwise keeps the system theme's pale selection while
    our global label rule supplies light text in a dark file chooser. */
 filechooser placessidebar row:selected,
@@ -214,6 +232,39 @@ filechooser placessidebar row:selected image {{ color: @text; opacity: 1; }}
 .package-status-danger {{ background: alpha(@danger, 0.16); color: @danger; border-radius: 4px; padding: 2px 6px; font-weight: bold; }}
 .package-version-change {{ color: @focus; font-weight: bold; }}
 .package-version-change.downgrade {{ color: @warning; }}
+.local-installer-dialog .installer-heading {{ background: @surface; border-bottom: 1px solid @border; padding: 10px 16px; }}
+.local-installer-dialog .installer-tabs {{ background: @surface; border: 1px solid @border; border-radius: 8px; margin: 8px 14px 0; padding: 2px; }}
+.local-installer-dialog .installer-tabs button {{ background: transparent; border: none; border-radius: 6px; box-shadow: none; color: @muted; min-width: 115px; padding: 5px 14px; }}
+.local-installer-dialog .installer-tabs button:checked {{ background: @selection; color: @text; }}
+.local-installer-dialog .installer-tabs button:hover {{ color: @text; }}
+.local-installer-dialog .installer-tabs button:focus {{ outline: none; box-shadow: none; }}
+.local-installer-dialog .installer-icon-frame {{ background: @selection; border-radius: 10px; padding: 7px; }}
+.local-installer-dialog .installer-progress-card,
+.local-installer-dialog .installer-result-card {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 10px; }}
+.local-installer-dialog .installer-preview-card {{ background: transparent; padding: 0; }}
+.local-installer-dialog .installer-overview-description {{ color: @text; padding: 1px 0 4px; }}
+.local-installer-dialog .installer-fact {{ background: @surface; border: 1px solid @border; border-radius: 9px; padding: 9px 11px; }}
+.local-installer-dialog .installer-fact-label {{ color: @muted; font-size: 9pt; }}
+.local-installer-dialog .installer-fact-value {{ color: @text; font-weight: 600; }}
+.local-installer-dialog .installer-details-card {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 10px 12px; }}
+.local-installer-dialog .installer-section-title {{ color: @text; font-weight: bold; }}
+.local-installer-dialog .installer-detail-row {{ border-bottom: 1px solid @border; padding: 2px 0 6px; }}
+.local-installer-dialog .installer-detail-row:last-child {{ border-bottom: none; padding-bottom: 0; }}
+.local-installer-dialog .installer-dependency-section {{ border-bottom: 1px solid @border; padding-bottom: 5px; }}
+.local-installer-dialog .installer-dependency-toggle {{ background: transparent; border: none; box-shadow: none; color: @text; padding: 5px 2px; }}
+.local-installer-dialog .installer-dependency-toggle:hover {{ background: @surface_hover; border-radius: 5px; }}
+.local-installer-dialog .installer-dependency-toggle:focus {{ outline: none; box-shadow: none; }}
+.local-installer-dialog .installer-dependency-toggle image {{ color: @focus; }}
+.local-installer-dialog .installer-secondary-action {{ background: @surface; border: 1px solid @border; color: @text; border-radius: 7px; }}
+.local-installer-dialog .installer-secondary-action:hover {{ background: @surface_hover; }}
+.local-installer-dialog .installer-status-note {{ background: alpha(@success, 0.10); border-radius: 6px; padding: 7px 10px; }}
+.local-installer-dialog .installer-status-note.caution {{ background: alpha(@warning, 0.10); }}
+.local-installer-dialog .installer-security-note {{ background: alpha(@warning, 0.10); border-radius: 6px; padding: 8px 10px; color: @text; }}
+.local-installer-dialog .installer-options-card {{ background: @surface; border-top: 1px solid @border; padding: 8px 16px; }}
+.local-installer-dialog .installer-options-card checkbutton {{ padding: 1px 0; }}
+.local-installer-dialog .installer-trust {{ margin-top: 4px; border-top: 1px solid @border; padding-top: 6px; font-weight: bold; }}
+.local-installer-dialog .installer-actions {{ background: @background; border-top: 1px solid @border; padding: 8px 16px; }}
+.local-installer-dialog .installer-actions button {{ min-height: 34px; min-width: 108px; }}
 .empty-state {{ padding: 24px; }}
 .section-title {{ font-weight: bold; font-size: 12pt; }}
 .danger-banner {{ background: alpha(@danger, 0.12); border: 1px solid @danger; border-radius: 6px; padding: 10px; }}
@@ -230,7 +281,11 @@ filechooser placessidebar row:selected image {{ color: @text; opacity: 1; }}
 .help-card {{ background: @surface; border: 1px solid @border; border-radius: 6px; padding: 12px; }}
 .action-bar {{ border-top: 1px solid @border; padding-top: 12px; }}
 .dialog-action-area, dialog .action-area {{ padding: 12px; border-top: 1px solid @border; background: @surface; }}
-menu, .menu, popover {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 6px; padding: 6px; }}
+menu, .menu, popover {{ background: @surface; color: @text; border: 1px solid @border; border-radius: 8px; padding: 6px; }}
+popover scrolledwindow, popover viewport, popover list {{ background: @surface; color: @text; }}
+popover list row {{ background: @surface; color: @text; border-bottom: 1px solid alpha(@border, 0.5); padding: 2px 4px; }}
+popover list row:hover {{ background: @surface_hover; }}
+popover list row button {{ color: @text; padding: 6px 8px; }}
 menuitem {{ padding: 8px 12px; color: @text; }}
 menuitem:hover, menuitem:selected {{ background: @selection; }}
 menuitem label {{ color: inherit; }}
