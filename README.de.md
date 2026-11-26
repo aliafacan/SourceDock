@@ -57,9 +57,9 @@ Mit [build.sh](build.sh) lassen sich die aktuellen Quellen paketieren und instal
 
 Neue Aufnahmen aus Version 1.4.10: Hauptfenster mit 1366×768 Pixeln, Dialoge in ihrer eigenen Größe.
 
-![Store und Entdecken](docs/screenshots/v1.4.10/discover-light-de-100-1366x768.png)
-![Installierte Anwendungen](docs/screenshots/v1.4.10/installed-dark-de-100-1366x768.png)
-![Update-Zentrale](docs/screenshots/v1.4.10/updates-dark-de-100-1366x768.png)
+![Store und Entdecken](docs/screenshots/v2.0.0/discover-light.png)
+![Installierte Anwendungen](docs/screenshots/v2.0.0/installed-dark.png)
+![Update-Zentrale](docs/screenshots/v2.0.0/updates-dark.png)
 
 ### Anwendungsquelle wechseln
 

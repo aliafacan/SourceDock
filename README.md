@@ -46,10 +46,10 @@ Build and install the current source with [build.sh](build.sh). It verifies the 
 <div align="center">
 
 ### Software Discovery & Store (Light Mode)
-![Discover & Store View](docs/screenshots/v1.4.10/discover-light-en-100-1366x768.png)
+![Discover & Store View](docs/screenshots/v2.0.0/discover-light.png)
 
 ### Installed Applications (Dark Mode)
-![Installed Applications View](docs/screenshots/v1.4.10/installed-dark-en-100-1366x768.png)
+![Installed Applications View](docs/screenshots/v2.0.0/installed-dark.png)
 
 ### Application Permissions (Dark Mode)
 ![Application Permissions](docs/screenshots/v2.0.0/permissions-dark.png)
@@ -61,7 +61,7 @@ Build and install the current source with [build.sh](build.sh). It verifies the 
 ![Startup Applications](docs/screenshots/v2.0.0/autostart-light.png)
 
 ### Unified Updates Center (Dark Mode)
-![Updates Center View](docs/screenshots/v1.4.10/updates-dark-en-100-1366x768.png)
+![Updates Center View](docs/screenshots/v2.0.0/updates-dark.png)
 
 ### Application source switching
 
@@ -80,8 +80,8 @@ Captured from SourceDock 1.4.10 with read-only host metadata; no package operati
 [Standalone Package Installer](docs/screenshots/v1.4.10/installer-dark-en-100-1366x768.png) &bull;
 [Settings & Preferences](docs/screenshots/v2.0.0/settings-update-policy-dark.png) &bull;
 [Help & User Guide](docs/screenshots/v2.0.0/help-light.png) &bull;
-[Operations Log](docs/screenshots/v1.4.10/operations-dark-en-100-1366x768.png) &bull;
-[Packages View](docs/screenshots/v1.4.10/packages-dark-en-100-1366x768.png)
+[Operations Log](docs/screenshots/v2.0.0/operations-dark.png) &bull;
+[Packages View](docs/screenshots/v2.0.0/packages-dark.png)
 
 </div>
 

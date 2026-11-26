@@ -57,9 +57,9 @@ Use [build.sh](build.sh) para empaquetar e instalar las fuentes actuales. Verifi
 
 Capturas nuevas de la versión 1.4.10: ventanas principales de 1366×768 y diálogos en su tamaño propio.
 
-![Tienda y descubrimiento](docs/screenshots/v1.4.10/discover-light-es-100-1366x768.png)
-![Aplicaciones instaladas](docs/screenshots/v1.4.10/installed-dark-es-100-1366x768.png)
-![Centro de actualizaciones](docs/screenshots/v1.4.10/updates-dark-es-100-1366x768.png)
+![Tienda y descubrimiento](docs/screenshots/v2.0.0/discover-light.png)
+![Aplicaciones instaladas](docs/screenshots/v2.0.0/installed-dark.png)
+![Centro de actualizaciones](docs/screenshots/v2.0.0/updates-dark.png)
 
 ### Cambiar la fuente de una aplicación
 

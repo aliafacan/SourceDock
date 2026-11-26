@@ -57,9 +57,9 @@ Use [build.sh](build.sh) para empacotar e instalar as fontes atuais. O script ve
 
 Novas capturas da versão 1.4.10: janelas principais em 1366×768 e diálogos em seu tamanho próprio.
 
-![Loja e descoberta](docs/screenshots/v1.4.10/discover-light-pt_BR-100-1366x768.png)
-![Aplicativos instalados](docs/screenshots/v1.4.10/installed-dark-pt_BR-100-1366x768.png)
-![Central de atualizações](docs/screenshots/v1.4.10/updates-dark-pt_BR-100-1366x768.png)
+![Loja e descoberta](docs/screenshots/v2.0.0/discover-light.png)
+![Aplicativos instalados](docs/screenshots/v2.0.0/installed-dark.png)
+![Central de atualizações](docs/screenshots/v2.0.0/updates-dark.png)
 
 ### Alterar a fonte de um aplicativo
 

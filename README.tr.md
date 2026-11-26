@@ -46,10 +46,10 @@ Güncel kaynakları [build.sh](build.sh) ile paketleyip kurabilirsiniz. Betik sa
 <div align="center">
 
 ### Yazılım Keşfi ve Mağaza (Açık Tema)
-![Mağaza ve Keşfet Görünümü](docs/screenshots/v1.4.10/discover-light-tr-100-1366x768.png)
+![Mağaza ve Keşfet Görünümü](docs/screenshots/v2.0.0/discover-light.png)
 
 ### Yüklü Uygulamalar (Koyu Tema)
-![Yüklü Uygulamalar Görünümü](docs/screenshots/v1.4.10/installed-dark-tr-100-1366x768.png)
+![Yüklü Uygulamalar Görünümü](docs/screenshots/v2.0.0/installed-dark.png)
 
 ### Uygulama İzinleri (Koyu Tema)
 ![Uygulama İzinleri](docs/screenshots/v2.0.0/permissions-dark.png)
@@ -61,7 +61,7 @@ Güncel kaynakları [build.sh](build.sh) ile paketleyip kurabilirsiniz. Betik sa
 ![Başlangıç Uygulamaları](docs/screenshots/v2.0.0/autostart-light.png)
 
 ### Birleşik Güncelleme Merkezi (Koyu Tema)
-![Güncellemeler Görünümü](docs/screenshots/v1.4.10/updates-dark-tr-100-1366x768.png)
+![Güncellemeler Görünümü](docs/screenshots/v2.0.0/updates-dark.png)
 
 ### Uygulama kaynağını değiştirme
 
@@ -80,8 +80,8 @@ Görüntüler SourceDock 1.4.10’dan, sistem meta verileri yalnızca okunarak a
 [Müstakil Paket Kurucu](docs/screenshots/v1.4.10/installer-dark-tr-100-1366x768.png) &bull;
 [Ayarlar ve Güncelleme Politikası](docs/screenshots/v2.0.0/settings-update-policy-dark.png) &bull;
 [Yardım Rehberi](docs/screenshots/v2.0.0/help-light.png) &bull;
-[İşlem Günlüğü](docs/screenshots/v1.4.10/operations-dark-tr-100-1366x768.png) &bull;
-[Paketler Görünümü](docs/screenshots/v1.4.10/packages-dark-tr-100-1366x768.png)
+[İşlem Günlüğü](docs/screenshots/v2.0.0/operations-dark.png) &bull;
+[Paketler Görünümü](docs/screenshots/v2.0.0/packages-dark.png)
 
 </div>
 

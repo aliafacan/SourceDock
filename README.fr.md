@@ -57,9 +57,9 @@ Utilisez [build.sh](build.sh) pour empaqueter et installer les sources actuelles
 
 Nouvelles captures de la version 1.4.10 : fenêtres principales en 1366×768 et dialogues à leur taille propre.
 
-![Boutique et découverte](docs/screenshots/v1.4.10/discover-light-fr-100-1366x768.png)
-![Applications installées](docs/screenshots/v1.4.10/installed-dark-fr-100-1366x768.png)
-![Centre des mises à jour](docs/screenshots/v1.4.10/updates-dark-fr-100-1366x768.png)
+![Boutique et découverte](docs/screenshots/v2.0.0/discover-light.png)
+![Applications installées](docs/screenshots/v2.0.0/installed-dark.png)
+![Centre des mises à jour](docs/screenshots/v2.0.0/updates-dark.png)
 
 ### Changer la source d’une application
 
