@@ -208,11 +208,11 @@ notebook tab:checked {{ background: @selection; color: @text; border-color: alph
 notebook tab:focus, notebook tab:checked:focus {{ outline: none; box-shadow: none; }}
 notebook tab label {{ color: inherit; }}
 notebook stack, notebook > stack {{ background: @background; }}
-stackswitcher, .help-tabs {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 3px; }}
-stackswitcher button:not(.titlebutton), .help-tabs button:not(.titlebutton) {{ background: transparent; border: 1px solid transparent; border-radius: 7px; box-shadow: none; color: @muted; padding: 6px 12px; margin: 0 2px; }}
-stackswitcher button:not(.titlebutton):hover, .help-tabs button:not(.titlebutton):hover {{ background: @surface_hover; color: @text; }}
-stackswitcher button:not(.titlebutton):checked, .help-tabs button:not(.titlebutton):checked {{ background: @selection; border-color: alpha(@focus, 0.35); color: @text; font-weight: bold; box-shadow: none; }}
-stackswitcher button:not(.titlebutton):focus, .help-tabs button:not(.titlebutton):focus {{ outline: none; box-shadow: none; }}
+stackswitcher, .help-tabs, box.help-tabs.linked {{ background: @surface; border: 1px solid @border; border-radius: 10px; padding: 3px; }}
+stackswitcher > button.toggle, .help-tabs > button.toggle, box.help-tabs.linked > button:not(.titlebutton) {{ background: transparent; border: 1px solid transparent; border-radius: 7px; box-shadow: none; color: @muted; padding: 6px 12px; margin: 0 2px; }}
+stackswitcher > button.toggle:hover, .help-tabs > button.toggle:hover, box.help-tabs.linked > button:not(.titlebutton):hover {{ background: @surface_hover; color: @text; border-color: transparent; }}
+stackswitcher > button.toggle:checked, .help-tabs > button.toggle:checked, box.help-tabs.linked > button:not(.titlebutton):checked {{ background: @selection; border-color: alpha(@focus, 0.35); color: @text; font-weight: bold; box-shadow: none; }}
+stackswitcher > button.toggle:focus, .help-tabs > button.toggle:focus, box.help-tabs.linked > button:not(.titlebutton):focus {{ outline: none; box-shadow: none; }}
 switch {{ background: @border; border: 1px solid @border; border-radius: 16px; min-width: 44px; min-height: 24px; }}
 switch:checked {{ background: @accent; border-color: shade(@accent, 0.9); }}
 switch slider {{ background: #ffffff; border: 1px solid @border; border-radius: 50%; }}
